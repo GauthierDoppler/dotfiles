@@ -22,6 +22,7 @@ link() {
 }
 
 # ~/.config/* folders (whole directory symlinks)
+link "delta"               "$HOME/.config/delta"
 link "ghostty"             "$HOME/.config/ghostty"
 link "lazygit"             "$HOME/.config/lazygit"
 link "nvim"                "$HOME/.config/nvim"

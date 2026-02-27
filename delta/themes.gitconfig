@@ -1,0 +1,31 @@
+[delta "lazygit-side-by-side"]
+    paging = never
+    side-by-side = true
+    syntax-theme = none
+    hunk-header-style = omit
+    file-decoration-style = none
+    plus-style = green normal
+    minus-style = red normal
+    plus-emph-style = green bold normal
+    minus-emph-style = red bold normal
+    line-numbers-minus-style = red
+    line-numbers-plus-style = green
+    line-numbers-zero-style = white
+    line-numbers-left-format = {nm:>4}│
+    line-numbers-right-format = {np:>4}│
+
+[delta "lazygit-inline"]
+    paging = never
+    line-numbers = true
+    syntax-theme = none
+    hunk-header-style = omit
+    file-decoration-style = none
+    plus-style = green normal
+    minus-style = red normal
+    plus-emph-style = green bold normal
+    minus-emph-style = red bold normal
+    line-numbers-minus-style = red
+    line-numbers-plus-style = green
+    line-numbers-zero-style = white
+    line-numbers-left-format = {nm:>4}│
+    line-numbers-right-format = {np:>4}│
