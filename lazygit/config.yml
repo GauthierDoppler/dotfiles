@@ -1,0 +1,32 @@
+git:
+  # press | to cycle between pagers
+  # first: delta side-by-side (default)
+  # second: delta inline with line numbers
+  pagers:
+    - colorArg: always
+      pager: delta --paging=never --side-by-side --syntax-theme=ansi --hunk-header-style=omit --file-decoration-style=none --plus-style='green normal' --minus-style='red normal' --plus-emph-style='green bold normal' --minus-emph-style='red bold normal' --line-numbers-minus-style='red' --line-numbers-plus-style='green'
+    - colorArg: always
+      pager: delta --paging=never --line-numbers --syntax-theme=ansi --hunk-header-style=omit --file-decoration-style=none --plus-style='green normal' --minus-style='red normal' --plus-emph-style='green bold normal' --minus-emph-style='red bold normal' --line-numbers-minus-style='red' --line-numbers-plus-style='green'
+gui:
+  theme:
+    nerdFontsVersion: ""
+    activeBorderColor:
+      - green
+      - bold
+    inactiveBorderColor:
+      - white
+    # default: reverse (highlights with inverted colors)
+    selectedLineBgColor:
+      - "#2a2a3a"
+    # default: green bg
+    diffAddBgColor:
+      - default
+    # default: red bg
+    diffRemoveBgColor:
+      - default
+    # default: green
+    diffAddFgColor:
+      - green
+    # default: red
+    diffRemoveFgColor:
+      - red

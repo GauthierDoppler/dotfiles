@@ -1,0 +1,18 @@
+# This is Git's per-user configuration file.
+[user]
+#Please adapt and uncomment the following lines:
+name = Gauthier Doppler
+	email = gauthier.doppler@theodo.com
+[push]
+	autoSetupRemote = true
+[alias]
+	wt-add = "!f() { \\\n    branch=\"$1\"; \\\n    base=\"${2:-main}\"; \\\n    [ -z \"$branch\" ] && echo \"Usage: git wt-add <branch> [base]\" >&2 && return 1; \\\n    root=\"$(git rev-parse --show-toplevel)\"; \\\n    path=\"$root/worktrees/$branch\"; \\\n    git fetch origin \"$base\" >/dev/null 2>&1 || true; \\\n    git worktree add -b \"$branch\" \"$path\" \"$base\" >&2 || return 1; \\\n    echo \"$path\"; \\\n  }; f"
+	unskip = "\\!f() {\n  for file in \"$@\"; do\n    if git ls-files --error-unmatch \"$file\" >/dev/null 2>&1; then\n      git update-index --no-skip-worktree \"$file\"\n      echo \"unskip-worktree: $file\"\n    else\n      exclude=\"$(git rev-parse --show-toplevel)/.git/info/exclude\"\n      escaped=$(printf \"%s\" \"$file\" | sed \"s/[\\/&]/\\\\\\\\&/g\")\n      sed -i \"\" \"/^${escaped}$/d\" \"$exclude\"\n      echo \"un-excluded: $file\"\n    fi\n  done\n}; f"
+	skip = "!f() { \n  for file in \"$@\"; do\n    if git ls-files --error-unmatch \"$file\" >/dev/null 2>&1; then\n      git update-index --skip-worktree \"$file\"\n      echo \"skip-worktree: $file\"\n    else\n      echo \"$file\" >> \"$(git rev-parse --show-toplevel)/.git/info/exclude\"\n      echo \"excluded: $file\"\n    fi\n  done\n}; f"
+	wt = "!f() { \\\n    branch=\"$1\"; \\\n    base=\"${2:-main}\"; \\\n    [ -z \"$branch\" ] && echo \"Usage: git wt <branch> [base]\" >&2 && return 1; \\\n    root=\"$(git rev-parse --show-toplevel)\"; \\\n    path=\"$root/worktrees/$branch\"; \\\n    git fetch origin \"$base\" >/dev/null 2>&1 || true; \\\n    git worktree add -b \"$branch\" \"$path\" \"$base\" >&2 || return 1; \\\n    echo \"$path\"; \\\n  }; f"
+	wtl = worktree list
+	wtc = "!f() { \\\n  branch=\"$1\"; \\\n  [ -z \"$branch\" ] && echo \"Usage: git wtc <branch>\" && return 1; \\\n  root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || { echo \"❌ Not in a git repo\"; return 1; }; \\\n  cd \"$root/worktrees/$branch\" 2>/dev/null && pwd || echo \"❌ No worktree at $root/worktrees/$branch\"; \\\n}; f"
+	wtr = "!f() { \\\n  branch=\"$1\"; \\\n  [ -z \"$branch\" ] && echo \"Usage: git wtr <branch>\" && return 1; \\\n  git worktree remove \"worktrees/$branch\"; \\\n}; f"
+	wtp = worktree prune
+	sync = !git fetch && git rebase origin/main
+	pullsafe = !git stash && git pull && git stash pop
