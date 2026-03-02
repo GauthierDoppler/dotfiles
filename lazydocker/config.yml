@@ -1,0 +1,16 @@
+gui:
+  border: "rounded"
+  theme:
+    activeBorderColor:
+      - green
+      - bold
+    inactiveBorderColor:
+      - white
+    selectedLineBgColor:
+      - "#3b3b5c"
+    optionsTextColor:
+      - blue
+logs:
+  timestamps: false
+  since: ""
+  tail: "300"
