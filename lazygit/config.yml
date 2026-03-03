@@ -1,3 +1,5 @@
+refresher:
+  refreshInterval: 2
 git:
   # press | to cycle between pagers
   # delta themes defined in ~/dotfiles/delta/themes.gitconfig
