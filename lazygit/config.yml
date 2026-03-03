@@ -18,7 +18,7 @@ gui:
       - white
     # default: reverse (highlights with inverted colors)
     selectedLineBgColor:
-      - "#303050"
+      - "#404070"
     # default: green bg
     diffAddBgColor:
       - default
