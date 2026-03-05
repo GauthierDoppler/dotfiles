@@ -16,5 +16,6 @@ name = Gauthier Doppler
 	wtp = worktree prune
 	sync = !git fetch && git rebase origin/main
 	pullsafe = !git stash && git pull && git stash pop
+	pushall = push --recurse-submodules=on-demand
 [include]
 	path = ~/dotfiles/delta/themes.gitconfig
