@@ -14,8 +14,8 @@ name = Gauthier Doppler
 	wtc = "!f() { \\\n  branch=\"$1\"; \\\n  [ -z \"$branch\" ] && echo \"Usage: git wtc <branch>\" && return 1; \\\n  root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || { echo \"❌ Not in a git repo\"; return 1; }; \\\n  cd \"$root/worktrees/$branch\" 2>/dev/null && pwd || echo \"❌ No worktree at $root/worktrees/$branch\"; \\\n}; f"
 	wtr = "!f() { \\\n  branch=\"$1\"; \\\n  [ -z \"$branch\" ] && echo \"Usage: git wtr <branch>\" && return 1; \\\n  git worktree remove \"worktrees/$branch\"; \\\n}; f"
 	wtp = worktree prune
-	sync = !git fetch && git rebase origin/main
 	pullsafe = !git stash && git pull && git stash pop
 	pushall = push --recurse-submodules=on-demand
+	sync = !git stash && git fetch && git rebase origin/main && git stash pop
 [include]
 	path = ~/dotfiles/delta/themes.gitconfig
