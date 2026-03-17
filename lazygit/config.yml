@@ -8,6 +8,8 @@ git:
       pager: delta --features lazygit-side-by-side
     - colorArg: always
       pager: delta --features lazygit-inline
+os:
+  editPreset: "nvim-remote"
 gui:
   theme:
     nerdFontsVersion: ""

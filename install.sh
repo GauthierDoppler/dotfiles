@@ -36,3 +36,19 @@ link "git/ignore"          "$HOME/.config/git/ignore"
 link "dot_gitconfig"       "$HOME/.gitconfig"
 link "dot_tmux.conf"       "$HOME/.tmux.conf"
 link "dot_zshrc"           "$HOME/.zshrc"
+
+# --- Dependencies ---
+
+ensure() {
+  local cmd="$1"
+  shift
+  if command -v "$cmd" &>/dev/null; then
+    echo "found: $cmd"
+  else
+    echo "installing: $cmd"
+    "$@"
+  fi
+}
+
+ensure "pipx" brew install pipx
+ensure "nvr"  pipx install neovim-remote
