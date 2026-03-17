@@ -15,6 +15,7 @@ name = Gauthier Doppler
 	wtr = "!f() { \\\n  branch=\"$1\"; \\\n  [ -z \"$branch\" ] && echo \"Usage: git wtr <branch>\" && return 1; \\\n  git worktree remove \"worktrees/$branch\"; \\\n}; f"
 	wtp = worktree prune
 	pull-safe = "!stashed=$(git stash); git pull; [ \"$stashed\" != \"No local changes to save\" ] && git stash pop"
+	squash-merge = "!f() { \\\n    branch=\"${1:?Usage: git squash-merge <branch>}\"; \\\n    msg=\"$(echo \"$branch\" | sed 's/[-_]/ /g')\"; \\\n    git merge --squash \"$branch\" && git commit -e -m \"$msg\"; \\\n  }; f"
 	pushall = push --recurse-submodules=on-demand
 	sync = !git fetch && git rebase origin/main
 	sync-safe = "!stashed=$(git stash); git fetch && git rebase origin/main; [ \"$stashed\" != \"No local changes to save\" ] && git stash pop"
