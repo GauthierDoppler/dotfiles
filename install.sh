@@ -37,6 +37,13 @@ link "dot_gitconfig"       "$HOME/.gitconfig"
 link "dot_tmux.conf"       "$HOME/.tmux.conf"
 link "dot_zshrc"           "$HOME/.zshrc"
 
+# ~/.claude/* individual files
+link "dot_claude/settings.json"        "$HOME/.claude/settings.json"
+link "dot_claude/CLAUDE.md"            "$HOME/.claude/CLAUDE.md"
+link "dot_claude/statusline-custom.sh" "$HOME/.claude/statusline-custom.sh"
+link "dot_claude/hooks"                "$HOME/.claude/hooks"
+
+
 # --- Dependencies ---
 
 ensure() {
@@ -50,5 +57,10 @@ ensure() {
   fi
 }
 
-ensure "pipx" brew install pipx
-ensure "nvr"  pipx install neovim-remote
+ensure "pipx"                brew install pipx
+ensure "nvr"                 pipx install neovim-remote
+ensure "terminal-notifier"   brew install terminal-notifier
+
+# Register notification app bundle for Claude Code icon
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app"
+echo "registered: ClaudeCodeNotifier.app"

@@ -52,5 +52,11 @@ keybind = option+shift+tab=goto_split:previous
 keybind = option+shift+r=prompt_surface_title
 # Fix Shift+Enter to send proper escape sequence for tmux
 keybind = shift+enter=text:\x1b[13;2u
+# Bell: bounce dock icon + badge (no system notification to avoid noise)
+bell-features = title,attention
+
+# Desktop notifications (OSC 9/777 — Claude Code completion, etc.)
+desktop-notifications = true
+
 theme = Catppuccin Frappe
 unfocused-split-opacity = 0.55
