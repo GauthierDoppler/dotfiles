@@ -19,12 +19,14 @@ Personal development environment for macOS — managed with symlinks.
 ## Install
 
 ```bash
-git clone --recursive git@github.com:GauthierDoppler/dotfiles.git ~/dotfiles
-cd ~/dotfiles
-./install.sh
+xcode-select --install
+git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
+cd ~/dotfiles && ./install.sh
 ```
 
-The install script symlinks everything to the right place. Existing files are backed up as `*.bak`.
+First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, symlinks, Node, Claude Code CLI).
+
+All dependencies are auto-installed via `Brewfile`. Existing files are backed up as `*.bak`.
 
 ### Symlink map
 
@@ -40,16 +42,22 @@ delta/             → ~/.config/delta
 git/ignore         → ~/.config/git/ignore
 ```
 
+### Machine-specific config
+
+Add local overrides (project paths, work tools) to `~/.zshrc.local` — it's sourced last and not tracked in git.
+
+### SSH helper
+
+`ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard. Available after install.
+
 ## Dependencies
 
-- [Oh My Zsh](https://ohmyz.sh/)
-- [fnm](https://github.com/Schniz/fnm) — fast Node version manager
-- [bun](https://bun.sh/)
-- [Neovim](https://neovim.io/)
-- [tmux](https://github.com/tmux/tmux)
-- [Ghostty](https://ghostty.org/)
-- [delta](https://github.com/dandavison/delta) — git diff pager
-- [lazygit](https://github.com/jesseduffield/lazygit)
+Auto-installed by `install.sh` via `Brewfile`:
+
+- [Neovim](https://neovim.io/), [tmux](https://github.com/tmux/tmux), [Ghostty](https://ghostty.org/), [Raycast](https://raycast.com/), [Claude](https://claude.com/)
+- [fnm](https://github.com/Schniz/fnm), [bun](https://bun.sh/), [Go](https://go.dev/)
+- [delta](https://github.com/dandavison/delta), [lazygit](https://github.com/jesseduffield/lazygit), [lazydocker](https://github.com/jesseduffield/lazydocker), [ripgrep](https://github.com/BurntSushi/ripgrep)
+- [Oh My Zsh](https://ohmyz.sh/), [pipx](https://pipx.pypa.io/), [terminal-notifier](https://github.com/julienXX/terminal-notifier)
 
 ## Tmux cheatsheet
 

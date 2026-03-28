@@ -9,11 +9,14 @@ A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed
 ## Installation & Symlinks
 
 ```bash
-git clone --recursive git@github.com:GauthierDoppler/dotfiles.git ~/dotfiles
-cd ~/dotfiles && ./install.sh
+xcode-select --install
+git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
+cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The `link()` function in `install.sh` creates symlinks and backs up existing files as `*.bak`. When adding a new config, use the `/add-config` skill.
+The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → submodules → symlinks → bun → Node LTS → npm globals → app registration.
+
+The `link()` function creates symlinks and backs up existing files as `*.bak`. When adding a new config, use the `/add-config` skill.
 
 **Naming convention:**
 - `~/.config/*` folders → stored as-is (e.g., `ghostty/`, `lazygit/`)
