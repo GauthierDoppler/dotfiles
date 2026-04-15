@@ -49,6 +49,7 @@ fi
 n() { if [ "$#" -eq 0 ]; then command nvim .; else command nvim "$@"; fi; }
 alias c="clear"
 alias cl="claude"
+alias "cl-yolo"="claude --dangerously-skip-permissions"
 alias tmux-help='echo "
   ── PANE MODE ── Ctrl+a → p → ...
      d  split down          r  split right
