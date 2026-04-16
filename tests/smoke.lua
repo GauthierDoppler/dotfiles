@@ -4,30 +4,40 @@ local function assertf(cond, msg)
   end
 end
 
+-- Navigation specs: vim-tmux-navigator + nvim-window-picker
 local nav_specs = require('custom.plugins.navigation')
 assertf(type(nav_specs) == 'table', 'navigation specs missing')
 
-local neo_override
+local has_window_picker = false
 for _, spec in ipairs(nav_specs) do
-  if spec[1] == 'nvim-neo-tree/neo-tree.nvim' then
-    neo_override = spec
+  if spec[1] == 's1n7ax/nvim-window-picker' then
+    has_window_picker = true
     break
   end
 end
-
-assertf(neo_override ~= nil, 'neo-tree override spec missing')
-assertf(type(neo_override.opts) == 'function', 'neo-tree override opts must be a function')
-
-local neo_opts = {}
-neo_override.opts(nil, neo_opts)
-assertf(neo_opts.filesystem ~= nil, 'neo-tree filesystem override missing')
-assertf(neo_opts.filesystem.use_libuv_file_watcher == true, 'neo-tree file watcher override is not enabled')
-
-assertf(vim.fn.exists(':Neotree') == 2, ':Neotree command is missing')
-assertf(vim.fn.exists(':LazyGit') == 2, ':LazyGit command is missing')
-assertf(vim.fn.maparg('<leader>gg', 'n') ~= '', '<leader>gg mapping is missing')
+assertf(has_window_picker, 'nvim-window-picker spec missing from navigation')
 
 local ok_picker = pcall(require, 'window-picker')
 assertf(ok_picker, 'window-picker module cannot be required')
+
+-- Snacks (file explorer + picker + lazygit live here).
+-- Snacks.explorer / Snacks.lazygit are callable tables (have __call), not raw functions.
+local function callable(x)
+  if type(x) == 'function' then return true end
+  if type(x) ~= 'table' then return false end
+  local mt = getmetatable(x)
+  return mt ~= nil and type(mt.__call) == 'function'
+end
+
+assertf(type(_G.Snacks) == 'table', 'Snacks global not loaded')
+assertf(callable(Snacks.explorer), 'Snacks.explorer not callable')
+assertf(type(Snacks.picker) == 'table', 'Snacks.picker missing')
+assertf(callable(Snacks.picker.files), 'Snacks.picker.files not callable')
+assertf(callable(Snacks.lazygit), 'Snacks.lazygit not callable')
+
+-- Core keymaps that must be wired for daily use
+assertf(vim.fn.maparg('<leader>e', 'n') ~= '', '<leader>e (explorer) mapping is missing')
+assertf(vim.fn.maparg('<leader>sf', 'n') ~= '', '<leader>sf (find files) mapping is missing')
+assertf(vim.fn.maparg('<leader>gg', 'n') ~= '', '<leader>gg (lazygit) mapping is missing')
 
 print('smoke:ok')
