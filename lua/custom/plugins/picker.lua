@@ -1,5 +1,7 @@
--- Picker keymaps (snacks.picker)
--- LSP navigation keymaps are set in the LspAttach autocommand below.
+-- Picker keymaps (snacks.picker).
+-- LSP navigation keymaps are set per-buffer in the LspAttach autocommand below.
+-- (Document highlight + inlay hints live in the `kickstart-lsp-attach` autocommand
+--  inside lua/custom/plugins/lsp.lua — split is intentional.)
 
 -- File explorer
 vim.keymap.set('n', '<leader>e', function() Snacks.explorer() end, { desc = 'File [E]xplorer toggl[e]' })

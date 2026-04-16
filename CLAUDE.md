@@ -44,7 +44,7 @@ Read `ARCHITECTURE.md` and `AGENTS.md` first — they cover the module layout an
 - Put personal plugin additions in `lua/custom/plugins/*.lua`, grouped by feature (navigation, git, ui, docker).
 - Keep plugin-related keymaps close to their plugin config.
 - Don't re-expand the modular layout back into a giant `init.lua`.
-- All LSP navigation keymaps (`grd`, `grr`, `gri`, `grt`, `grD`, `gO`, `gW`) live in the Telescope `LspAttach` autocommand. The lspconfig `LspAttach` handles only document highlight and inlay hints. `grn`/`gra` are Neovim 0.11+ built-in defaults.
+- All LSP navigation keymaps (`grd`, `grr`, `gri`, `grt`, `grD`, `gO`, `gW`) live in the snacks-picker `LspAttach` autocommand (`lua/custom/plugins/picker.lua`). The lspconfig `LspAttach` (`lua/custom/plugins/lsp.lua`) handles only document highlight and inlay hints. `grn`/`gra` are Neovim 0.11+ built-in defaults.
 
 ## LSP Servers Configured
 

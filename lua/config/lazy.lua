@@ -74,7 +74,7 @@ require('lazy').setup({
     -- Change the name of the colorscheme plugin below, and then
     -- change the command in the config to whatever the name of that colorscheme is.
     --
-    -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
+    -- To browse installed colorschemes, open the picker via `<leader>ss` and choose "colorschemes".
     'catppuccin/nvim',
     name = 'catppuccin',
     priority = 1000,
@@ -226,9 +226,8 @@ require('lazy').setup({
   { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
-  -- Or use telescope!
-  -- In normal mode type `<space>sh` then write `lazy.nvim-plugin`
-  -- you can continue same window with `<space>sr` which resumes last telescope search
+  -- Or use the snacks picker: `<leader>sh` then type `lazy.nvim-plugin`.
+  -- Resume the last picker search with `<leader>sr`.
 }, {
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the
