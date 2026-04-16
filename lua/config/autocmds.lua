@@ -47,16 +47,18 @@ vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'TermClose' }, {
   end,
 })
 
--- Auto-save all modified buffers on focus lost, buffer leave, or leaving insert mode
-vim.api.nvim_create_autocmd({ 'FocusLost', 'BufLeave', 'InsertLeave', 'TextChanged' }, {
-  desc = 'Auto-save all modified buffers',
+-- Auto-save the current buffer on focus lost, buffer leave, or leaving insert mode.
+-- Scoped to the triggering buffer (not all buffers) and writes are pcalled so failures
+-- surface in :messages instead of being swallowed by `silent!`.
+vim.api.nvim_create_autocmd({ 'FocusLost', 'BufLeave', 'InsertLeave' }, {
+  desc = 'Auto-save current buffer',
   group = vim.api.nvim_create_augroup('auto-save', { clear = true }),
-  callback = function()
-    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.bo[buf].modified and vim.bo[buf].modifiable and vim.bo[buf].buftype == '' and vim.api.nvim_buf_get_name(buf) ~= '' then
-        vim.api.nvim_buf_call(buf, function() vim.cmd 'silent! w' end)
-      end
-    end
+  callback = function(args)
+    local buf = args.buf
+    if not vim.bo[buf].modified or not vim.bo[buf].modifiable then return end
+    if vim.bo[buf].buftype ~= '' or vim.api.nvim_buf_get_name(buf) == '' then return end
+    local ok, err = pcall(function() vim.api.nvim_buf_call(buf, function() vim.cmd.write { mods = { silent = true } } end) end)
+    if not ok then vim.notify('auto-save failed: ' .. tostring(err), vim.log.levels.WARN) end
   end,
 })
 
