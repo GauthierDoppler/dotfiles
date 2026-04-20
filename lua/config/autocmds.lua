@@ -61,14 +61,3 @@ vim.api.nvim_create_autocmd({ 'FocusLost', 'BufLeave', 'InsertLeave' }, {
     if not ok then vim.notify('auto-save failed: ' .. tostring(err), vim.log.levels.WARN) end
   end,
 })
-
--- Force-close buffers without prompting (auto-save handles persistence)
-vim.api.nvim_create_autocmd('BufDelete', {
-  desc = 'Force-delete modified buffers since auto-save handles persistence',
-  group = vim.api.nvim_create_augroup('force-buf-delete', { clear = true }),
-  callback = function(args)
-    if vim.bo[args.buf].modified then
-      vim.bo[args.buf].modified = false
-    end
-  end,
-})
