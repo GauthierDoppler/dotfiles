@@ -1,6 +1,6 @@
 -- Picker keymaps (snacks.picker).
 -- LSP navigation keymaps are set per-buffer in the LspAttach autocommand below.
--- (Document highlight + inlay hints live in the `kickstart-lsp-attach` autocommand
+-- (Document highlight + inlay hints live in the `lsp-attach` autocommand
 --  inside lua/custom/plugins/lsp.lua — split is intentional.)
 
 -- File explorer
