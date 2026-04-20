@@ -30,6 +30,9 @@ return {
     },
     opts = {
       focus = true,
+      keys = {
+        ['<cr>'] = 'jump_close',
+      },
       win = {
         type = 'float',
         border = 'rounded',
