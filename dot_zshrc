@@ -67,10 +67,12 @@ alias tmux-help='echo "
      Ctrl+a → w         menu de toutes les windows, toutes sessions  ·  Alt+w
      Ctrl+a → 1-9       aller à la window N
 
-  ── BARRE DE STATUT (2 lignes) ──
-     ligne du haut : toutes les sessions vivantes (la courante en bleu)
-     ligne du bas  : les windows de la session courante
-                     •  activité   ·  !  bell   ·  󰊓  zoom
+  ── BARRE DE STATUT ──
+     bp-api_main ····   1 cc  2 nvim  3 dev
+     le worktree courant, puis un point par AUTRE session
+     (jaune = cette session a une window en alerte), puis les windows
+     marqueurs : •  activité   ·  !  bell   ·  󰊓  zoom
+     la liste des sessions est dans le menu (Ctrl+a → s), pas dans la barre
 
   ── PANE MODE ── Ctrl+a → p → ...
      d  split down          r  split right

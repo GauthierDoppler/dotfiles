@@ -63,9 +63,11 @@ Auto-installed by `install.sh` via `Brewfile`:
 
 Prefix is `Ctrl+a`. Modes are displayed in the status bar. `Prefix → ?` opens this as a popup.
 
-The status bar is **two rows**: the top one lists every live session (the current one highlighted), the bottom one the windows of that session. With one session per worktree ([grove](https://github.com/GauthierDoppler/grove-ai)), the top row is the map of what you have running and the bottom row is where you are inside it.
+The status bar answers **where am I**; the menus answer **where can I go**. It reads `bp-api_main ····  1 cc  2 nvim  3 dev`: the worktree you're in, one dot per *other* live session, then the windows of this session.
 
-One row was not enough: at 120 columns, 5 worktree sessions eat ~95 of them and the window list collapses to `1:cc >`. Session names are shortened for the bar — `grove_bp-api_main_f2d1` renders as `bp-api_main`. Window markers: `•` activity, `!` bell, `󰊓` zoomed.
+Listing every session in the bar cost ~95 of 120 columns and drowned the one thing you read continuously — the current window. The dots keep the awareness at 4 columns instead of 95, and a dot turns **yellow** when that session has a window in alert, so you see that a Claude finished elsewhere without carrying the list around. `Prefix → s` resolves a dot into a name.
+
+Session names are shortened — `grove_bp-api_main_f2d1` renders as `bp-api_main`. Window markers: `•` activity, `!` bell, `󰊓` zoomed. The active window is the only saturated block on the bar, in the same blue as the active pane border.
 
 ### Sessions
 
@@ -73,7 +75,7 @@ Switching uses `switch-client`, not `attach-session`, so it works from inside a 
 
 | Shortcut | Action |
 |----------|--------|
-| `Prefix → s` / `Alt+s` | Session menu — numbered popup, grove's `grove_` prefix and hash trimmed |
+| `Prefix → s` / `Alt+s` | Session menu — numbered popup, grove's `grove_` prefix and hash trimmed, `•` marks a session in alert |
 | `Prefix → Tab` | Last session (ping-pong between two worktrees) |
 | `Prefix → ( )` | Previous / next session (repeatable) |
 | `Prefix → S` | Full `choose-tree` picker |

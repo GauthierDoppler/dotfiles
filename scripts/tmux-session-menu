@@ -31,11 +31,15 @@ pretty() {
   printf '%s' "$name"
 }
 
-# First pass: collect, and measure the longest name so the window counts line up.
+# First pass: collect, and measure the longest name so the right column lines up.
+#
+# The status bar no longer lists the sessions — it shows one dot per other
+# session, and a yellow dot when that session has a window in alert. This menu
+# is where that dot gets resolved into a name, so it carries the same marker.
 names=() labels=() counts=()
 width=0
 
-while IFS=$'\t' read -r name windows attached; do
+while IFS=$'\t' read -r name windows attached alerts; do
   [ -n "$name" ] || continue
 
   if [ "$name" = "$current" ]; then
@@ -51,8 +55,8 @@ while IFS=$'\t' read -r name windows attached; do
 
   names+=("$name")
   labels+=("$label")
-  counts+=("$windows")
-done < <(tmux list-sessions -F '#{session_name}	#{session_windows}	#{session_attached}' 2>/dev/null | sort)
+  counts+=("${windows}w${alerts:+ •}")
+done < <(tmux list-sessions -F '#{session_name}	#{session_windows}	#{session_attached}	#{session_alerts}' 2>/dev/null | sort)
 
 # Menu entries are (label, key, command) triples; a lone "" draws a separator.
 items=()
@@ -61,7 +65,7 @@ keys='123456789abcdefg'
 for i in "${!names[@]}"; do
   [ "$i" -lt "${#keys}" ] || break
   items+=(
-    "$(printf '%-*s  %sw' "$width" "${labels[$i]}" "${counts[$i]}")"
+    "$(printf '%-*s  %s' "$width" "${labels[$i]}" "${counts[$i]}")"
     "${keys:$i:1}"
     "switch-client -t '=${names[$i]}'"
   )
