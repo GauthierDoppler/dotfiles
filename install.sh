@@ -98,7 +98,22 @@ link "dot_claude/hooks"                "$HOME/.claude/hooks"
 
 # Scripts
 mkdir -p "$HOME/.local/bin"
-link "scripts/ssh-setup"   "$HOME/.local/bin/ssh-setup"
+link "scripts/ssh-setup"          "$HOME/.local/bin/ssh-setup"
+link "scripts/tmux-session-menu"  "$HOME/.local/bin/tmux-session-menu"
+link "scripts/tmux-window-menu"   "$HOME/.local/bin/tmux-window-menu"
+
+# ─── Phase 6b: TPM (tmux plugin manager) ───────────────────
+# dot_tmux.conf ends with `run '~/.tmux/plugins/tpm/tpm'`; without the clone
+# that line is a no-op and resurrect/continuum never load.
+TPM_DIR="$HOME/.tmux/plugins/tpm"
+if [[ ! -d "$TPM_DIR" ]]; then
+  echo "Installing TPM..."
+  git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR"
+fi
+# Install any plugins declared in dot_tmux.conf, non-interactively.
+if [[ -x "$TPM_DIR/bin/install_plugins" ]]; then
+  "$TPM_DIR/bin/install_plugins" || warn "tpm install_plugins failed (is tmux running?)"
+fi
 
 # ─── Phase 7: Switch remote to SSH ─────────────────────────
 current_remote="$(git -C "$DOTFILES" remote get-url origin 2>/dev/null || true)"

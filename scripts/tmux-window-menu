@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Numbered popup of every window in every session — jump anywhere in one hop.
+#
+# Windows of the current session come first (keyed 1-9), then the windows of
+# other sessions, each prefixed with its shortened session name. Selecting an
+# entry switches session and selects the window in a single command, so it
+# works from inside a session without a new terminal tab.
+#
+# Usage: tmux-window-menu [client-name]
+
+set -euo pipefail
+
+client="${1:-}"
+
+current="$(tmux display-message -p '#{client_session}')"
+
+# grove_bp-api_main_f2d1 -> bp-api_main
+pretty() {
+  local name="$1"
+  case "$name" in
+    grove_*)
+      name="${name#grove_}"
+      case "$name" in
+        *_[0-9a-f][0-9a-f][0-9a-f][0-9a-f]) name="${name%_????}" ;;
+      esac
+      ;;
+  esac
+  printf '%s' "$name"
+}
+
+items=()
+keys='123456789abcdefghijklmnopqrstuvwxyz'
+i=0
+last_session=''
+
+add_window() {
+  local session="$1" index="$2" wname="$3" cmd="$4" active="$5" label
+
+  [ "$i" -lt "${#keys}" ] || return 0
+
+  if [ "$session" = "$current" ]; then
+    label="$(printf '%s %s:%s  %s' "$([ "$active" = '1' ] && echo '*' || echo ' ')" "$index" "$wname" "$cmd")"
+  else
+    label="$(printf '  %s  %s:%s  %s' "$(pretty "$session")" "$index" "$wname" "$cmd")"
+  fi
+
+  # A blank separator between session groups keeps the list scannable.
+  if [ -n "$last_session" ] && [ "$session" != "$last_session" ]; then
+    items+=("")
+  fi
+  last_session="$session"
+
+  items+=(
+    "$label"
+    "${keys:$i:1}"
+    "switch-client -t '=${session}:${index}'"
+  )
+  i=$((i + 1))
+}
+
+# Current session first, then the rest — the windows you are most likely to
+# want land on keys 1-9.
+while IFS=$'\t' read -r session index wname cmd active; do
+  [ "$session" = "$current" ] || continue
+  add_window "$session" "$index" "$wname" "$cmd" "$active"
+done < <(tmux list-windows -a -F '#{session_name}	#{window_index}	#{window_name}	#{pane_current_command}	#{window_active}' 2>/dev/null)
+
+while IFS=$'\t' read -r session index wname cmd active; do
+  [ "$session" != "$current" ] || continue
+  add_window "$session" "$index" "$wname" "$cmd" "$active"
+done < <(tmux list-windows -a -F '#{session_name}	#{window_index}	#{window_name}	#{pane_current_command}	#{window_active}' 2>/dev/null | sort)
+
+items+=(
+  ""
+  "last window" "Tab" "last-window"
+  "rename this window" "," "command-prompt -I '#W' \"rename-window -- '%%'\""
+  "new window here" "n" "new-window -c '#{pane_current_path}'"
+)
+
+if [ -n "$client" ]; then
+  tmux display-menu -c "$client" -T ' windows ' -x C -y C "${items[@]}"
+else
+  tmux display-menu -T ' windows ' -x C -y C "${items[@]}"
+fi

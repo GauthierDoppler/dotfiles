@@ -51,6 +51,22 @@ alias c="clear"
 alias cl="claude"
 alias "cl-yolo"="claude --dangerously-skip-permissions"
 alias tmux-help='echo "
+  ── SESSIONS (une par worktree) ──
+     Ctrl+a → s   menu des sessions (numéroté)   ·  Alt+s
+     Ctrl+a → Tab session précédente (ping-pong)
+     Ctrl+a → ( ) session précédente / suivante
+     Ctrl+a → S   choose-tree complet
+     Tout passe par switch-client : plus besoin d'\''un nouvel onglet.
+
+  ── WINDOWS ──
+     Alt+h / Alt+l      window précédente / suivante   (sans prefix)
+     Alt+1-9            aller à la window N            (sans prefix)
+     Alt+o              dernière window                (sans prefix)
+     Ctrl+a → h / l     window préc. / suiv. (répétable)
+     Ctrl+a → Space     dernière window
+     Ctrl+a → w         menu de toutes les windows, toutes sessions
+     Ctrl+a → 1-9       aller à la window N
+
   ── PANE MODE ── Ctrl+a → p → ...
      d  split down          r  split right
      x  close pane          z  zoom/unzoom
@@ -67,21 +83,24 @@ alias tmux-help='echo "
      H/J/K/L  resize (5px)
 
   ── MOVE MODE ── Ctrl+a → m → ... (sticky, Esc to exit)
-     h/j/k/l  swap pane
+     h/j/k/l  swap pane (dans la vraie direction)
 
   ── DIRECT (Ctrl+a → touche) ──
      |  split right     -  split down     c  new window
-     s  sessions        w  windows        z  zoom
-     d  detach          r  reload         [  copy mode
-     1-9  jump to tab
+     z  zoom            d  detach         r  reload
+     [  copy mode       ?  cheat sheet
 
   ── SANS PREFIX ──
-     Ctrl+h/j/k/l  navigate panes
+     Ctrl+h/j/k/l  navigate panes (Neovim-aware)
 
   ── COPY MODE (Ctrl+a → [) ──
      v  select    y  copy to clipboard    q  quit
      /  search    n/N  next/prev match
      drag souris = copie auto
+
+  ── PLUGINS (TPM) ──
+     Ctrl+a → I  installer      Ctrl+a → U  mettre à jour
+     resurrect + continuum : sauvegarde auto toutes les 15 min
 "'
 
 # ─── Optional sources ─────────────────────────────────────

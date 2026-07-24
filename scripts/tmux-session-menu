@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Numbered popup of live tmux sessions — pick one, switch in place.
+#
+# Grove (github.com/GauthierDoppler/grove-ai) names a session per worktree as
+# "grove_<project>_<branch>_<key>", where <key> is a 4-hex-digit hash of the
+# repo root. The menu strips both so entries read "bp-api_main" instead of
+# "grove_bp-api_main_f2d1".
+#
+# Switching uses switch-client, not attach-session, so it works from inside a
+# session — no new terminal tab needed.
+#
+# Usage: tmux-session-menu [client-name]
+
+set -euo pipefail
+
+client="${1:-}"
+
+current="$(tmux display-message -p '#{client_session}')"
+
+# grove_bp-api_main_f2d1 -> bp-api_main
+pretty() {
+  local name="$1"
+  case "$name" in
+    grove_*)
+      name="${name#grove_}"
+      case "$name" in
+        *_[0-9a-f][0-9a-f][0-9a-f][0-9a-f]) name="${name%_????}" ;;
+      esac
+      ;;
+  esac
+  printf '%s' "$name"
+}
+
+# Menu entries are (label, key, command) triples; a lone "" draws a separator.
+items=()
+keys='123456789abcdefg'
+i=0
+
+while IFS=$'\t' read -r name windows attached; do
+  [ -n "$name" ] || continue
+  [ "$i" -lt "${#keys}" ] || break
+
+  if [ "$name" = "$current" ]; then
+    marker='*'
+  elif [ "$attached" != '0' ]; then
+    marker='+'
+  else
+    marker=' '
+  fi
+
+  items+=(
+    "$marker $(pretty "$name")  ${windows}w"
+    "${keys:$i:1}"
+    "switch-client -t '=${name}'"
+  )
+  i=$((i + 1))
+done < <(tmux list-sessions -F '#{session_name}	#{session_windows}	#{session_attached}' 2>/dev/null | sort)
+
+items+=(
+  ""
+  "last session" "Tab" "switch-client -l"
+  "rename this session" "," "command-prompt -I '#S' \"rename-session -- '%%'\""
+  "new session" "n" "command-prompt -p 'session name:' \"new-session -s '%%'\""
+  "kill this session" "X" "confirm-before -p 'kill #S? (y/n)' kill-session"
+)
+
+if [ -n "$client" ]; then
+  tmux display-menu -c "$client" -T ' sessions ' -x C -y C "${items[@]}"
+else
+  tmux display-menu -T ' sessions ' -x C -y C "${items[@]}"
+fi

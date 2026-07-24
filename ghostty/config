@@ -50,6 +50,11 @@
 keybind = option+tab=goto_split:next
 keybind = option+shift+tab=goto_split:previous
 keybind = option+shift+r=prompt_surface_title
+
+# Left Option acts as Alt so tmux receives Alt+h/l, Alt+1-9 and Alt+s for
+# window/session navigation without a prefix. Right Option is untouched and
+# still types { } [ ] | \ — set this to `true` only if you never need that.
+macos-option-as-alt = left
 # Fix Shift+Enter to send proper escape sequence for tmux
 keybind = shift+enter=text:\x1b[13;2u
 # Bell: bounce dock icon + badge (no system notification to avoid noise)

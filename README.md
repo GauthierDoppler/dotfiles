@@ -61,16 +61,51 @@ Auto-installed by `install.sh` via `Brewfile`:
 
 ## Tmux cheatsheet
 
-Prefix is `Ctrl+a`. Modes are displayed in the status bar.
+Prefix is `Ctrl+a`. Modes are displayed in the status bar. `Prefix → ?` opens this as a popup.
+
+The status bar lists **every live session** with the current one highlighted — with one session per worktree ([grove](https://github.com/GauthierDoppler/grove-ai)), that's the map of what you have running.
+
+### Sessions
+
+Switching uses `switch-client`, not `attach-session`, so it works from inside a session — no new terminal tab.
+
+| Shortcut | Action |
+|----------|--------|
+| `Prefix → s` / `Alt+s` | Session menu — numbered popup, grove's `grove_` prefix and hash trimmed |
+| `Prefix → Tab` | Last session (ping-pong between two worktrees) |
+| `Prefix → ( )` | Previous / next session (repeatable) |
+| `Prefix → S` | Full `choose-tree` picker |
+
+### Windows
+
+| Shortcut | Action |
+|----------|--------|
+| `Alt+h` / `Alt+l` | Previous / next window (no prefix) |
+| `Alt+1-9` | Jump to window N (no prefix) |
+| `Alt+o` | Last window (no prefix) |
+| `Prefix → h` / `l` | Previous / next window (repeatable) |
+| `Prefix → Space` | Last window |
+| `Prefix → w` / `Alt+w` | Menu of every window in every session — jump anywhere in one hop |
+| `Prefix → 1-9` | Jump to window N |
+
+Alt bindings need `macos-option-as-alt = left` in the ghostty config (set by default here). Right Option still types `{ } [ ] | \`.
+
+### Modes
 
 | Shortcut | Action |
 |----------|--------|
 | `Prefix → p` | **Pane mode** — `d` split down, `r` split right, `x` close, `z` zoom, `hjkl` navigate |
 | `Prefix → t` | **Tab mode** — `n` new, `x` close, `,` rename, `hl` prev/next, `1-9` jump |
 | `Prefix → R` | **Resize mode** (sticky) — `hjkl` resize 2px, `HJKL` resize 5px, `Esc` exit |
-| `Prefix → m` | **Move mode** (sticky) — `hjkl` swap panes, `Esc` exit |
+| `Prefix → m` | **Move mode** (sticky) — `hjkl` swap panes directionally, `Esc` exit |
 | `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware) |
 | `Prefix → [` | Copy mode (vi keys: `v` select, `y` copy, `/` search) |
+
+### Plugins
+
+Managed by [TPM](https://github.com/tmux-plugins/tpm), bootstrapped by `install.sh`. `Prefix → I` installs, `Prefix → U` updates.
+
+- **tmux-resurrect** + **tmux-continuum** — auto-saves every 15 min and restores sessions, windows, layouts and working dirs when the tmux server starts, so worktree sessions survive a reboot or a ghostty crash.
 
 ## Git aliases
 
