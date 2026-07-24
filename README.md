@@ -63,7 +63,9 @@ Auto-installed by `install.sh` via `Brewfile`:
 
 Prefix is `Ctrl+a`. Modes are displayed in the status bar. `Prefix → ?` opens this as a popup.
 
-The status bar lists **every live session** with the current one highlighted — with one session per worktree ([grove](https://github.com/GauthierDoppler/grove-ai)), that's the map of what you have running.
+The status bar is **two rows**: the top one lists every live session (the current one highlighted), the bottom one the windows of that session. With one session per worktree ([grove](https://github.com/GauthierDoppler/grove-ai)), the top row is the map of what you have running and the bottom row is where you are inside it.
+
+One row was not enough: at 120 columns, 5 worktree sessions eat ~95 of them and the window list collapses to `1:cc >`. Session names are shortened for the bar — `grove_bp-api_main_f2d1` renders as `bp-api_main`. Window markers: `•` activity, `!` bell, `󰊓` zoomed.
 
 ### Sessions
 
@@ -89,6 +91,10 @@ Switching uses `switch-client`, not `attach-session`, so it works from inside a 
 | `Prefix → 1-9` | Jump to window N |
 
 Alt bindings need `macos-option-as-alt = left` in the ghostty config (set by default here). Right Option still types `{ } [ ] | \`.
+
+### Look & feel
+
+Menus and popups are themed rather than left to tmux's white-on-black defaults: Catppuccin Mocha ground, rounded borders (`menu-border-lines` / `popup-border-lines`), and both menu scripts pad their columns to a measured width so entries don't stair-step. The inactive pane is dimmed slightly (`window-style` vs `window-active-style`) and the active pane border is blue, so the focused pane reads without hunting. Window activity and bell show as a `•` / `!` marker only — tmux's default `reverse` style painted a grey block over half the bar.
 
 ### Modes
 

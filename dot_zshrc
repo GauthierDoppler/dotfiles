@@ -64,8 +64,13 @@ alias tmux-help='echo "
      Alt+o              dernière window                (sans prefix)
      Ctrl+a → h / l     window préc. / suiv. (répétable)
      Ctrl+a → Space     dernière window
-     Ctrl+a → w         menu de toutes les windows, toutes sessions
+     Ctrl+a → w         menu de toutes les windows, toutes sessions  ·  Alt+w
      Ctrl+a → 1-9       aller à la window N
+
+  ── BARRE DE STATUT (2 lignes) ──
+     ligne du haut : toutes les sessions vivantes (la courante en bleu)
+     ligne du bas  : les windows de la session courante
+                     •  activité   ·  !  bell   ·  󰊓  zoom
 
   ── PANE MODE ── Ctrl+a → p → ...
      d  split down          r  split right

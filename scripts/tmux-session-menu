@@ -31,14 +31,12 @@ pretty() {
   printf '%s' "$name"
 }
 
-# Menu entries are (label, key, command) triples; a lone "" draws a separator.
-items=()
-keys='123456789abcdefg'
-i=0
+# First pass: collect, and measure the longest name so the window counts line up.
+names=() labels=() counts=()
+width=0
 
 while IFS=$'\t' read -r name windows attached; do
   [ -n "$name" ] || continue
-  [ "$i" -lt "${#keys}" ] || break
 
   if [ "$name" = "$current" ]; then
     marker='*'
@@ -48,13 +46,26 @@ while IFS=$'\t' read -r name windows attached; do
     marker=' '
   fi
 
-  items+=(
-    "$marker $(pretty "$name")  ${windows}w"
-    "${keys:$i:1}"
-    "switch-client -t '=${name}'"
-  )
-  i=$((i + 1))
+  label="$marker $(pretty "$name")"
+  [ "${#label}" -gt "$width" ] && width="${#label}"
+
+  names+=("$name")
+  labels+=("$label")
+  counts+=("$windows")
 done < <(tmux list-sessions -F '#{session_name}	#{session_windows}	#{session_attached}' 2>/dev/null | sort)
+
+# Menu entries are (label, key, command) triples; a lone "" draws a separator.
+items=()
+keys='123456789abcdefg'
+
+for i in "${!names[@]}"; do
+  [ "$i" -lt "${#keys}" ] || break
+  items+=(
+    "$(printf '%-*s  %sw' "$width" "${labels[$i]}" "${counts[$i]}")"
+    "${keys:$i:1}"
+    "switch-client -t '=${names[$i]}'"
+  )
+done
 
 items+=(
   ""

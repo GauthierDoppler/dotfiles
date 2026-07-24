@@ -28,47 +28,58 @@ pretty() {
   printf '%s' "$name"
 }
 
-items=()
-keys='123456789abcdefghijklmnopqrstuvwxyz'
-i=0
-last_session=''
+sessions=() targets=() labels=() cmds=()
+width=0
 
-add_window() {
+# First pass: build the labels and measure the longest, so the command column
+# lines up instead of stair-stepping.
+collect() {
   local session="$1" index="$2" wname="$3" cmd="$4" active="$5" label
 
-  [ "$i" -lt "${#keys}" ] || return 0
-
   if [ "$session" = "$current" ]; then
-    label="$(printf '%s %s:%s  %s' "$([ "$active" = '1' ] && echo '*' || echo ' ')" "$index" "$wname" "$cmd")"
+    label="$(printf '%s %s:%s' "$([ "$active" = '1' ] && echo '*' || echo ' ')" "$index" "$wname")"
   else
-    label="$(printf '  %s  %s:%s  %s' "$(pretty "$session")" "$index" "$wname" "$cmd")"
+    label="$(printf '  %s  %s:%s' "$(pretty "$session")" "$index" "$wname")"
   fi
+  [ "${#label}" -gt "$width" ] && width="${#label}"
 
-  # A blank separator between session groups keeps the list scannable.
-  if [ -n "$last_session" ] && [ "$session" != "$last_session" ]; then
-    items+=("")
-  fi
-  last_session="$session"
-
-  items+=(
-    "$label"
-    "${keys:$i:1}"
-    "switch-client -t '=${session}:${index}'"
-  )
-  i=$((i + 1))
+  sessions+=("$session")
+  targets+=("${session}:${index}")
+  labels+=("$label")
+  cmds+=("$cmd")
 }
 
 # Current session first, then the rest — the windows you are most likely to
 # want land on keys 1-9.
 while IFS=$'\t' read -r session index wname cmd active; do
   [ "$session" = "$current" ] || continue
-  add_window "$session" "$index" "$wname" "$cmd" "$active"
+  collect "$session" "$index" "$wname" "$cmd" "$active"
 done < <(tmux list-windows -a -F '#{session_name}	#{window_index}	#{window_name}	#{pane_current_command}	#{window_active}' 2>/dev/null)
 
 while IFS=$'\t' read -r session index wname cmd active; do
   [ "$session" != "$current" ] || continue
-  add_window "$session" "$index" "$wname" "$cmd" "$active"
+  collect "$session" "$index" "$wname" "$cmd" "$active"
 done < <(tmux list-windows -a -F '#{session_name}	#{window_index}	#{window_name}	#{pane_current_command}	#{window_active}' 2>/dev/null | sort)
+
+items=()
+keys='123456789abcdefghijklmnopqrstuvwxyz'
+last_session=''
+
+for i in "${!targets[@]}"; do
+  [ "$i" -lt "${#keys}" ] || break
+
+  # A blank separator between session groups keeps the list scannable.
+  if [ -n "$last_session" ] && [ "${sessions[$i]}" != "$last_session" ]; then
+    items+=("")
+  fi
+  last_session="${sessions[$i]}"
+
+  items+=(
+    "$(printf '%-*s  %s' "$width" "${labels[$i]}" "${cmds[$i]}")"
+    "${keys:$i:1}"
+    "switch-client -t '=${targets[$i]}'"
+  )
+done
 
 items+=(
   ""
