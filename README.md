@@ -96,6 +96,10 @@ Alt bindings need `macos-option-as-alt = left` in the ghostty config (set by def
 
 ### Look & feel
 
+The bar is drawn as powerline segments on `#181825` — darker than the terminal ground, so it reads as a bar rather than one more line of text. Each window carries an icon derived from the command actually running in its active pane (nvim, claude, node/bun, shell), so you spot the nvim window without reading the name.
+
+The current window's accent **follows the active mode**: blue at rest (matching the active pane border), peach the moment you enter pane/tab/resize/move mode, alongside the mode chip on the right. That branch lives in `window-status-current-format`, not in `window-status-current-style` — a `-style` option is format-expanded without client context, so `#{client_key_table}` there is always empty and the accent would be stuck on one branch.
+
 Menus and popups are themed rather than left to tmux's white-on-black defaults: Catppuccin Mocha ground, rounded borders (`menu-border-lines` / `popup-border-lines`), and both menu scripts pad their columns to a measured width so entries don't stair-step. The inactive pane is dimmed slightly (`window-style` vs `window-active-style`) and the active pane border is blue, so the focused pane reads without hunting. Window activity and bell show as a `•` / `!` marker only — tmux's default `reverse` style painted a grey block over half the bar.
 
 ### Modes
