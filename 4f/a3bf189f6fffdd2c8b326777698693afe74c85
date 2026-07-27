@@ -1,0 +1,21 @@
+CLAUDE.md
+  s_1de67a8e1c4833::t_f8d0781628d8a8 1
+AGENTS.md
+  s_1de67a8e1c4833::t_046d32333b242f 1-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "4fa3bf189f6fffdd2c8b326777698693afe74c85",
+  "prompts": {},
+  "sessions": {
+    "s_1de67a8e1c4833": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c15fbe10-1b04-4d03-a22f-6e751802c7a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
