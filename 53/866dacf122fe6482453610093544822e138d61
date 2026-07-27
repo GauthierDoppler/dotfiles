@@ -1,0 +1,19 @@
+install.sh
+  s_1de67a8e1c4833::t_31fe4a27c1999a 150-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "53866dacf122fe6482453610093544822e138d61",
+  "prompts": {},
+  "sessions": {
+    "s_1de67a8e1c4833": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c15fbe10-1b04-4d03-a22f-6e751802c7a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
