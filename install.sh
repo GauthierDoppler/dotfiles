@@ -98,6 +98,7 @@ link "dot_claude/hooks"                "$HOME/.claude/hooks"
 
 # Scripts
 mkdir -p "$HOME/.local/bin"
+link "scripts/local-diff"  "$HOME/.local/bin/local-diff"
 link "scripts/ssh-setup"   "$HOME/.local/bin/ssh-setup"
 
 # ─── Phase 7: Switch remote to SSH ─────────────────────────

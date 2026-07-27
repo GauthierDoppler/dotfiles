@@ -1,0 +1,101 @@
+#!/bin/bash
+# Show everything living in machine-local config files that is NOT in the
+# shared dotfiles config — i.e. what this machine has that a fresh clone wouldn't.
+#
+# Usage: local-diff
+#
+# Each finding is a candidate for one of two decisions:
+#   - promote it into the tracked dotfiles (it's generic, you want it everywhere)
+#   - leave it local (it's machine-, work-, or account-specific)
+
+set -uo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+
+bold=$'\033[1m'; dim=$'\033[90m'; yellow=$'\033[33m'; green=$'\033[32m'; reset=$'\033[0m'
+found=0
+
+shorten() { echo "$1" | sed "s|^$HOME|~|"; }
+header() { printf "\n%s%s%s\n%s%s%s\n" "$bold" "$(shorten "$1")" "$reset" "$dim" "$2" "$reset"; }
+emit()   { sed "s/^/  $yellow/;s/\$/$reset/"; }
+
+# Lines in a shell file that carry meaning: no comments, no blanks, whitespace-normalized.
+shell_significant() {
+    sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$1" \
+        | grep -v '^$'
+}
+
+# ─── Shell: line-by-line ───────────────────────────────────
+diff_shell() {
+    local local_file="$1" shared_file="$2"
+    [[ -f "$local_file" ]] || return 0
+
+    local extra
+    extra=$(comm -23 \
+        <(shell_significant "$local_file" | sort -u) \
+        <(shell_significant "$shared_file" | sort -u))
+
+    [[ -z "$extra" ]] && return 0
+    found=1
+    header "$local_file" "not in $(shorten "$shared_file")"
+    echo "$extra" | emit
+}
+
+# ─── Gitconfig: key-by-key (order- and formatting-insensitive) ───
+diff_gitconfig() {
+    local local_file="$1" shared_file="$2"
+    [[ -f "$local_file" ]] || return 0
+
+    local extra
+    extra=$(comm -23 \
+        <(git config --file "$local_file" --list 2>/dev/null | sort -u) \
+        <(git config --file "$shared_file" --list 2>/dev/null | sort -u))
+
+    [[ -z "$extra" ]] && return 0
+    found=1
+    header "$local_file" "not in $(shorten "$shared_file")"
+    echo "$extra" | emit
+}
+
+# ─── JSON: key paths present locally but not shared ────────
+diff_json() {
+    local local_file="$1" shared_file="$2"
+    [[ -f "$local_file" ]] || return 0
+    command -v jq >/dev/null || return 0
+
+    # key=value, not just key: a local override with a *different value* for a
+    # shared key is exactly the kind of drift worth surfacing.
+    local flatten='[paths(scalars) as $p | ($p | join(".")) + "=" + (getpath($p) | tostring)] | .[]'
+
+    local extra
+    extra=$(comm -23 \
+        <(jq -r "$flatten" "$local_file" 2>/dev/null | sort -u) \
+        <(jq -r "$flatten" "$shared_file" 2>/dev/null | sort -u))
+
+    [[ -z "$extra" ]] && return 0
+    found=1
+    header "$local_file" "not in $(shorten "$shared_file")"
+    echo "$extra" | emit
+}
+
+diff_shell     "$HOME/.zshrc.local"              "$DOTFILES/dot_zshrc"
+diff_gitconfig "$HOME/.gitconfig.local"          "$DOTFILES/dot_gitconfig"
+diff_json      "$HOME/.claude/settings.local.json" "$DOTFILES/dot_claude/settings.json"
+
+# ─── Orphans: local files nothing knows about ──────────────
+known=(".zshrc.local" ".gitconfig.local")
+orphans=""
+for f in "$HOME"/.*.local; do
+    [[ -e "$f" ]] || continue
+    base="$(basename "$f")"
+    printf '%s\n' "${known[@]}" | grep -qx "$base" || orphans+="  $base"$'\n'
+done
+if [[ -n "$orphans" ]]; then
+    found=1
+    header "Unpaired local files" "no shared counterpart is being compared"
+    printf '%s\n' "${orphans%$'\n'}" | sed "s/^ *//" | emit
+fi
+
+if [[ $found -eq 0 ]]; then
+    printf "%s✓ local config adds nothing beyond the shared dotfiles%s\n" "$green" "$reset"
+fi
