@@ -147,5 +147,14 @@ EOF
   echo "created: ~/.zshrc.local"
 fi
 
+# ─── Phase 13: .gitconfig.local ────────────────────────────
+if [[ ! -f "$HOME/.gitconfig.local" ]]; then
+  cat > "$HOME/.gitconfig.local" << 'EOF'
+# Machine-specific config — not tracked in dotfiles.
+# Add local credential helpers, daemon sockets, per-machine identities, etc. here.
+EOF
+  echo "created: ~/.gitconfig.local"
+fi
+
 echo ""
 echo "Done! Open a new terminal or run: exec zsh"
