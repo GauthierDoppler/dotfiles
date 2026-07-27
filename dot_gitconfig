@@ -19,5 +19,10 @@ name = Gauthier Doppler
 	pushall = push --recurse-submodules=on-demand
 	sync = !git fetch && git rebase origin/main
 	sync-safe = "!stashed=$(git stash); git fetch && git rebase origin/main; [ \"$stashed\" != \"No local changes to save\" ] && git stash pop"
+[credential "https://git.heroku.com"]
+	helper = !heroku git:credentials
 [include]
 	path = ~/dotfiles/delta/themes.gitconfig
+# Machine-specific config — not tracked in dotfiles.
+[include]
+	path = ~/.gitconfig.local
