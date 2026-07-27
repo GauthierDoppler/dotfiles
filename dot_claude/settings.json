@@ -6,7 +6,7 @@
       "Bash(pnpm test:*)",
       "Bash(pnpm typecheck:*)"
     ],
-    "defaultMode": "default"
+    "defaultMode": "auto"
   },
   "model": "opus[1m]",
   "hooks": {
@@ -20,6 +20,28 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.git-ai/bin/git-ai checkpoint claude --hook-input stdin"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.git-ai/bin/git-ai checkpoint claude --hook-input stdin"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
@@ -28,9 +50,10 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "ruby-lsp@claude-plugins-official": true,
+    "codex@openai-codex": true,
     "playground@claude-plugins-official": true,
-    "codex@openai-codex": true
+    "ruby-lsp@claude-plugins-official": true,
+    "plannotator@plannotator": true
   },
   "extraKnownMarketplaces": {
     "openai-codex": {
@@ -38,10 +61,25 @@
         "source": "github",
         "repo": "openai/codex-plugin-cc"
       }
+    },
+    "plannotator": {
+      "source": {
+        "source": "github",
+        "repo": "backnotprop/plannotator"
+      }
     }
   },
   "alwaysThinkingEnabled": true,
-  "effortLevel": "high",
-  "voiceEnabled": true,
-  "skipDangerousModePermissionPrompt": true
+  "effortLevel": "medium",
+  "tui": "default",
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
+  "editorMode": "normal",
+  "teammateMode": "in-process",
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": true
 }
