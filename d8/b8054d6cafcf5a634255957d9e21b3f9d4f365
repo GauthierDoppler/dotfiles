@@ -1,0 +1,38 @@
+dot_zshrc
+  s_b8181be137c596::t_427be2deed81fc 53-54
+dot_tmux.conf
+  s_b8181be137c596::t_014a2fd16097c0 171-181
+  s_a24781aa900bd3::t_855ca98b5817bb 129-137
+  s_a24781aa900bd3::t_e45aebe186dab9 305-307,312-315,317-318,320-326,328-329
+  s_a24781aa900bd3::t_988e970d610301 282,284
+  s_b8181be137c596::t_b7aaf2ccafdb4c 203-209
+  s_b8181be137c596::t_a7d7f4ee601b18 319
+  s_a24781aa900bd3::t_9f5f257d4f25a9 187-202
+scripts/tmux-sessions
+  s_a24781aa900bd3::t_5164cf3bbcc9a2 19,22-45
+  s_a24781aa900bd3::t_7824b7f7233ebf 1-18,20-21,46-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "d8b8054d6cafcf5a634255957d9e21b3f9d4f365",
+  "prompts": {},
+  "sessions": {
+    "s_a24781aa900bd3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d169cd80-c1ab-413e-a381-5d1429bc5605",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    },
+    "s_b8181be137c596": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e0ded61a-792c-40a2-8213-f6b2ac51b225",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
