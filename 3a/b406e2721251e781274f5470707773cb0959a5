@@ -1,0 +1,22 @@
+Brewfile
+  s_b8181be137c596::t_98c2257a5d3353 20-23,31-37
+  s_b8181be137c596::t_595bced9ed884c 24
+  s_b8181be137c596::t_69d80eb299aba6 14-15,17-19
+  s_b8181be137c596::t_0dc070a5e0af4f 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "3ab406e2721251e781274f5470707773cb0959a5",
+  "prompts": {},
+  "sessions": {
+    "s_b8181be137c596": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e0ded61a-792c-40a2-8213-f6b2ac51b225",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
