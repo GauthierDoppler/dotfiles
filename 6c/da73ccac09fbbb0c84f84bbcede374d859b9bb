@@ -1,0 +1,23 @@
+README.md
+  s_b8181be137c596::t_306d16edf50454 43-46,49-50,53-72,74,76-78
+AGENTS.md
+  s_b8181be137c596::t_a56ffc77e02aa8 18
+  s_b8181be137c596::t_bff3babab6ed7e 27-60
+  s_b8181be137c596::t_781b510b0608e2 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "6cda73ccac09fbbb0c84f84bbcede374d859b9bb",
+  "prompts": {},
+  "sessions": {
+    "s_b8181be137c596": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e0ded61a-792c-40a2-8213-f6b2ac51b225",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
