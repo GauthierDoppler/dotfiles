@@ -40,15 +40,42 @@ zed/               → ~/.config/zed
 lazygit/           → ~/.config/lazygit
 delta/             → ~/.config/delta
 git/ignore         → ~/.config/git/ignore
+lazydocker/        → ~/.config/lazydocker
+dot_claude/CLAUDE.md            → ~/.claude/CLAUDE.md
+dot_claude/hooks                → ~/.claude/hooks
+dot_claude/statusline-custom.sh → ~/.claude/statusline-custom.sh
 ```
+
+`~/.claude/settings.json` is deliberately **not** symlinked — see below.
 
 ### Machine-specific config
 
-Add local overrides (project paths, work tools) to `~/.zshrc.local` — it's sourced last and not tracked in git.
+Every tracked config is portable. Anything specific to one machine (project
+paths, work tools, credential helpers) goes in an untracked local file:
 
-### SSH helper
+| Shared (tracked)           | Local (untracked)                |
+| -------------------------- | -------------------------------- |
+| `dot_zshrc`                | `~/.zshrc.local` (sourced last)  |
+| `dot_gitconfig`            | `~/.gitconfig.local` (included)  |
+| `dot_claude/settings.json` | `dot_claude/settings.local.json` |
 
-`ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard. Available after install.
+`local-diff` lists what has accumulated locally, so you can decide whether to
+promote it into the tracked config or leave it machine-specific.
+
+Claude Code is the awkward one: it has no user-scope local settings file, and it
+rewrites `~/.claude/settings.json` in place (reordering keys, absolutising
+paths). So that file is generated rather than linked. `claude-settings-sync`
+merges the tracked base with the local override, and before each regeneration it
+captures whatever the app changed into the local override — so app-side edits are
+never lost and the shared base still propagates. `--dry-run` previews it.
+
+### Helpers
+
+Symlinked into `~/.local/bin` by `install.sh`:
+
+- `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
+- `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
+- `claude-settings-sync` — regenerates `~/.claude/settings.json` from base + local override
 
 ## Dependencies
 
