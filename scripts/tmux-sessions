@@ -1,40 +1,90 @@
 #!/bin/bash
-# Fuzzy tmux session switcher, meant to be run inside `display-popup -E`.
+# Modal fuzzy tmux session switcher, meant to be run inside `display-popup -E`.
 #
-#   Enter    switch to the highlighted session
-#   Ctrl-x   kill the highlighted session and keep picking
-#   Esc      cancel
+#   j / k     move down / up
+#   Enter     switch to the highlighted session
+#   Tab       toggle: this project's sessions  <->  all sessions
+#   i         start filtering by name
+#   Esc       leave search if searching, otherwise close
+#   q         close (navigation only — in search it is a plain character)
+#   Ctrl-x    kill the highlighted session and keep picking
 #
-# The current session is excluded and the list is sorted most-recently-used
-# first, so the top entry is always the session you came from: Prefix+s then
-# Enter is a "jump back" toggle.
+# Search is OFF by default. With a handful of sessions, navigating beats typing,
+# so j/k are movement keys and only `i` hands the keyboard to the query.
 #
-# Usage: tmux-sessions [--list]
+# Esc is a single binding that branches on $FZF_INPUT_STATE (enabled/disabled/
+# hidden). Do NOT implement this with `unbind(esc)`: fzf's unbind REMOVES a key's
+# behaviour rather than restoring its default, so unbinding esc makes it inert.
+# Combined with `q` being unbound during search, that left no way out of the
+# popup at all except ctrl-c.
+#
+# The test is POSIX `[` on purpose: fzf runs these with `$SHELL -c`, falling back
+# to `sh -c`, so bash's `[[` is not guaranteed to be available.
+#
+# ─── Project scoping ────────────────────────────────────────
+# Grove names sessions "{prefix}{project}_{branch}_{key}" where {key} is a
+# per-repo hash — FNV-1a32 of the absolute repo root path, low 16 bits, 4 hex
+# chars — and is always the LAST field. It is identical for every branch and
+# worktree of a repo, so "sessions of this project" == "same trailing key".
+#
+# Why the trailing key and not the leading "grove_<project>" prefix: grove's
+# sanitizer is /[.\s:/@]/ -> '_' and leaves '_' alone. A repo named `my_repo`
+# produces grove_my_repo_main_f2d1, where splitting on '_' from the left cannot
+# separate project from branch. The trailing key has no such ambiguity.
+#
+# A session with no key (a hand-made name like `cctap`) belongs to no project,
+# so it lists everything and Tab has nothing to toggle.
+#
+# Usage: tmux-sessions [--list] [--toggle] [--prompt] [--header]
 
-set -u
+set -uo pipefail
 
 self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+scope_file="${TMPDIR:-/tmp}/tmux-sessions.scope"
 
+# ─── Scope state ───────────────────────────────────────────
+# Held in a file rather than in fzf, so `reload` subshells and the prompt/header
+# helpers all observe the same value without depending on fzf internals.
+scope_read()  { [ -r "$scope_file" ] && cat "$scope_file" || echo project; }
+scope_write() { printf '%s' "$1" > "$scope_file"; }
+
+current_session() { tmux display-message -p '#{session_name}' 2>/dev/null || true; }
+
+# Trailing 4-hex grove repo key, or empty when the name is not grove-shaped.
+# Requires two separators before the key so a short name like `my_a1b2` does not
+# masquerade as a project.
+session_key() {
+  [[ "$1" =~ ^.+_.+_([0-9a-f]{4})$ ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
+# ─── Listing ───────────────────────────────────────────────
 list() {
-  local current rows width=0
-  current=$(tmux display-message -p '#{session_name}' 2>/dev/null || true)
+  local scope current key rows width=0
+  scope="$(scope_read)"
+  current="$(current_session)"
+  key="$(session_key "$current")"
 
-  # Worktree session names get long, so pad to the longest one actually present
-  # instead of a fixed width that silently breaks alignment.
+  # No project to scope to -> always show everything.
+  [ -z "$key" ] && scope=all
+
   rows=$(
     tmux list-sessions -F '#{session_last_attached}|#{session_name}|#{session_windows}|#{session_attached}' 2>/dev/null |
       sort -t'|' -k1,1nr |
       while IFS='|' read -r _ name windows attached; do
         [ "$name" = "$current" ] && continue
+        if [ "$scope" = project ] && [ "${name##*_}" != "$key" ]; then
+          continue
+        fi
         printf '%s|%s|%s\n' "$name" "$windows" "$attached"
       done
   )
   [ -n "$rows" ] || return 0
 
+  # Pad to the longest name actually present rather than a fixed width, so
+  # alignment holds for both short names and long worktree names.
   while IFS='|' read -r name _ _; do
     [ "${#name}" -gt "$width" ] && width=${#name}
   done <<<"$rows"
-  [ "$width" -gt 60 ] && width=60
 
   while IFS='|' read -r name windows attached; do
     if [ "${attached:-0}" != "0" ]; then
@@ -45,10 +95,44 @@ list() {
   done <<<"$rows"
 }
 
-if [ "${1:-}" = "--list" ]; then
-  list
-  exit 0
-fi
+# ─── Labels ────────────────────────────────────────────────
+prompt_label() {
+  local key
+  key="$(session_key "$(current_session)")"
+  if [ -z "$key" ] || [ "$(scope_read)" = all ]; then
+    printf '  all  '
+  else
+    printf '  project  '
+  fi
+}
+
+header_label() {
+  local key scope
+  key="$(session_key "$(current_session)")"
+  scope="$(scope_read)"
+  if [ -z "$key" ]; then
+    printf 'j/k move   enter switch   i search   ctrl-x kill   (no project)'
+  elif [ "$scope" = all ]; then
+    printf 'j/k move   enter switch   tab project only   i search   ctrl-x kill'
+  else
+    printf 'j/k move   enter switch   tab show all   i search   ctrl-x kill'
+  fi
+}
+
+# ─── Helper modes (invoked by fzf bindings) ────────────────
+case "${1:-}" in
+  --toggle)
+    if [ "$(scope_read)" = project ]; then scope_write all; else scope_write project; fi
+    list
+    exit 0
+    ;;
+  --list)   list; exit 0 ;;
+  --prompt) prompt_label; exit 0 ;;
+  --header) header_label; exit 0 ;;
+esac
+
+# ─── Interactive ───────────────────────────────────────────
+scope_write project   # deterministic default on every invocation
 
 entries=$(list)
 if [ -z "$entries" ]; then
@@ -57,18 +141,24 @@ if [ -z "$entries" ]; then
 fi
 
 # fzf's default delimiter is whitespace, so {1} is the session name. Session
-# names must therefore not contain spaces — tmux replaces them with '_' anyway.
+# names never contain spaces — grove replaces them with '_'.
 selected=$(
   printf '%s\n' "$entries" | fzf \
-    --prompt='  session  ' \
-    --pointer='▸' \
-    --header='enter switch   ctrl-x kill' \
+    --disabled \
+    --prompt="$(prompt_label)" \
+    --header="$(header_label)" \
     --header-first \
+    --pointer='▸' \
     --no-multi \
     --cycle \
+    --bind 'j:down,k:up' \
+    --bind 'q:abort' \
+    --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
+    --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+transform-prompt($self --prompt)' || echo abort" \
+    --bind "tab:reload($self --toggle)+transform-prompt($self --prompt)+transform-header($self --header)+first" \
+    --bind "ctrl-x:execute-silent(tmux kill-session -t {1})+reload($self --list)" \
     --preview='tmux list-windows -t {1} -F "#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}"' \
-    --preview-window='right,48%,border-left' \
-    --bind="ctrl-x:execute-silent(tmux kill-session -t {1})+reload($self --list)"
+    --preview-window='right,48%,border-left'
 ) || exit 0
 
 [ -n "$selected" ] || exit 0
