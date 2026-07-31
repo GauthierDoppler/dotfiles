@@ -1,0 +1,133 @@
+#!/bin/bash
+# Rebuild ~/.claude/settings.json from the tracked base plus machine-local
+# overrides, capturing whatever the Claude Code app wrote there since last run.
+#
+#   base  $DOTFILES/dot_claude/settings.json            tracked, portable, shared
+#   local $DOTFILES/dot_claude/settings.local.json      untracked, this machine only
+#   snap  $DOTFILES/dot_claude/settings.generated.json  untracked, bookkeeping
+#   live  ~/.claude/settings.json                       generated — the app writes here too
+#
+# Claude Code rewrites the live file in place: /config toggles land there, and it
+# absolutises paths like $HOME/.git-ai/bin/git-ai. So the live file is never a
+# safe symlink target, and regenerating it naively would discard those changes.
+#
+# This is a 3-way merge, and the snapshot is what makes it one. Diffing live
+# against the *base* cannot work: after a base edit, live still holds the old
+# base value, so "the app changed this" and "the base changed under me" are
+# indistinguishable — drift capture wins and the base can never propagate again.
+# So instead we record exactly what we last wrote to live, and diff against that:
+#
+#   1. drift     = live - snap        strictly what the app changed since our write
+#   2. new local = local * drift      nothing the app did is ever lost
+#   3. live      = base * new local   base propagates wherever the app was silent
+#   4. snap      = live               ready for next time
+#
+# With no snapshot (first run) drift is taken against the base, so pre-existing
+# machine-local settings — git-ai hooks, absolutised paths — are captured rather
+# than clobbered.
+#
+# Trade-off: a change you made intending it to be *shared* also lands in local,
+# so it will not reach your other machines until you promote it into the base by
+# hand. `local-diff` lists what has accumulated in local so you can spot those.
+#
+# Usage: claude-settings-sync [--dry-run]
+
+set -euo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+BASE="$DOTFILES/dot_claude/settings.json"
+LOCAL="$DOTFILES/dot_claude/settings.local.json"
+SNAP="$DOTFILES/dot_claude/settings.generated.json"
+LIVE="$HOME/.claude/settings.json"
+
+dry_run=0
+[[ "${1:-}" == "--dry-run" ]] && dry_run=1
+
+command -v jq >/dev/null || { echo "claude-settings-sync: jq is required" >&2; exit 1; }
+[[ -f "$BASE" ]] || { echo "claude-settings-sync: missing base $BASE" >&2; exit 1; }
+jq -e . "$BASE" >/dev/null 2>&1 || { echo "claude-settings-sync: $BASE is not valid JSON" >&2; exit 1; }
+
+# Recursive difference: every leaf in $live that the reference lacks or disagrees
+# with. Objects recurse; arrays and scalars are taken wholesale, which is what
+# makes an array-replacing merge correct on the way back out — a captured array
+# already contains the base's own entries.
+# shellcheck disable=SC2016  # jq program: $-vars are jq's, must not expand
+DDIFF='
+def ddiff($b):
+  . as $l
+  | if ($l | type) == "object" and ($b | type) == "object" then
+      reduce ($l | keys_unsorted[]) as $k ({};
+        if ($b | has($k)) | not then
+          .[$k] = $l[$k]
+        elif $l[$k] == $b[$k] then
+          .
+        elif ($l[$k] | type) == "object" and ($b[$k] | type) == "object" then
+          ($l[$k] | ddiff($b[$k])) as $sub
+          | if ($sub | length) == 0 then . else .[$k] = $sub end
+        else
+          .[$k] = $l[$k]
+        end)
+    else
+      $l
+    end;
+ddiff($ref)
+'
+
+existing_local='{}'
+if [[ -f "$LOCAL" ]]; then
+  jq -e . "$LOCAL" >/dev/null 2>&1 || { echo "claude-settings-sync: $LOCAL is not valid JSON" >&2; exit 1; }
+  existing_local="$(cat "$LOCAL")"
+fi
+
+# ─── 1. Capture drift: live - snap ─────────────────────────
+# Reference is the last generated content, so drift is strictly what the app
+# changed after we wrote it. Falling back to the base on a first run means
+# pre-existing machine-local settings get captured instead of clobbered.
+reference="$(cat "$BASE")"
+bootstrap=1
+if [[ -f "$SNAP" ]] && jq -e . "$SNAP" >/dev/null 2>&1; then
+  reference="$(cat "$SNAP")"
+  bootstrap=0
+fi
+
+drift='{}'
+if [[ -f "$LIVE" ]]; then
+  if ! jq -e . "$LIVE" >/dev/null 2>&1; then
+    echo "claude-settings-sync: $LIVE is not valid JSON — refusing to touch it" >&2
+    exit 1
+  fi
+  drift="$(jq --argjson ref "$reference" "$DDIFF" "$LIVE")"
+fi
+
+new_local="$(jq -n --argjson a "$existing_local" --argjson b "$drift" '$a * $b')"
+merged="$(jq -n --argjson base "$(cat "$BASE")" --argjson loc "$new_local" '$base * $loc')"
+
+if [[ $dry_run -eq 1 ]]; then
+  [[ $bootstrap -eq 1 ]] && echo "(no snapshot yet — diffing against the base)"
+  echo "── drift captured from $LIVE ──"
+  echo "$drift" | jq -S .
+  echo "── resulting $LOCAL ──"
+  echo "$new_local" | jq -S .
+  echo "── resulting $LIVE ──"
+  echo "$merged" | jq -S .
+  exit 0
+fi
+
+# ─── 2. Write ──────────────────────────────────────────────
+if [[ "$(echo "$new_local" | jq -S .)" != "$(echo "$existing_local" | jq -S .)" ]]; then
+  echo "$new_local" | jq -S . > "$LOCAL"
+  echo "updated: $LOCAL"
+fi
+
+mkdir -p "$(dirname "$LIVE")"
+if [[ ! -f "$LIVE" ]] || [[ "$(jq -S . "$LIVE")" != "$(echo "$merged" | jq -S .)" ]]; then
+  [[ -f "$LIVE" ]] && cp "$LIVE" "${LIVE}.bak"
+  echo "$merged" | jq -S . > "$LIVE"
+  echo "regenerated: $LIVE"
+else
+  echo "up to date: $LIVE"
+fi
+
+# Record what we just wrote, so the next run can tell app changes from base
+# changes. Must always be refreshed, including on the up-to-date path.
+echo "$merged" | jq -S . > "$SNAP"

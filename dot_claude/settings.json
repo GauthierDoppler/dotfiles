@@ -1,5 +1,42 @@
 {
+  "alwaysThinkingEnabled": true,
   "cleanupPeriodDays": 90,
+  "editorMode": "normal",
+  "effortLevel": "medium",
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "plannotator@plannotator": true,
+    "playground@claude-plugins-official": true,
+    "ruby-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "openai-codex": {
+      "source": {
+        "repo": "openai/codex-plugin-cc",
+        "source": "github"
+      }
+    },
+    "plannotator": {
+      "source": {
+        "repo": "backnotprop/plannotator",
+        "source": "github"
+      }
+    }
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/notify.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  },
+  "model": "opus[1m]",
   "permissions": {
     "allow": [
       "Bash(eza:*)",
@@ -8,78 +45,19 @@
     ],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/notify.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.git-ai/bin/git-ai checkpoint claude --hook-input stdin"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.git-ai/bin/git-ai checkpoint claude --hook-input stdin"
-          }
-        ]
-      }
-    ]
-  },
+  "skipAutoPermissionPrompt": true,
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
   "statusLine": {
-    "type": "command",
-    "command": "/Users/gauthierdoppler/.claude/statusline-custom.sh",
-    "padding": 0
+    "command": "~/.claude/statusline-custom.sh",
+    "padding": 0,
+    "type": "command"
   },
-  "enabledPlugins": {
-    "codex@openai-codex": true,
-    "playground@claude-plugins-official": true,
-    "ruby-lsp@claude-plugins-official": true,
-    "plannotator@plannotator": true
-  },
-  "extraKnownMarketplaces": {
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    },
-    "plannotator": {
-      "source": {
-        "source": "github",
-        "repo": "backnotprop/plannotator"
-      }
-    }
-  },
-  "alwaysThinkingEnabled": true,
-  "effortLevel": "medium",
+  "teammateMode": "in-process",
   "tui": "default",
   "voice": {
     "enabled": true,
     "mode": "hold"
   },
-  "skipDangerousModePermissionPrompt": true,
-  "skipWorkflowUsageWarning": true,
-  "editorMode": "normal",
-  "teammateMode": "in-process",
-  "skipAutoPermissionPrompt": true,
   "voiceEnabled": true
 }

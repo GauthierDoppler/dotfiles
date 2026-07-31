@@ -1,2 +1,7 @@
 .claude/worktrees/
 Brewfile.lock.json
+
+# Machine-local Claude Code overrides, plus the snapshot claude-settings-sync
+# uses to tell app changes from base changes. Both are per-machine state.
+dot_claude/settings.local.json
+dot_claude/settings.generated.json

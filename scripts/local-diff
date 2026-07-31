@@ -15,7 +15,7 @@ DOTFILES="${DOTFILES:-$HOME/dotfiles}"
 bold=$'\033[1m'; dim=$'\033[90m'; yellow=$'\033[33m'; green=$'\033[32m'; reset=$'\033[0m'
 found=0
 
-shorten() { echo "$1" | sed "s|^$HOME|~|"; }
+shorten() { echo "${1/#$HOME/~}"; }
 header() { printf "\n%s%s%s\n%s%s%s\n" "$bold" "$(shorten "$1")" "$reset" "$dim" "$2" "$reset"; }
 emit()   { sed "s/^/  $yellow/;s/\$/$reset/"; }
 
@@ -65,6 +65,7 @@ diff_json() {
 
     # key=value, not just key: a local override with a *different value* for a
     # shared key is exactly the kind of drift worth surfacing.
+    # shellcheck disable=SC2016  # jq program: $-vars are jq's, must not expand
     local flatten='[paths(scalars) as $p | ($p | join(".")) + "=" + (getpath($p) | tostring)] | .[]'
 
     local extra
@@ -78,9 +79,13 @@ diff_json() {
     echo "$extra" | emit
 }
 
-diff_shell     "$HOME/.zshrc.local"              "$DOTFILES/dot_zshrc"
-diff_gitconfig "$HOME/.gitconfig.local"          "$DOTFILES/dot_gitconfig"
-diff_json      "$HOME/.claude/settings.local.json" "$DOTFILES/dot_claude/settings.json"
+diff_shell     "$HOME/.zshrc.local"                        "$DOTFILES/dot_zshrc"
+diff_gitconfig "$HOME/.gitconfig.local"                    "$DOTFILES/dot_gitconfig"
+# Claude Code has no user-scope local settings file, so the override lives in the
+# repo dir (untracked) and claude-settings-sync merges it. Anything listed here
+# accumulated on this machine and will not reach your other machines until you
+# promote it into dot_claude/settings.json by hand.
+diff_json      "$DOTFILES/dot_claude/settings.local.json"  "$DOTFILES/dot_claude/settings.json"
 
 # ─── Orphans: local files nothing knows about ──────────────
 known=(".zshrc.local" ".gitconfig.local")
