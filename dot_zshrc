@@ -50,39 +50,8 @@ n() { if [ "$#" -eq 0 ]; then command nvim .; else command nvim "$@"; fi; }
 alias c="clear"
 alias cl="claude"
 alias "cl-yolo"="claude --dangerously-skip-permissions"
-alias tmux-help='echo "
-  ── PANE MODE ── Ctrl+a → p → ...
-     d  split down          r  split right
-     x  close pane          z  zoom/unzoom
-     !  pane → own window   Space  cycle layout
-     h/j/k/l  navigate      Tab  next pane
-
-  ── TAB MODE ── Ctrl+a → t → ...
-     n  new tab             x  close tab
-     ,  rename              Tab  last tab
-     h/l  prev/next         1-9  jump to tab
-
-  ── RESIZE MODE ── Ctrl+a → R → ... (sticky, Esc to exit)
-     h/j/k/l  resize (2px)
-     H/J/K/L  resize (5px)
-
-  ── MOVE MODE ── Ctrl+a → m → ... (sticky, Esc to exit)
-     h/j/k/l  swap pane
-
-  ── DIRECT (Ctrl+a → touche) ──
-     |  split right     -  split down     c  new window
-     s  sessions        w  windows        z  zoom
-     d  detach          r  reload         [  copy mode
-     1-9  jump to tab
-
-  ── SANS PREFIX ──
-     Ctrl+h/j/k/l  navigate panes
-
-  ── COPY MODE (Ctrl+a → [) ──
-     v  select    y  copy to clipboard    q  quit
-     /  search    n/N  next/prev match
-     drag souris = copie auto
-"'
+# Le cheat sheet tmux vit dans dot_tmux.conf et s'affiche avec Prefix + ? —
+# une seule source de vérité, lue directement depuis le fichier.
 
 # ─── Optional sources ─────────────────────────────────────
 [[ -f "$HOME/.local/bin/env" ]] && . "$HOME/.local/bin/env"

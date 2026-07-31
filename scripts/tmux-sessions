@@ -1,0 +1,76 @@
+#!/bin/bash
+# Fuzzy tmux session switcher, meant to be run inside `display-popup -E`.
+#
+#   Enter    switch to the highlighted session
+#   Ctrl-x   kill the highlighted session and keep picking
+#   Esc      cancel
+#
+# The current session is excluded and the list is sorted most-recently-used
+# first, so the top entry is always the session you came from: Prefix+s then
+# Enter is a "jump back" toggle.
+#
+# Usage: tmux-sessions [--list]
+
+set -u
+
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+list() {
+  local current rows width=0
+  current=$(tmux display-message -p '#{session_name}' 2>/dev/null || true)
+
+  # Worktree session names get long, so pad to the longest one actually present
+  # instead of a fixed width that silently breaks alignment.
+  rows=$(
+    tmux list-sessions -F '#{session_last_attached}|#{session_name}|#{session_windows}|#{session_attached}' 2>/dev/null |
+      sort -t'|' -k1,1nr |
+      while IFS='|' read -r _ name windows attached; do
+        [ "$name" = "$current" ] && continue
+        printf '%s|%s|%s\n' "$name" "$windows" "$attached"
+      done
+  )
+  [ -n "$rows" ] || return 0
+
+  while IFS='|' read -r name _ _; do
+    [ "${#name}" -gt "$width" ] && width=${#name}
+  done <<<"$rows"
+  [ "$width" -gt 60 ] && width=60
+
+  while IFS='|' read -r name windows attached; do
+    if [ "${attached:-0}" != "0" ]; then
+      printf "%-${width}s  %3s win  · attached\n" "$name" "$windows"
+    else
+      printf "%-${width}s  %3s win\n" "$name" "$windows"
+    fi
+  done <<<"$rows"
+}
+
+if [ "${1:-}" = "--list" ]; then
+  list
+  exit 0
+fi
+
+entries=$(list)
+if [ -z "$entries" ]; then
+  tmux display-message "  no other session"
+  exit 0
+fi
+
+# fzf's default delimiter is whitespace, so {1} is the session name. Session
+# names must therefore not contain spaces — tmux replaces them with '_' anyway.
+selected=$(
+  printf '%s\n' "$entries" | fzf \
+    --prompt='  session  ' \
+    --pointer='▸' \
+    --header='enter switch   ctrl-x kill' \
+    --header-first \
+    --no-multi \
+    --cycle \
+    --preview='tmux list-windows -t {1} -F "#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}"' \
+    --preview-window='right,48%,border-left' \
+    --bind="ctrl-x:execute-silent(tmux kill-session -t {1})+reload($self --list)"
+) || exit 0
+
+[ -n "$selected" ] || exit 0
+
+tmux switch-client -t "${selected%% *}"
