@@ -11,12 +11,30 @@ brew "fnm"
 brew "pipx"
 brew "terminal-notifier"
 brew "go"
+brew "pnpm"
+brew "gh"
 brew "ripgrep"
+brew "fd"
+brew "fzf"
+brew "eza"
+brew "tree"
+brew "htop"
+brew "yq"
+brew "coreutils"
+brew "jq"
 brew "imagemagick"
 brew "ghostscript"
 brew "poppler"
 brew "ruby"
 brew "libpq"
+
+# ─── Shell scripting (this repo is bash) ────────────────────
+brew "shellcheck"
+brew "bats-core"
+brew "gitleaks"
+
+# ─── AI tooling ─────────────────────────────────────────────
+brew "agent-browser"
 
 # ─── Desktop apps ───────────────────────────────────────────
 cask "ghostty"
