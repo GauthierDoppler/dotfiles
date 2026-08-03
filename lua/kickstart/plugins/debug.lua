@@ -75,10 +75,8 @@ return {
 
     require('mason-nvim-dap').setup {
       automatic_installation = true,
-      ensure_installed = {
-        'delve',
-        'js',
-      },
+      -- See vim.g.headless in init.lua — this is the third install-on-startup path.
+      ensure_installed = vim.g.headless and {} or { 'delve', 'js' },
       handlers = {
         function(config) require('mason-nvim-dap').default_setup(config) end,
         js = function(config)

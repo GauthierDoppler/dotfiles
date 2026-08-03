@@ -117,7 +117,9 @@ require('lazy').setup({
         'xml',
         'yaml',
       }
-      require('nvim-treesitter').install(parsers)
+      -- See vim.g.headless in init.lua. Highlighting below still starts for
+      -- whatever parsers are already on disk.
+      if not vim.g.headless then require('nvim-treesitter').install(parsers) end
       -- Filetype names differ from parser names for some languages
       local filetypes = {
         'bash',
