@@ -1,0 +1,63 @@
+{
+  "alwaysThinkingEnabled": true,
+  "cleanupPeriodDays": 90,
+  "editorMode": "normal",
+  "effortLevel": "medium",
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "plannotator@plannotator": true,
+    "playground@claude-plugins-official": true,
+    "ruby-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "openai-codex": {
+      "source": {
+        "repo": "openai/codex-plugin-cc",
+        "source": "github"
+      }
+    },
+    "plannotator": {
+      "source": {
+        "repo": "backnotprop/plannotator",
+        "source": "github"
+      }
+    }
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "~/.claude/hooks/notify.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  },
+  "model": "opus[1m]",
+  "permissions": {
+    "allow": [
+      "Bash(eza:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm typecheck:*)"
+    ],
+    "defaultMode": "auto"
+  },
+  "skipAutoPermissionPrompt": true,
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
+  "statusLine": {
+    "command": "~/.claude/statusline-custom.sh",
+    "padding": 0,
+    "type": "command"
+  },
+  "teammateMode": "in-process",
+  "tui": "default",
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "voiceEnabled": true
+}

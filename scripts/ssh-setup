@@ -1,0 +1,27 @@
+#!/bin/bash
+# Generate an SSH key, add to agent, copy pubkey to clipboard.
+# Usage: ssh-setup [key-name]   (default: id_ed25519)
+
+set -euo pipefail
+
+name="${1:-id_ed25519}"
+key_path="$HOME/.ssh/$name"
+
+if [[ -f "$key_path" ]]; then
+  echo "Key already exists: $key_path"
+  pbcopy < "${key_path}.pub"
+  echo "Public key copied to clipboard."
+  exit 0
+fi
+
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+echo "Generating SSH key: $key_path"
+ssh-keygen -t ed25519 -C "gauthier.doppler@theodo.com" -f "$key_path"
+
+eval "$(ssh-agent -s)"
+ssh-add "$key_path"
+
+pbcopy < "${key_path}.pub"
+echo "Public key copied to clipboard."

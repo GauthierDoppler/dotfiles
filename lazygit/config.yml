@@ -1,0 +1,37 @@
+refresher:
+  refreshInterval: 2
+git:
+  # press | to cycle between pagers
+  # delta themes defined in ~/dotfiles/delta/themes.gitconfig
+  pagers:
+    - colorArg: always
+      pager: delta --features lazygit-side-by-side
+    - colorArg: always
+      pager: delta --features lazygit-inline
+os:
+  editPreset: "nvim-remote"
+  edit: 'nvim --server "$NVIM" --remote-send "<C-\\><C-n><cmd>close<cr>" && nvr --remote {{filename}}'
+  editAtLine: 'nvim --server "$NVIM" --remote-send "<C-\\><C-n><cmd>close<cr>" && nvr --remote +{{line}} {{filename}}'
+gui:
+  theme:
+    nerdFontsVersion: ""
+    activeBorderColor:
+      - green
+      - bold
+    inactiveBorderColor:
+      - white
+    # default: reverse (highlights with inverted colors)
+    selectedLineBgColor:
+      - "#404070"
+    # default: green bg
+    diffAddBgColor:
+      - default
+    # default: red bg
+    diffRemoveBgColor:
+      - default
+    # default: green
+    diffAddFgColor:
+      - green
+    # default: red
+    diffRemoveFgColor:
+      - red
