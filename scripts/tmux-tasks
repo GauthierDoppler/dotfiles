@@ -41,7 +41,7 @@
 # task name ("android/build" -> window "android-build") rather than configured,
 # so there is nothing to keep in sync.
 #
-# Usage: tmux-tasks [--check] [--list] [--cycle] [--prompt] [--header] [--run <task>]
+# Usage: tmux-tasks [--check] [--list] [--advance] [--prompt] [--header] [--run <task>]
 #
 # --check exits 0 when this project has at least one task. The tmux binding
 # gates on it with `if-shell` so the popup is never opened just to be closed
@@ -160,6 +160,14 @@ header_label() {
 }
 
 # Next group in the ring: all -> <groups in order> -> all
+#
+# This only WRITES the new group, it prints nothing. Advancing and rendering must
+# not be split across two fzf actions: `reload` runs its command asynchronously
+# while `transform-prompt` runs synchronously, so a `reload(--cycle)+transform-
+# prompt(--prompt)` binding renders the prompt from the group file *before* the
+# reload subprocess has updated it — the list moves but the label lags one step
+# behind. The tab binding therefore calls `--advance` inside a single
+# `transform`, which completes before any of the actions it emits are run.
 cycle_group() {
   local current all next found=0
   current="$(group_read)"
@@ -229,9 +237,9 @@ run_task() {
 
 # ─── Helper modes (invoked by fzf bindings) ────────────────
 case "${1:-}" in
-  --check)  [ -d "$tasks_dir" ] && [ -n "$(discover)" ]; exit $? ;;
-  --list)   list; exit 0 ;;
-  --cycle)  cycle_group; list; exit 0 ;;
+  --check)   [ -d "$tasks_dir" ] && [ -n "$(discover)" ]; exit $? ;;
+  --list)    list; exit 0 ;;
+  --advance) cycle_group; exit 0 ;;
   --prompt) prompt_label; exit 0 ;;
   --header) header_label; exit 0 ;;
   --run)    run_task "${2:-}"; exit $? ;;
@@ -253,8 +261,12 @@ fi
 
 # fzf's default delimiter is whitespace, so {1} is the task name. Task names are
 # file paths under .tmux/ and must not contain spaces.
-# shellcheck disable=SC2016  # $f is expanded by fzf's preview shell, not here
-preview='f="'"$tasks_dir"'/{1}"; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 "$f"; else cat "$f"; fi'
+# fzf SHELL-QUOTES placeholders before substituting them, so `{1}` must never sit
+# inside quotes of our own: "$dir/{1}" expands to "$dir/'demo/detach'" and the
+# quotes land in the path itself. Assigning it bare (`f={1}`) is the only safe
+# form — fzf's quoting then does exactly what it is meant to do.
+# shellcheck disable=SC2016  # $f and $d are expanded by fzf's preview shell, not here
+preview='f={1}; d="'"$tasks_dir"'"; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 "$d/$f"; else cat "$d/$f"; fi'
 
 selected=$(
   printf '%s\n' "$entries" | fzf \
@@ -269,8 +281,8 @@ selected=$(
     --bind 'q:abort' \
     --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
     --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+transform-prompt($self --prompt)' || echo abort" \
-    --bind "tab:reload($self --cycle)+transform-prompt($self --prompt)+transform-header($self --header)+first" \
-    --bind "ctrl-e:execute(\${EDITOR:-vi} '$tasks_dir/{1}')" \
+    --bind "tab:transform:$self --advance; echo \"reload($self --list)+transform-prompt($self --prompt)+transform-header($self --header)+first\"" \
+    --bind "ctrl-e:execute(f={1}; \${EDITOR:-vi} '$tasks_dir'/\"\$f\")" \
     --preview="$preview" \
     --preview-window='right,55%,border-left'
 ) || exit 0
