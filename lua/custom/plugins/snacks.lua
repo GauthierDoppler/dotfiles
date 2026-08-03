@@ -15,9 +15,7 @@ return {
           local text = picker.input:get()
           picker.input:set(nil, text .. ' -- -g **/*.')
         end,
-        focus_editor = function(picker)
-          vim.api.nvim_set_current_win(picker.main)
-        end,
+        focus_editor = function(picker) vim.api.nvim_set_current_win(picker.main) end,
         explorer_search_open = function(picker)
           local item = picker:current()
           if not item then return end
@@ -42,7 +40,27 @@ return {
         explorer = {
           hidden = true,
           ignored = true,
-          exclude = { 'node_modules', '.git', '.DS_Store', '__pycache__', '.cache' },
+          -- The explorer runs with hidden+ignored on, so it does NOT get the
+          -- .gitignore filtering that files/grep rely on. Gradle and Xcode
+          -- generate very large trees, and without these the explorer is
+          -- unusable in an Android/iOS/KMP repo.
+          exclude = {
+            'node_modules',
+            '.git',
+            '.DS_Store',
+            '__pycache__',
+            '.cache',
+            -- Gradle / Android
+            'build',
+            '.gradle',
+            '.kotlin',
+            '.idea',
+            -- Xcode / iOS
+            'DerivedData',
+            'Pods',
+            '.build',
+            'xcuserdata',
+          },
           matcher = { sort_empty = false, fuzzy = true, smartcase = true },
           win = {
             list = {
