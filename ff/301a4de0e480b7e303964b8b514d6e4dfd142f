@@ -1,0 +1,34 @@
+dot_zshrc
+  s_bcca654f79f73b::t_9a62a3ac09dc9d 60-63
+scripts/local-diff
+  s_bcca654f79f73b::t_8791ba464adc46 85-90
+  s_bcca654f79f73b::t_4c9624613c5397 97-101,105,109
+  s_bcca654f79f73b::t_a3f1df66d7dfeb 36-37
+  s_bcca654f79f73b::t_0e08d1fc594d4b 51,54-55
+AGENTS.md
+  s_bcca654f79f73b::t_70bca0d247b86b 30-55,59-60,63-66
+install.sh
+  s_bcca654f79f73b::t_269541720e4024 146-148,156-158,160
+  s_bcca654f79f73b::t_56c3c5f804b9ad 93-96
+  s_bcca654f79f73b::t_698b1e0b84218e 77-92,97-132
+  s_bcca654f79f73b::t_da6bc473269a24 149-151,153-155,159
+  s_bcca654f79f73b::t_273ec06896d18a 152
+dot_gitconfig
+  s_bcca654f79f73b::t_c480f6343ea221 24-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "ff301a4de0e480b7e303964b8b514d6e4dfd142f",
+  "prompts": {},
+  "sessions": {
+    "s_bcca654f79f73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b182cc66-a9ab-48c8-8734-67f9dd4b0b48",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
