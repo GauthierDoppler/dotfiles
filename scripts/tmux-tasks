@@ -11,22 +11,20 @@
 #   q         close (navigation only — in search it is a plain character)
 #
 # The interaction model is deliberately identical to `tmux-sessions`; see that
-# file for why search is off by default and why Esc branches on
-# $FZF_INPUT_STATE instead of using fzf's `unbind(esc)`.
+# file for why Esc branches on $FZF_INPUT_STATE instead of using fzf's
+# `unbind(esc)`.
 #
 # The test is POSIX `[` on purpose: fzf runs bindings with `$SHELL -c`, falling
 # back to `sh -c`, so bash's `[[` is not guaranteed to be available.
 #
 # ─── Where tasks come from ──────────────────────────────────
 # `<root>/.tmux/` where <root> is the SESSION's working directory, never the
-# pane's. Running the picker from a pane sitting three directories deep, or in
-# /tmp, resolves to the same project — that is the whole point of anchoring on
-# `#{session_path}`.
+# pane's, so the picker resolves the same project from a pane three directories
+# deep.
 #
 # A task is any *executable* regular file at depth 1 or 2 under .tmux/. The
-# executable bit is the only filter, which is what lets `.tmux/lib/common.sh`
-# stay out of the list without a naming convention or an ignore file: it simply
-# is not chmod +x.
+# executable bit is the only filter, which is what keeps `.tmux/lib/common.sh`
+# out of the list with no naming convention and no ignore file.
 #
 #   .tmux/android/build   -> task "android/build", group "android"
 #   .tmux/doctor          -> task "doctor",        group ""  (ungrouped)
@@ -47,9 +45,9 @@
 #
 # Usage: tmux-tasks [--check] [--list] [--advance] [--prompt] [--header] [--run <task>]
 #
-# --check exits 0 when this project has at least one task. The tmux binding
-# gates on it with `if-shell` so the popup is never opened just to be closed
-# again — opening and exiting immediately reads as a flash.
+# --check exits 0 when this project has at least one task, so the tmux binding
+# can gate the popup on it: a popup that opens and immediately exits reads as a
+# flash.
 
 set -uo pipefail
 
@@ -57,9 +55,8 @@ self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 runner="${self%/*}/tmux-task-run"
 
 # ─── Project root ───────────────────────────────────────────
-# `#{session_path}` is the session's working directory, fixed at creation by
-# `new-session -c`. Unlike pane_current_path it does not follow the shell, so it
-# is stable no matter where the current pane has wandered.
+# `#{session_path}` is fixed at creation by `new-session -c` and, unlike
+# pane_current_path, does not follow the shell.
 session_root() {
   local root
   root="$(tmux display-message -p '#{session_path}' 2>/dev/null)"
@@ -79,17 +76,13 @@ root="$(session_root)"
 tasks_dir="$root/.tmux"
 
 # ─── MRU state ──────────────────────────────────────────────
-# Keyed by the project path so worktrees of the same repo share one history,
-# matching how `tmux-sessions` treats a project. `cksum` is enough here: this is
-# a cache filename, not a security boundary.
+# Keyed by the project path so worktrees of the same repo share one history.
 mru_file="${TMPDIR:-/tmp}/tmux-tasks.$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
 group_file="${TMPDIR:-/tmp}/tmux-tasks.group"
 
 group_read()  { [ -r "$group_file" ] && cat "$group_file" || echo all; }
 group_write() { printf '%s' "$1" > "$group_file"; }
 
-# Most recent first. Rewritten whole each run — the file only ever holds as many
-# lines as there are tasks, so there is nothing to prune.
 mru_touch() {
   local name="$1" tmp
   tmp="$mru_file.tmp.$$"
@@ -107,8 +100,7 @@ discover() {
     sort
 }
 
-# Header value for a key, from the first 20 lines. Anchored on '# <key>:' so a
-# mention of the word inside the script body cannot match.
+# Header value for a key, from the first 20 lines.
 meta() {
   sed -n "1,20{s/^# *$2: *//p;}" "$tasks_dir/$1" 2>/dev/null | head -1
 }
@@ -118,8 +110,6 @@ groups() {
 }
 
 # ─── Listing ────────────────────────────────────────────────
-# Columns are padded to the widest entry actually present rather than a fixed
-# width, so alignment holds for both "doctor" and "android/install-debug".
 list() {
   local group names name width=0 order
   group="$(group_read)"
@@ -188,12 +178,6 @@ cycle_group() {
 }
 
 # ─── Running ────────────────────────────────────────────────
-# The wrapper keeps the window alive after the script exits so the output of a
-# fast failure survives. `remain-on-exit` would leave a dead pane that has to be
-# respawned by hand; a keypress is more predictable.
-#
-# cwd is the project root for every task, whatever the pane was doing, so
-# scripts can assume ./gradlew resolves.
 # run_task <name> [inline]
 #
 # `inline` is set by the interactive path, which is already running inside the
@@ -219,12 +203,9 @@ run_task() {
 
   mru_touch "$name"
 
-  # The task is wrapped by `tmux-task-run`, which runs it with the right cwd and
-  # environment and publishes @task_status on the window for the status bar.
-  #
-  # Marked only for the placements that OWN a window. On a split or a popup the
-  # task shares the window you are working in, where a ✗ would be ambiguous —
-  # and you are looking straight at the output anyway, so it adds nothing.
+  # mark=1 for the placements that OWN a window: those get @task_status plus a
+  # bell and a macOS notification on completion. On a split or a popup the task
+  # shares the window you are working in and the output is right in front of you.
   case "$placement" in
     window|detach) mark=1 ;;
     *)             mark=0 ;;
@@ -246,8 +227,6 @@ run_task() {
       tmux split-window -h -l "$size" -c "$root" "$cmd"
       ;;
     detach)
-      # Not selected. @task_status marks the window in the status bar with
-      # running / ✓ / ✗, which is the notification.
       if tmux list-windows -F '#{window_name}' | grep -qxF "$slug"; then
         tmux respawn-window -k -t "$slug" -c "$root" "$cmd"
       else

@@ -10,25 +10,19 @@
 #   q         close (navigation only — in search it is a plain character)
 #   Ctrl-x    kill the highlighted session and keep picking
 #
-# Search is OFF by default. With a handful of sessions, navigating beats typing,
-# so j/k are movement keys and only `i` hands the keyboard to the query.
-#
 # ─── Preview ────────────────────────────────────────────────
 # The preview shows the highlighted session's window list plus a live capture of
 # its CURRENT window — not a window you pick inside the preview, because fzf
 # previews cannot be focused. h/l instead run `previous-window`/`next-window` on
 # the *other* session, which works fine while it is detached: the current window
-# is session state and needs no attached client. So the "which window am I
-# looking at" cursor is not tracked here at all — it is tmux's own, which is why
-# there is no index to clamp per session and nothing to reset when the highlight
-# moves.
+# is session state and needs no attached client.
 #
-# The trade is that h/l MUTATE that session: cycle past a window and Esc out, and
-# you will land there next time you attach. That is the intended behaviour —
-# lining up the window you want before pressing Enter is the point.
+# h/l therefore MUTATE that session, which is the point: this is how you keep an
+# eye on what another session is doing, and Enter then attaches straight to the
+# window you were watching.
 #
-# The capture comes back at the SOURCE pane's geometry, which is bigger than this
-# popup in both directions, and the two mismatches need opposite treatment:
+# The capture comes back at the SOURCE pane's geometry, bigger than this popup in
+# both directions, and the two mismatches need opposite treatment:
 #
 #   width   `nowrap`, and the popup is deliberately wider than the other pickers
 #           (90%/80% vs 70%/60%). A full-screen TUI cannot be reflowed, so the
@@ -77,11 +71,49 @@ scope_write() { printf '%s' "$1" > "$scope_file"; }
 
 current_session() { tmux display-message -p '#{session_name}' 2>/dev/null || true; }
 
-# Trailing 4-hex grove repo key, or empty when the name is not grove-shaped.
-# Requires two separators before the key so a short name like `my_a1b2` does not
-# masquerade as a project.
-session_key() {
-  [[ "$1" =~ ^.+_.+_([0-9a-f]{4})$ ]] && printf '%s' "${BASH_REMATCH[1]}"
+# FNV-1a 32-bit, low 16 bits, 4 hex digits — grove's projectKey, byte for byte
+# (it mirrors Go's hash/fnv.New32a). LC_ALL=C so the loop walks BYTES, matching
+# the UTF-8 encoding grove hashes.
+fnv_key() {
+  local LC_ALL=C s="$1" i n b h=2166136261
+  n=${#s}
+  for (( i = 0; i < n; i++ )); do
+    printf -v b '%d' "'${s:i:1}"
+    (( b < 0 )) && (( b += 256 ))
+    (( h = ((h ^ b) * 16777619) & 0xFFFFFFFF ))
+  done
+  printf '%04x' $(( h & 0xFFFF ))
+}
+
+# Repo root as grove sees it: `git rev-parse --show-toplevel` from the MAIN
+# worktree. Derived from --git-common-dir so every linked worktree of a repo
+# resolves to the same root, and therefore to the same key.
+repo_root() {
+  local common
+  common="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [ -n "$common" ] || return 1
+  dirname "$common"
+}
+
+# Grove repo key of the CURRENT session, or empty when it has none.
+#
+# Shape alone is not enough: `^.+_.+_([0-9a-f]{4})$` also matches hand-named
+# sessions like `api_perf_beef`, which then scoped the picker to a project that
+# does not exist — empty list, and Tab looking broken. So the trailing field is
+# only accepted when it equals the key grove WOULD derive from this session's own
+# repo root. A non-grove name cannot collide except by hash accident.
+project_key() {
+  local name path candidate root
+  name="$(current_session)"
+  [[ "$name" =~ ^.+_.+_([0-9a-f]{4})$ ]] || return 0
+  candidate="${BASH_REMATCH[1]}"
+
+  path="$(tmux display-message -p '#{session_path}' 2>/dev/null)"
+  [ -n "${path:-}" ] && [ -d "$path" ] || return 0
+  root="$(repo_root "$path")" || return 0
+
+  [ "$(fnv_key "$root")" = "$candidate" ] && printf '%s' "$candidate"
+  return 0
 }
 
 # ─── Listing ───────────────────────────────────────────────
@@ -89,7 +121,7 @@ list() {
   local scope current key rows width=0
   scope="$(scope_read)"
   current="$(current_session)"
-  key="$(session_key "$current")"
+  key="$(project_key)"
 
   # No project to scope to -> always show everything.
   [ -z "$key" ] && scope=all
@@ -107,8 +139,6 @@ list() {
   )
   [ -n "$rows" ] || return 0
 
-  # Pad to the longest name actually present rather than a fixed width, so
-  # alignment holds for both short names and long worktree names.
   while IFS='|' read -r name _ _; do
     [ "${#name}" -gt "$width" ] && width=${#name}
   done <<<"$rows"
@@ -163,7 +193,7 @@ cycle() {
 # ─── Labels ────────────────────────────────────────────────
 prompt_label() {
   local key
-  key="$(session_key "$(current_session)")"
+  key="$(project_key)"
   if [ -z "$key" ] || [ "$(scope_read)" = all ]; then
     printf '  all  '
   else
@@ -176,7 +206,7 @@ prompt_label() {
 # width, where fzf truncates the tail (i.e. it silently ate `ctrl-x kill`).
 header_label() {
   local key scope
-  key="$(session_key "$(current_session)")"
+  key="$(project_key)"
   scope="$(scope_read)"
   if [ -z "$key" ]; then
     printf 'j/k move   h/l window   i search   (no project)\nenter switch   ctrl-x kill'

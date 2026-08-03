@@ -3,6 +3,21 @@
 This file provides guidance to AI coding agents (Claude Code, Codex) when working
 with code in this repository. `CLAUDE.md` is a symlink to this file.
 
+## Comments
+
+A comment is justified only when it records a constraint imposed by **external
+software** that cost real debugging time and would otherwise be re-hit — "fzf's
+`unbind` removes a key's behaviour rather than restoring its default", "tmux
+allows one popup per client and a nested `display-popup` silently no-ops while
+still exiting 0", "tmux truncates the *expanded* format string and will cut a
+`#[fg=]` in half", "BSD find has no `-executable`".
+
+Not justified: restating what the line below does, explaining why a particular
+option or colour was chosen, narrating a design decision, or justifying a
+removal ("there used to be X, dropped because never used"). Rationale of that
+kind belongs in this file, not in the config. When changing something, do not
+add a comment explaining the change.
+
 ## What This Is
 
 A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta. All configs are symlinked from this repo to their expected locations via `install.sh`.
@@ -85,6 +100,43 @@ and the snapshot are gitignored.
 
 Run `claude-settings-sync --dry-run` to preview what would be captured.
 
+## Tmux
+
+**There is no session persistence — no tmux-resurrect, no tmux-continuum, no
+tpm — and that is deliberate.** `grove` (the git-worktree manager at
+`~/Developer/perso/grove-ai`, see the `grove` skill) is the session factory: a
+session is derived from a worktree, so it is reproducible on demand from the
+repo plus `.grove/config.yaml`. Restoring a save-file would reconstruct whatever
+happened to be open at the last checkpoint; recreating from a worktree
+reconstructs what the project *is*. Do not add a persistence plugin.
+
+**`terminal-features`, not `terminal-overrides`, and never with a bare `set -a`.**
+`set -a` on an array option appends, so a reload — `Prefix + r` — grows the array
+every time; the live server had accumulated 52 duplicated `terminal-overrides`
+entries this way. `set -gu` first resets the option to its default array (which
+carries the stock `xterm*:clipboard:ccolour:cstyle:focus:title`, needed for OSC 52
+and focus events), so the `set -gu` + `set -as` pair is idempotent. Ghostty gets
+`RGB:usstyle:sync` — `usstyle` is what makes nvim's LSP undercurl render as a
+curl rather than a plain underline. Its TERM outside tmux is `xterm-ghostty`;
+inside, `default-terminal` stays `tmux-256color`.
+
+**`detach-on-destroy off`**: killing the last window of a session switches to
+another session instead of ejecting the client out of tmux.
+
+**`Prefix + 1..9` depends on a keyboard layout that macOS, not tmux, provides.**
+`keyboard/FR-AZERTY-num.bundle` is an AZERTY layout with an unshifted,
+QWERTY-order number row, **copied** to `~/Library/Keyboard Layouts/` by
+`install.sh` (`copy_bundle()`, not `link()` — macOS's input-source daemon does
+not reliably follow a symlink there). Without it the digit bindings need Shift
+and the muscle memory
+breaks silently. Installing is automated, *selecting* is not: see README. The
+bundle's 322 KB `.icns` is deliberately not tracked — it is only the menu-bar
+glyph, macOS falls back to a generic icon, and it was 87 % of the payload.
+
+`next-layout` is on `Prefix + L` (tmux's own `Prefix + Space` went to the session
+picker). It is the only keyboard way to rebalance a split here: there are no
+resize bindings, on purpose — resizing is done by dragging the pane border.
+
 ## Per-project tmux tasks
 
 `Prefix + e` opens a task picker (`scripts/tmux-tasks`) over `<project>/.tmux/`.
@@ -139,10 +191,18 @@ Only `window` and `detach` are marked. A split or popup shares the window you
 are working in, where a `✗` would be ambiguous — and the output is right in
 front of you anyway.
 
+Those same two placements also **notify** on completion: a `\a` bell (picked up by
+`monitor-bell on`, then by ghostty's `bell-features = title,attention` for the
+dock bounce and badge) plus a `terminal-notifier` banner, sent as
+`com.mitchellh.ghostty` so clicking it focuses the terminal. Both are skipped when
+the task's window is the active window of an attached client — notifying about
+output the user is staring at is noise — and `terminal-notifier` is probed with
+`command -v` so a machine without it degrades to the bell alone.
+
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
-information. "Claude is waiting" comes from its own Notification hook →
-`terminal-notifier`, not from tmux.
+information. `monitor-bell` stays on: a BEL is rare enough to mean something.
+"Claude is waiting" comes from its own Notification hook → `terminal-notifier`.
 
 The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
 popup only for the script to find no tasks and exit reads as a flash, so in that
@@ -199,7 +259,7 @@ without that the CI gate could only ever fail after the fact.
 
 ## Key Integrations
 
-- **Tmux ↔ Neovim**: `vim-tmux-navigator` for Ctrl+h/j/k/l pane navigation. Tmux has `focus-events on` for Neovim autoread and gitsigns refresh.
+- **Tmux ↔ Neovim**: `vim-tmux-navigator` for Ctrl+h/j/k/l pane navigation. Tmux has `focus-events on` for Neovim autoread and gitsigns refresh. The same four keys are re-bound in `copy-mode-vi`, where they otherwise fall through to tmux defaults — `C-h` was a duplicate `cursor-left` and `C-j` was `copy-pipe-and-cancel`, i.e. it yanked and exited the mode.
 - **Git ↔ Delta**: `dot_gitconfig` includes `delta/themes.gitconfig` for diff rendering. Lazygit also uses delta with custom side-by-side/inline pagers.
 - **Ghostty ↔ Tmux**: Extended key sequences for Shift+Enter compatibility.
 - **Tmux modes**: two one-shot modal tables, `Prefix → p` (pane) and `Prefix → t` (tab).
@@ -213,7 +273,11 @@ It does not parse the session name. Grove builds names as
 `{prefix}{project}_{branch}_{key}` with a sanitizer that maps `/[.\s:/@]/` to
 `_` and leaves existing `_` alone, so `grove_my_repo_main_f2d1` cannot be split
 from the left — the same ambiguity that makes `tmux-sessions` group by the
-trailing key instead. A name also freezes the branch at session creation, so it
+trailing key instead. That key is only trusted when it equals the one grove
+*would* derive from the session's own repo root (FNV-1a32 of the main worktree
+path, low 16 bits), because shape alone also matches a hand-named session like
+`api_perf_beef`, which used to scope the picker to a project that does not exist:
+empty list, `Tab` apparently broken. A name also freezes the branch at session creation, so it
 starts lying after the first `git checkout`. Nothing about the bar is
 grove-specific: any session in any repo gets the same treatment, and a session
 outside a repo falls back to its own name.

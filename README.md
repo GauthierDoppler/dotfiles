@@ -15,6 +15,7 @@ Personal development environment for macOS — managed with symlinks.
 | **Lazygit** | `lazygit/config.yml` | Delta side-by-side and inline pagers (toggle with `\|`) |
 | **Delta** | `delta/themes.gitconfig` | Custom themes for lazygit (side-by-side + inline) |
 | **Git ignore** | `git/ignore` | Global gitignore (`.claude/settings.local.json`) |
+| **Keyboard** | `keyboard/` | AZERTY layout with an unshifted number row — the tmux `Prefix → 1-9` bindings depend on it |
 
 ## Install
 
@@ -42,6 +43,8 @@ lazydocker/        → ~/.config/lazydocker
 dot_claude/CLAUDE.md            → ~/.claude/CLAUDE.md
 dot_claude/hooks                → ~/.claude/hooks
 dot_claude/statusline-custom.sh → ~/.claude/statusline-custom.sh
+
+keyboard/FR-AZERTY-num.bundle   → ~/Library/Keyboard Layouts/  (copied, not linked)
 ```
 
 `~/.zshrc`, `~/.gitconfig` and `~/.claude/settings.json` are deliberately **not**
@@ -120,9 +123,30 @@ Prefix is `Ctrl+a`. Modes are displayed in the status bar.
 | `Prefix → e` | Task picker — scripts from `<project>/.tmux/` |
 | `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies |
 | `Prefix → v` | Copy mode, then select with the mouse (`[` is an alias) |
-| `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware) |
+| `Prefix → L` | Next layout — the keyboard way to rebalance a split |
+| `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware; also inside copy mode) |
 
 Resize and move modes were removed — unused, and dragging a pane border resizes.
+
+### Keyboard layout (one manual step)
+
+`Prefix → 1-9` assumes the number row types digits **without** Shift.
+`install.sh` copies `keyboard/FR-AZERTY-num.bundle` (AZERTY with a
+QWERTY-order unshifted number row, authored in Ukelele) into
+`~/Library/Keyboard Layouts/` — copied, not symlinked, because macOS's
+input-source daemon does not reliably follow a symlink there. Re-running
+`install.sh` refreshes it. But macOS will not let a script pick it for you —
+writing `com.apple.HIToolbox` with `defaults` is cached by the input-source
+daemon and only takes after a logout.
+
+So after the first install, once, by hand:
+
+1. **System Settings → Keyboard → Text Input → Input Sources → Edit**
+2. `+` → **French** → **Français AZERTY Numérique** → Add
+3. Select it (and remove the stock AZERTY if you want it gone)
+
+The layout's menu-bar icon is not tracked (322 KB of `.icns` for a glyph), so it
+shows a generic icon. Nothing else changes.
 
 **Copying:** `Prefix + u` for a token (URL, file path), `Prefix + v` for a
 region. Plain dragging is unreliable — tmux only selects when the pane's

@@ -4,63 +4,32 @@
 # Usage (from tmux.conf, inside a #() substitution):
 #   tmux-status-left "#{session_path}" "#{session_name}"
 #
-# Prints three sub-segments separated by a thin powerline divider:
-#
 #    bp-api      root             main                  (primary checkout)
-#    bp-api      add-vitepress   chore/add-vitepress   (linked worktree)
+#    bp-api      wt              chore/add-vitepress   (linked worktree)
 #
-#   project  ·  worktree  ·  branch
+#   project  ·  root-or-wt  ·  branch
 #
-# The three are always shown. The worktree name and the branch are often
-# near-duplicates for grove worktrees (grove sanitizes '/' to '_'), but they are
-# genuinely independent for a hand-rolled `git worktree add`, and the primary
-# checkout is labelled `root` so the segment never goes blank.
-#
-# Nothing here is grove-specific. It works in any tmux session: identity comes
-# from #{session_path} + git, so a plain `tmux new -s foo` inside any repo gets
-# the same treatment, and a session outside a repo falls back to its own name.
-#
-# Why git and not the session name: grove names sessions
-# "{prefix}{project}_{branch}_{key}", and its sanitizer maps /[.\s:/@]/ to '_'
-# while leaving existing '_' alone. So `grove_my_repo_main_f2d1` cannot be split
-# into project and branch from the left — the ambiguity is documented at length
-# in scripts/tmux-sessions, which is why that script groups by the TRAILING key
-# and never tries to parse the middle. Asking git is unambiguous, and it stays
-# correct after a `git checkout`, which a name fixed at session birth does not:
-# the session called `..._main_f2d1` is, as I write this, on a docs/ branch.
-#
-# Output carries its own #[fg=...] styles: tmux expands the output of #() as a
-# format string, so the tone hierarchy is set here rather than in tmux.conf.
-#
-# Runs once per status-interval (5s) per attached client: three git calls, all
-# hitting warm cache. Cheap enough to not be worth memoising.
+# Identity comes from #{session_path} + git, so any session in any repo gets the
+# same treatment and a session outside a repo falls back to its own name.
 
 set -uo pipefail
 
 path="${1:-}"
 name="${2:-}"
 
-# Catppuccin FRAPPE, matching ghostty's theme. The bar used to be Mocha, two
-# shades darker than the terminal it sits under, which read as a hole punched in
-# the window rather than as chrome sitting on top of it.
-#
-# Ascending tone: project is context you rarely need, branch is the answer you
-# are usually looking for. All three stay BELOW the active-window pill, which
-# has to remain the brightest thing on the bar — "you are here" outranks
-# "which branch".
-DIM='#[fg=#838ba7]'
-MID='#[fg=#a5adce]'
+# Catppuccin Frappe. Ascending tone across the three fields, with the separator
+# below all of them. None of these may be #a5adce: that is
+# `window-status-style`, and a field sharing it reads as part of the window list
+# rather than as part of this block.
+DIM='#[fg=#949cbb]'
+MID='#[fg=#b5bfe2]'
 BRIGHT='#[fg=#c6d0f5,bold]'
-SEP='#[fg=#737994,nobold] '     # U+E0B1 thin powerline divider
+SEP='#[fg=#838ba7,nobold] '     # U+E0B1 thin powerline divider
 
 # Truncation happens HERE, not via status-left-length: tmux truncates the
 # expanded string, which by then contains #[fg=...] escapes, so it happily cuts
 # one in half and prints the remainder as literal text. tmux.conf sets a length
 # large enough to never trigger.
-# Every field is a FIXED width, so the closing  cap always lands in the same
-# column and the window list never moves when you switch worktree or branch.
-# That shift is the reason the worktree segment is now just root/wt: a variable
-# name there moved the whole bar on every session switch.
 MAX_PROJECT=16
 MAX_WORKTREE=4
 MAX_BRANCH=22
@@ -85,14 +54,12 @@ pad() {
 
 field() { pad "$(clip "$1" "$2")" "$2"; }
 
-# Total visible width of the three padded fields plus their separators. The
-# fallback pads to the same figure so a non-git session does not resize the
-# block either.
+# Total visible width of the three padded fields plus their separators, so the
+# window list starts at the same column whatever the session.
 TOTAL=48
 
-# Fallback: no path, a session whose directory has gone away, or a directory
-# that is not a git repo at all (a scratch `tmux new -s foo` in ~). The session
-# name is the only identity such a session has.
+# No path, a session whose directory has gone away, or a directory that is not a
+# git repo at all.
 bare() {
   printf '%s %s' "$BRIGHT" "$(field "$name" "$(( TOTAL - 1 ))")"
   exit 0
@@ -112,11 +79,6 @@ project="$(basename "$(dirname "$common")")"
 gitdir="$(git -C "$path" rev-parse --path-format=absolute --git-dir 2>/dev/null)"
 toplevel="$(git -C "$path" rev-parse --show-toplevel 2>/dev/null)"
 
-# Just root-or-worktree, not the worktree's name. The name is nearly always a
-# sanitized copy of the branch (grove maps '/' to '_'), so it was two columns of
-# duplicate information that also changed width on every switch. Which worktree
-# you are in is answered by the branch beside it; whether you are in one at all
-# is the part the branch cannot tell you.
 if [ "$gitdir" != "$common" ] && [ -n "$toplevel" ]; then
   worktree='wt'
 else
@@ -125,11 +87,12 @@ fi
 
 branch="$(git -C "$path" branch --show-current 2>/dev/null)"
 if [ -z "$branch" ]; then
-  # Detached HEAD: show the short sha rather than an empty segment.
   branch="$(git -C "$path" rev-parse --short HEAD 2>/dev/null)"
   [ -n "$branch" ] || branch='detached'
 fi
 
+# tmux expands the output of #() as a format string, so the styles are emitted
+# here rather than set in tmux.conf.
 printf '%s %s%s%s %s%s%s  %s' \
   "$DIM"    "$(field "$project"  "$MAX_PROJECT")"  "$SEP" \
   "$MID"    "$(field "$worktree" "$MAX_WORKTREE")" "$SEP" \
