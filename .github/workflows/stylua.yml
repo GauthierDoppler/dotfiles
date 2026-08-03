@@ -1,0 +1,34 @@
+name: Check Lua Formatting
+
+# Lives at the repo root because GitHub only reads workflows from the root
+# .github/workflows/. It used to sit in nvim/.github/workflows/ back when nvim
+# was a submodule with its own repo; after folding it in, that path stopped
+# being a workflow location at all.
+#
+# Triggered on push as well as pull_request: this repo is pushed to main
+# directly, so a PR-only trigger would almost never fire.
+on:
+  push:
+    paths:
+      - 'nvim/**.lua'
+      - 'nvim/.stylua.toml'
+      - '.github/workflows/stylua.yml'
+  pull_request:
+    paths:
+      - 'nvim/**.lua'
+      - 'nvim/.stylua.toml'
+      - '.github/workflows/stylua.yml'
+
+jobs:
+  stylua-check:
+    name: Stylua Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Stylua Check
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check nvim/

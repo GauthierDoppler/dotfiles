@@ -9,7 +9,7 @@ Personal development environment for macOS — managed with symlinks.
 | **Zsh** | `dot_zshrc` | Oh My Zsh with robbyrussell theme, fnm, bun, Android SDK paths |
 | **Tmux** | `dot_tmux.conf` | Zellij-style modal keybindings, Catppuccin Mocha theme, Neovim integration |
 | **Git** | `dot_gitconfig` | Worktree helpers (`git wt`), skip/unskip aliases, delta pager |
-| **Neovim** | `nvim/` | [kickstart.nvim](https://github.com/GauthierDoppler/kickstart.nvim) (submodule) |
+| **Neovim** | `nvim/` | originally forked from [kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim), since diverged |
 | **Ghostty** | `ghostty/config` | Catppuccin Frappe theme, split navigation keybinds |
 | **Zed** | `zed/` | Anthropic default model, One Dark theme, auto-format TypeScript |
 | **Lazygit** | `lazygit/config.yml` | Delta side-by-side and inline pagers (toggle with `\|`) |
