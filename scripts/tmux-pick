@@ -1,0 +1,141 @@
+#!/bin/bash
+# Fuzzy-pick a URL or file path off the current pane, meant to be run inside
+# `display-popup -E`.  Bound to Prefix + u.
+#
+#   j / k     move down / up
+#   i         start filtering by name
+#   Enter     copy to the system clipboard (and to the tmux paste buffer)
+#   Ctrl-o    open — browser for a URL, default app for a file
+#   Esc       leave search if searching, otherwise close
+#   q         close (navigation only — in search it is a plain character)
+#
+# Same modal ergonomics as scripts/tmux-sessions, including the Esc binding that
+# branches on $FZF_INPUT_STATE. Do NOT reimplement that with `unbind(esc)`:
+# fzf's unbind REMOVES a key's behaviour rather than restoring its default, so
+# unbinding esc makes it inert and, with `q` unbound during search, leaves no way
+# out of the popup at all.
+#
+# Why this exists: dragging to select is the unreliable path. tmux only starts a
+# selection when the pane's application has NOT asked for mouse events (see the
+# copy-mode block in dot_tmux.conf), and most of what you want off a terminal is
+# a token — a URL or a path — not a region. This skips selection entirely.
+#
+# ─── Noise control ──────────────────────────────────────────
+# The naive version matched anything shaped like a path and produced 174
+# candidates on a Claude Code pane, most of them junk: TUIs truncate long paths
+# to fit their width, so the captured text contains fragments like
+# `core/use-cases/get-mission-progress.tes`. There is no way to tell a truncated
+# path from a real one by shape.
+#
+# So paths are checked against the filesystem and dropped if they do not exist.
+# That is what makes the list usable, and it costs one stat per candidate.
+# URLs are kept unconditionally — they cannot be verified without fetching them,
+# and a truncated URL is rare because they are usually printed alone on a line.
+#
+# Everything runs with cwd at the pane's directory, so a relative path resolves
+# the same way it would if you typed it in that pane — which is also what makes
+# `Ctrl-o` work on relative paths.
+#
+# Usage: tmux-pick [pane-id]
+
+set -uo pipefail
+
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+# ─── Pane resolution ────────────────────────────────────────
+# The argument is only a hint. display-popup does not reliably format-expand its
+# shell-command, so `#{pane_id}` can arrive as that literal string rather than
+# as `%140` — which made capture-pane return nothing and the picker report "no
+# URLs found" on a pane that had twenty. Anything that is not a real pane id is
+# discarded and we ask tmux directly: display-message without -t resolves the
+# CURRENT pane, and a popup is not a pane, so it still points at whatever you
+# were looking at when you pressed the key.
+resolve_pane() {
+  local p="${1:-}"
+  case "$p" in
+    %[0-9]*) printf '%s' "$p" ;;
+    *) tmux display-message -p '#{pane_id}' 2>/dev/null ;;
+  esac
+}
+
+# ─── Candidate extraction (also invoked by fzf's reload) ────
+if [ "${1:-}" = --list ]; then
+  pane="$(resolve_pane "${2:-}")"
+  [ -n "$pane" ] || exit 0
+
+  cwd="$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null)"
+  [ -d "${cwd:-}" ] && { cd "$cwd" || true; }
+
+  # -J joins wrapped lines so a URL broken across the pane width comes back
+  # whole. -S -2000 reaches into scrollback: the thing you want is often from a
+  # command you ran a minute ago, not what is on screen right now.
+  content="$(tmux capture-pane -p -J -S -2000 -t "$pane" 2>/dev/null)"
+  [ -n "$content" ] || exit 0
+
+  # Reversed first: the bottom of the pane is the most recent output, and that is
+  # almost always what you are reaching for. Dedup then keeps the newest copy.
+  printf '%s\n' "$content" | tail -r 2>/dev/null | {
+    urls=''
+    paths=''
+    while IFS= read -r line; do
+      # URLs and git remotes — kept without checking.
+      while IFS= read -r m; do
+        [ -n "$m" ] && urls="$urls$m"$'\n'
+      done < <(printf '%s\n' "$line" | grep -oE '((https?|ftp)://|git@[A-Za-z0-9._-]+:)[^[:space:]<>"'"'"'`|(),]+' | sed -E 's/[.,:;]+$//')
+
+      # Path-shaped tokens — kept only if they exist on disk.
+      while IFS= read -r m; do
+        [ -n "$m" ] || continue
+        m="${m%"${m##*[!.,:;]}"}"
+        [ -e "$m" ] && paths="$paths$m"$'\n'
+      done < <(printf '%s\n' "$line" | grep -oE '(~|\.{0,2})?/?[A-Za-z0-9._~@+-]+(/[A-Za-z0-9._~@+-]+)+')
+    done
+
+    # URLs first: they are what you reach for most, and there are few of them.
+    # Dedup is on the RESOLVED path so `/private/tmp/x` and a `private/tmp/x`
+    # fragment of the same line collapse into one entry.
+    {
+      printf '%s' "$urls"
+      printf '%s' "$paths" | while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        printf '%s\n' "$(cd "$(dirname "$p")" 2>/dev/null && printf '%s/%s' "$(pwd)" "$(basename "$p")")"
+      done
+    } | grep -v '…' | awk 'length($0) > 3 && !seen[$0]++' | head -300
+  }
+  exit 0
+fi
+
+# ─── Interactive ────────────────────────────────────────────
+pane="$(resolve_pane "${1:-}")"
+[ -n "$pane" ] || { echo "cannot resolve the current pane"; sleep 2; exit 1; }
+
+rows="$("$self" --list "$pane")"
+if [ -z "$rows" ]; then
+  echo "no URLs or existing paths on this pane"
+  sleep 1.5
+  exit 0
+fi
+
+cwd="$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null)"
+[ -d "${cwd:-}" ] && { cd "$cwd" || true; }
+
+pick="$(
+  printf '%s\n' "$rows" | fzf \
+    --no-multi \
+    --disabled \
+    --height=100% \
+    --layout=reverse \
+    --info=inline \
+    --prompt='  pick  ' \
+    --header=$'j/k move   i search\nenter copy   ctrl-o open   esc close' \
+    --bind 'j:down,k:up' \
+    --bind 'q:abort' \
+    --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
+    --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+change-prompt(  pick  )' || echo abort" \
+    --bind 'ctrl-o:execute-silent(open {} >/dev/null 2>&1)+abort' \
+    --color='fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee'
+)" || exit 0
+
+[ -n "$pick" ] || exit 0
+printf '%s' "$pick" | pbcopy
+tmux set-buffer -w -- "$pick" 2>/dev/null
