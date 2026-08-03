@@ -72,6 +72,29 @@ worktrees:
 `worktrees.path` affects **new** worktrees only. Existing ones are always found by their real
 path from `git worktree list`, so changing it never orphans them.
 
+## Keeping `.grove/` out of the repo
+
+The user keeps grove setups untracked — they are personal tooling, not project config, and this
+matters most on repos we do not own. Use the `git skip` alias (defined in `dot_gitconfig`), which
+picks the right mechanism automatically:
+
+```bash
+git skip .grove/config.yaml .grove/setup.sh    # hide them
+git unskip .grove/config.yaml                  # reverse it
+```
+
+- **File is untracked** → appended to `.git/info/exclude`, a repo-local ignore that is never
+  committed and needs no change to the project's `.gitignore`.
+- **File is already tracked** (someone committed `.grove/` upstream) → `update-index
+  --skip-worktree`, so local edits stop showing up in `git status`.
+
+Prefer `git skip` over editing `.gitignore`: on a client repo, adding personal tooling to a
+tracked ignore file is a change to shared state.
+
+One caveat for the tracked case: `--skip-worktree` can make a later `git pull` fail or behave
+oddly if upstream modifies that same file. If a pull complains about `.grove/`, `git unskip` it,
+pull, then `git skip` it again.
+
 ## Session naming — and why it matters beyond grove
 
 Default format `{prefix}{project}_{branch}_{key}`, where `{key}` is an FNV-1a hash of the repo
@@ -136,10 +159,11 @@ Two things to respect when extending it:
 3. List the windows the user actually opens by hand; that is what `default_windows` should be.
 4. If the repo has gitignored files a worktree needs, write `.grove/setup.sh`, `chmod +x` it,
    and point `worktrees.setup_script` at it.
-5. Verify with a throwaway branch: `grove new tmp-check`, confirm the files and windows landed,
+5. `git skip .grove/config.yaml .grove/setup.sh` so the setup stays untracked.
+6. Verify with a throwaway branch: `grove new tmp-check`, confirm the files and windows landed,
    then `grove delete tmp-check -f`.
 
-Do not report it working until step 5 has actually run.
+Do not report it working until step 6 has actually run.
 
 ## Troubleshooting
 
@@ -151,6 +175,8 @@ Do not report it working until step 5 has actually run.
 | project's windows replaced the global ones | expected: arrays replace, they do not merge |
 | session picker no longer scopes to the project | `session_name_format` no longer ends in `{key}` |
 | sessions linger after deleting worktrees | `grove prune` |
+| `.grove/` shows up in `git status` | not skipped — `git skip .grove/config.yaml .grove/setup.sh` |
+| `git pull` complains about `.grove/` | `--skip-worktree` on a tracked file upstream changed: `git unskip`, pull, `git skip` again |
 
 Grove itself is a Bun/TypeScript project at `~/Developer/perso/grove-ai`. Rebuild and reinstall
 the binary after pulling with `bun run install:cli`. Tests are `bun run test` (vitest) — **not**
