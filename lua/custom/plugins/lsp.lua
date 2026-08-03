@@ -109,8 +109,8 @@ return {
             -- Registered on client.commands so vtsls's executeCommand reaches us
             -- instead of going through Neovim's default handler.
             client.commands['_typescript.moveToFileRefactoring'] = function(command, ctx)
-              local source_dir = vim.fn.expand('%:p:h')
-              local source_ext = vim.fn.expand('%:e')
+              local source_dir = vim.fn.expand '%:p:h'
+              local source_ext = vim.fn.expand '%:e'
               local cwd = vim.uv.cwd() .. '/'
               -- Show relative path in prompt, resolve to absolute for vtsls
               local rel_default = source_dir .. '/'
@@ -121,7 +121,7 @@ return {
                 completion = 'file',
               }, function(input)
                 if not input or input == '' then return end
-                if not input:match('%.[^/]+$') then input = input .. '.' .. source_ext end
+                if not input:match '%.[^/]+$' then input = input .. '.' .. source_ext end
                 -- Make relative paths absolute from source dir
                 if not vim.startswith(input, '/') then input = cwd .. input end
                 table.insert(command.arguments, input)

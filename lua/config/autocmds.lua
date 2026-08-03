@@ -41,9 +41,7 @@ vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'TermClose' }, {
   callback = function()
     vim.cmd 'checktime'
     local gs = package.loaded['gitsigns']
-    if gs then
-      pcall(gs.refresh)
-    end
+    if gs then pcall(gs.refresh) end
   end,
 })
 
@@ -57,7 +55,9 @@ vim.api.nvim_create_autocmd({ 'FocusLost', 'BufLeave', 'InsertLeave' }, {
     local buf = args.buf
     if not vim.bo[buf].modified or not vim.bo[buf].modifiable then return end
     if vim.bo[buf].buftype ~= '' or vim.api.nvim_buf_get_name(buf) == '' then return end
-    local ok, err = pcall(function() vim.api.nvim_buf_call(buf, function() vim.cmd.write { mods = { silent = true } } end) end)
+    local ok, err = pcall(function()
+      vim.api.nvim_buf_call(buf, function() vim.cmd.write { mods = { silent = true } } end)
+    end)
     if not ok then vim.notify('auto-save failed: ' .. tostring(err), vim.log.levels.WARN) end
   end,
 })

@@ -5,8 +5,6 @@ return {
     dependencies = {
       'folke/snacks.nvim',
     },
-    config = function()
-      require('pdfreader').setup()
-    end,
+    config = function() require('pdfreader').setup() end,
   },
 }
