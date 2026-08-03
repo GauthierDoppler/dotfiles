@@ -1,0 +1,35 @@
+dot_claude/skills/tmux-tasks/SKILL.md
+  s_bcca654f79f73b::t_85076f7daf92d4 103-107
+  s_bcca654f79f73b::t_bdb49d1f53738d 87
+scripts/tmux-task-run
+  s_bcca654f79f73b::t_1197ee97bbf543 1-59
+dot_tmux.conf
+  s_bcca654f79f73b::t_033e525e7ce6b6 36-41,43-45
+  s_bcca654f79f73b::t_8976f851594f76 298-307,309
+AGENTS.md
+  s_bcca654f79f73b::t_707f10dc99567f 90,98-119
+scripts/tmux-tasks
+  s_bcca654f79f73b::t_7de8edcbd60c77 206
+  s_bcca654f79f73b::t_468267b0c1820a 222-232
+  s_bcca654f79f73b::t_51220fc2f505a7 57
+  s_bcca654f79f73b::t_e81eb3fb8f01af 239
+  s_bcca654f79f73b::t_116548a66c23a0 249-250
+install.sh
+  s_bcca654f79f73b::t_91f01e38fc6293 114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "72b2eff411711e0f8fd42dde5d81180c194fbe0c",
+  "prompts": {},
+  "sessions": {
+    "s_bcca654f79f73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b182cc66-a9ab-48c8-8734-67f9dd4b0b48",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
