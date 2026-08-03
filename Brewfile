@@ -22,6 +22,9 @@ brew "tree"
 brew "htop"
 brew "yq"
 brew "coreutils"
+# Lua formatter. CI runs `stylua --check nvim/` on every push touching Lua, so
+# it has to be installable locally or the check can only ever fail after a push.
+brew "stylua"
 brew "jq"
 brew "imagemagick"
 brew "ghostscript"
