@@ -58,6 +58,48 @@ resolve_pane() {
   esac
 }
 
+# ─── Enter: open, don't copy ────────────────────────────────
+# A URL goes to Chrome. A file goes to the Neovim already running in THIS
+# session, because opening a source file in a new GUI app is never what you
+# meant — you wanted it in the editor you are already working in.
+#
+# Driven with send-keys rather than `nvr`: neovim-remote needs the instance to
+# be listening on a socket, and this config never sets --listen, so nvr has
+# nothing to connect to. send-keys needs no cooperation from nvim at all.
+# Escape first because nvim may be in insert mode; the path is sent with -l so
+# it is taken literally, with spaces backslash-escaped for the : command line.
+#
+# Falls back to `open` when the session has no nvim pane.
+if [ "${1:-}" = --open ]; then
+  target="${2:-}"
+  pane="$(resolve_pane "${3:-}")"
+  [ -n "$target" ] || exit 0
+
+  case "$target" in
+    http://*|https://*|ftp://*|git@*)
+      open -a 'Google Chrome' "$target" 2>/dev/null || open "$target" 2>/dev/null
+      exit 0
+      ;;
+  esac
+
+  sess="$(tmux display-message -p -t "$pane" '#{session_name}' 2>/dev/null)"
+  nvim_pane="$(
+    tmux list-panes -s -t "$sess" -F '#{pane_id} #{pane_current_command}' 2>/dev/null |
+      awk '$2 == "nvim" { print $1; exit }'
+  )"
+
+  if [ -n "$nvim_pane" ]; then
+    tmux send-keys -t "$nvim_pane" Escape
+    tmux send-keys -t "$nvim_pane" -l ":e ${target// /\\ }"
+    tmux send-keys -t "$nvim_pane" Enter
+    tmux select-window -t "$nvim_pane"
+    tmux select-pane -t "$nvim_pane"
+  else
+    open "$target" 2>/dev/null
+  fi
+  exit 0
+fi
+
 # ─── Candidate extraction (also invoked by fzf's reload) ────
 if [ "${1:-}" = --list ]; then
   pane="$(resolve_pane "${2:-}")"
@@ -72,36 +114,46 @@ if [ "${1:-}" = --list ]; then
   content="$(tmux capture-pane -p -J -S -2000 -t "$pane" 2>/dev/null)"
   [ -n "$content" ] || exit 0
 
-  # Reversed first: the bottom of the pane is the most recent output, and that is
-  # almost always what you are reaching for. Dedup then keeps the newest copy.
-  printf '%s\n' "$content" | tail -r 2>/dev/null | {
-    urls=''
-    paths=''
-    while IFS= read -r line; do
-      # URLs and git remotes — kept without checking.
-      while IFS= read -r m; do
-        [ -n "$m" ] && urls="$urls$m"$'\n'
-      done < <(printf '%s\n' "$line" | grep -oE '((https?|ftp)://|git@[A-Za-z0-9._-]+:)[^[:space:]<>"'"'"'`|(),]+' | sed -E 's/[.,:;]+$//')
+  # Reverse the WHOLE buffer once: the bottom of the pane is the most recent
+  # output, and that is almost always what you are reaching for. Dedup below then
+  # keeps the newest copy of anything printed twice.
+  #
+  # Each grep runs ONCE over the whole buffer, never per line. A previous version
+  # looped over ~2000 captured lines spawning two greps and a sed each — roughly
+  # 6000 processes — which took long enough that the popup sat there echoing
+  # keystrokes as raw escape sequences while it churned. Per-line shelling out
+  # inside a capture loop is the mistake to avoid here; the only per-candidate
+  # work left is one `test -e`, on a list that is already deduped.
+  reversed="$(printf '%s\n' "$content" | tail -r 2>/dev/null || printf '%s\n' "$content")"
 
-      # Path-shaped tokens — kept only if they exist on disk.
-      while IFS= read -r m; do
-        [ -n "$m" ] || continue
-        m="${m%"${m##*[!.,:;]}"}"
-        [ -e "$m" ] && paths="$paths$m"$'\n'
-      done < <(printf '%s\n' "$line" | grep -oE '(~|\.{0,2})?/?[A-Za-z0-9._~@+-]+(/[A-Za-z0-9._~@+-]+)+')
+  urls="$(
+    printf '%s\n' "$reversed" |
+      grep -oE '((https?|ftp)://|git@[A-Za-z0-9._-]+:)[^[:space:]<>"'"'"'`|(),]+' |
+      sed -E 's/[.,:;]+$//' |
+      grep -v '…' |
+      awk 'length($0) > 6 && !seen[$0]++'
+  )"
+
+  # Dedup BEFORE the existence test, so `test -e` runs once per distinct token
+  # rather than once per occurrence.
+  path_candidates="$(
+    printf '%s\n' "$reversed" |
+      grep -oE '(~|\.{0,2})?/?[A-Za-z0-9._~@+-]+(/[A-Za-z0-9._~@+-]+)+' |
+      sed -E 's/[.,:;]+$//' |
+      grep -v '…' |
+      awk 'length($0) > 3 && !seen[$0]++' |
+      head -400
+  )"
+
+  paths="$(
+    printf '%s\n' "$path_candidates" | while IFS= read -r p; do
+      [ -n "$p" ] && [ -e "$p" ] && printf '%s\n' "$p"
     done
+  )"
 
-    # URLs first: they are what you reach for most, and there are few of them.
-    # Dedup is on the RESOLVED path so `/private/tmp/x` and a `private/tmp/x`
-    # fragment of the same line collapse into one entry.
-    {
-      printf '%s' "$urls"
-      printf '%s' "$paths" | while IFS= read -r p; do
-        [ -n "$p" ] || continue
-        printf '%s\n' "$(cd "$(dirname "$p")" 2>/dev/null && printf '%s/%s' "$(pwd)" "$(basename "$p")")"
-      done
-    } | grep -v '…' | awk 'length($0) > 3 && !seen[$0]++' | head -300
-  }
+  # URLs first: they are what you reach for most, and there are few of them.
+  { printf '%s\n' "$urls"; printf '%s\n' "$paths"; } |
+    awk 'NF && !seen[$0]++' | head -200
   exit 0
 fi
 
@@ -127,11 +179,13 @@ pick="$(
     --layout=reverse \
     --info=inline \
     --prompt='  pick  ' \
-    --header=$'j/k move   i search\nenter copy   ctrl-o open   esc close' \
+    --header=$'j/k move   i search\nenter open (chrome / nvim)   ctrl-y copy   esc close' \
     --bind 'j:down,k:up' \
     --bind 'q:abort' \
     --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
     --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+change-prompt(  pick  )' || echo abort" \
+    --bind "enter:execute-silent($self --open {} $pane)+abort" \
+    --bind 'ctrl-y:accept' \
     --bind 'ctrl-o:execute-silent(open {} >/dev/null 2>&1)+abort' \
     --color='fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee'
 )" || exit 0
