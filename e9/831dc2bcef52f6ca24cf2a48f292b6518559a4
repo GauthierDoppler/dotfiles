@@ -1,0 +1,19 @@
+nvim
+  s_bcca654f79f73b::t_6f828001c7d273 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e9831dc2bcef52f6ca24cf2a48f292b6518559a4",
+  "prompts": {},
+  "sessions": {
+    "s_bcca654f79f73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b182cc66-a9ab-48c8-8734-67f9dd4b0b48",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
