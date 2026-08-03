@@ -83,6 +83,19 @@ if [ "${1:-}" = --open ]; then
   esac
 
   sess="$(tmux display-message -p -t "$pane" '#{session_name}' 2>/dev/null)"
+  pane_cwd="$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null)"
+
+  # Make the path ABSOLUTE before doing anything with it. Candidates are kept as
+  # they appeared on screen, so `scripts/seed-dev-user.ts` is relative to the
+  # PANE's directory — but it is about to be handed either to an nvim whose cwd
+  # is something else, or to a new window opened at the session root. Resolving
+  # here is what stops it opening the wrong file, or a new empty buffer.
+  case "$target" in
+    /*) ;;
+    "~"/*) target="$HOME/${target#"~"/}" ;;
+    *) target="${pane_cwd:-$PWD}/$target" ;;
+  esac
+
   nvim_pane="$(
     tmux list-panes -s -t "$sess" -F '#{pane_id} #{pane_current_command}' 2>/dev/null |
       awk '$2 == "nvim" { print $1; exit }'
@@ -109,8 +122,12 @@ if [ "${1:-}" = --open ]; then
     exit 0
   fi
 
-  dir="$(dirname "$target")"
-  [ -d "$dir" ] || dir="$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null)"
+  # cwd is the SESSION root, not the file's directory. Opening at dirname puts
+  # nvim's :pwd somewhere deep in the tree, so the file resolves but every
+  # project-wide thing after it — Telescope, :grep, LSP root detection — is
+  # scoped to that subdirectory instead of the repo.
+  dir="$(tmux display-message -p -t "$pane" '#{session_path}' 2>/dev/null)"
+  [ -d "${dir:-}" ] || dir="$(dirname "$target")"
   tmux new-window -t "$sess" -c "$dir" -n nvim "nvim ${target// /\\ }"
   exit 0
 fi
