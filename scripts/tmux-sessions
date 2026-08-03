@@ -2,6 +2,7 @@
 # Modal fuzzy tmux session switcher, meant to be run inside `display-popup -E`.
 #
 #   j / k     move down / up
+#   h / l     cycle the highlighted session's current window (preview follows)
 #   Enter     switch to the highlighted session
 #   Tab       toggle: this project's sessions  <->  all sessions
 #   i         start filtering by name
@@ -11,6 +12,24 @@
 #
 # Search is OFF by default. With a handful of sessions, navigating beats typing,
 # so j/k are movement keys and only `i` hands the keyboard to the query.
+#
+# ─── Preview ────────────────────────────────────────────────
+# The preview shows the highlighted session's window list plus a live capture of
+# its CURRENT window — not a window you pick inside the preview, because fzf
+# previews cannot be focused. h/l instead run `previous-window`/`next-window` on
+# the *other* session, which works fine while it is detached: the current window
+# is session state and needs no attached client. So the "which window am I
+# looking at" cursor is not tracked here at all — it is tmux's own, which is why
+# there is no index to clamp per session and nothing to reset when the highlight
+# moves.
+#
+# The trade is that h/l MUTATE that session: cycle past a window and Esc out, and
+# you will land there next time you attach. That is the intended behaviour —
+# lining up the window you want before pressing Enter is the point.
+#
+# capture-pane returns lines at the SOURCE pane's width, which is usually far
+# wider than this popup, hence `nowrap`: truncating a full-screen TUI reads, while
+# wrapping it does not.
 #
 # Esc is a single binding that branches on $FZF_INPUT_STATE (enabled/disabled/
 # hidden). Do NOT implement this with `unbind(esc)`: fzf's unbind REMOVES a key's
@@ -35,7 +54,8 @@
 # A session with no key (a hand-made name like `cctap`) belongs to no project,
 # so it lists everything and Tab has nothing to toggle.
 #
-# Usage: tmux-sessions [--list] [--flip] [--prompt] [--header]
+# Usage: tmux-sessions [--list] [--flip] [--prompt] [--header] [--preview <session>]
+#                      [--next <session>] [--prev <session>]
 
 set -uo pipefail
 
@@ -95,6 +115,24 @@ list() {
   done <<<"$rows"
 }
 
+# ─── Preview ───────────────────────────────────────────────
+# `-t <session>` with no window part resolves to the session's current window and
+# its active pane, which is exactly the window the list above marks with ←.
+# `-e` keeps the SGR sequences so a coloured TUI comes back looking like itself.
+preview() {
+  local name="$1"
+  tmux list-windows -t "$name" \
+    -F '#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}' 2>/dev/null
+  printf '\n'
+  tmux capture-pane -pe -t "$name" 2>/dev/null
+}
+
+# `no next window` on a single-window session is a failure exit, not a problem to
+# report — h/l are movement keys and a session with one window simply cannot move.
+cycle() {
+  tmux "$1" -t "$2" 2>/dev/null || true
+}
+
 # ─── Labels ────────────────────────────────────────────────
 prompt_label() {
   local key
@@ -106,16 +144,19 @@ prompt_label() {
   fi
 }
 
+# Two lines — navigation on top, actions below. One line no longer fits: the list
+# side is roughly half of the popup, and `tab project only` pushed it past the
+# width, where fzf truncates the tail (i.e. it silently ate `ctrl-x kill`).
 header_label() {
   local key scope
   key="$(session_key "$(current_session)")"
   scope="$(scope_read)"
   if [ -z "$key" ]; then
-    printf 'j/k move   enter switch   i search   ctrl-x kill   (no project)'
+    printf 'j/k move   h/l window   i search   (no project)\nenter switch   ctrl-x kill'
   elif [ "$scope" = all ]; then
-    printf 'j/k move   enter switch   tab project only   i search   ctrl-x kill'
+    printf 'j/k move   h/l window   tab project only   i search\nenter switch   ctrl-x kill'
   else
-    printf 'j/k move   enter switch   tab show all   i search   ctrl-x kill'
+    printf 'j/k move   h/l window   tab show all   i search\nenter switch   ctrl-x kill'
   fi
 }
 
@@ -132,9 +173,12 @@ case "${1:-}" in
     if [ "$(scope_read)" = project ]; then scope_write all; else scope_write project; fi
     exit 0
     ;;
-  --list)   list; exit 0 ;;
-  --prompt) prompt_label; exit 0 ;;
-  --header) header_label; exit 0 ;;
+  --list)    list; exit 0 ;;
+  --prompt)  prompt_label; exit 0 ;;
+  --header)  header_label; exit 0 ;;
+  --preview) preview "${2:-}"; exit 0 ;;
+  --next)    cycle next-window "${2:-}"; exit 0 ;;
+  --prev)    cycle previous-window "${2:-}"; exit 0 ;;
 esac
 
 # ─── Interactive ───────────────────────────────────────────
@@ -159,12 +203,14 @@ selected=$(
     --cycle \
     --bind 'j:down,k:up' \
     --bind 'q:abort' \
-    --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
-    --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+transform-prompt($self --prompt)' || echo abort" \
+    --bind "l:execute-silent($self --next {1})+refresh-preview" \
+    --bind "h:execute-silent($self --prev {1})+refresh-preview" \
+    --bind 'i:enable-search+unbind(j,k,q,h,l)+change-prompt(  search  )' \
+    --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q,h,l)+transform-prompt($self --prompt)' || echo abort" \
     --bind "tab:transform:$self --flip; echo \"reload($self --list)+transform-prompt($self --prompt)+transform-header($self --header)+first\"" \
     --bind "ctrl-x:execute-silent(tmux kill-session -t {1})+reload($self --list)" \
-    --preview='tmux list-windows -t {1} -F "#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}"' \
-    --preview-window='right,48%,border-left'
+    --preview="$self --preview {1}" \
+    --preview-window='right,48%,border-left,nowrap'
 ) || exit 0
 
 [ -n "$selected" ] || exit 0
