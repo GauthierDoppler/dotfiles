@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A modular Neovim config based on a custom fork of kickstart.nvim, managed as a git submodule of a dotfiles repo. Uses lazy.nvim for plugin management.
+A modular Neovim config, originally forked from kickstart.nvim and since diverged. It lives as a plain directory inside the dotfiles repo. Uses lazy.nvim for plugin management.
 
 ## Validation Commands
 
@@ -50,6 +50,16 @@ Read `ARCHITECTURE.md` and `AGENTS.md` first — they cover the module layout an
 
 ts_ls, eslint, gopls, pyright, ruff, ruby_lsp, lua_ls — all via mason auto-install.
 
-## This Is a Submodule
+## This Is Part of the Dotfiles Repo
 
-This repo is a submodule of `~/dotfiles`. Changes here must be committed inside the submodule first, then the submodule ref updated in the parent repo.
+`nvim/` is a plain directory in `~/dotfiles`, not a submodule and not a separate
+repo — commit changes here like any other file. The history of the old
+`kickstart.nvim` fork was folded in with `git subtree`, so it is still reachable,
+but the pre-fold commits carry un-prefixed paths (`init.lua`, not
+`nvim/init.lua`) and `git log -- nvim/<file>` will not walk into them.
+
+Upstream kickstart is **not** tracked any more. Do not try to merge from it.
+
+CI: `stylua --check nvim/` runs from `.github/workflows/stylua.yml` at the *repo
+root*. A workflow file under `nvim/.github/` would never run — GitHub only reads
+the root one.

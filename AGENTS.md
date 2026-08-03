@@ -15,7 +15,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → submodules → symlinks → Claude settings merge → bun → Node LTS → npm globals → app registration.
+The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → symlinks → Claude settings merge → bun → Node LTS → npm globals → app registration.
 
 The `link()` function creates symlinks and backs up existing files as `*.bak`. When adding a new config, use the `/add-config` skill.
 
@@ -169,9 +169,23 @@ documented in the `tmux-tasks` skill, not the `grove` one: `.tmux/` is untracked
 so a project that uses both copies it across in its own `.grove/setup.sh`. The
 dependency points one way only.
 
-## Neovim Config (submodule)
+## Neovim Config
 
-The `nvim/` directory is a git submodule pointing to a custom fork of kickstart.nvim (`GauthierDoppler/kickstart.nvim`). Changes to neovim config must be committed inside the submodule first, then the submodule ref updated in this repo.
+`nvim/` is a plain directory in this repo — commit changes to it like anything
+else. It was a git submodule pointing at a `kickstart.nvim` fork until that fork
+had diverged far enough that upstream merges were no longer realistic (the
+inherited stylua workflow was still gated on `github.repository ==
+'nvim-lua/kickstart.nvim'` and had never once run). The submodule was charging a
+commit-plus-bump dance per change and a clone that broke whenever it had not been
+pushed, so it was folded in with `git subtree`.
+
+The fork's 444 commits came across and are reachable, but pre-fold commits carry
+un-prefixed paths, so `git log -- nvim/<file>` stops at the merge. Use
+`git log <merge>^2` to walk the old history. Upstream kickstart is no longer
+tracked; do not merge from it.
+
+Lua formatting is checked by `.github/workflows/stylua.yml` at the **repo root** —
+a workflow under `nvim/.github/` would silently never run.
 
 **Structure:** `nvim/init.lua` loads `config.options`, `config.keymaps`, `config.autocmds`, `config.lazy` (in that order). All plugins are managed by lazy.nvim in `lua/config/lazy.lua`. Custom plugins go in `lua/custom/plugins/`, kickstart extras in `lua/kickstart/plugins/`.
 

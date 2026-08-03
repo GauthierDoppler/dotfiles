@@ -52,9 +52,11 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 fi
 
-# ─── Phase 5: Git submodules ───────────────────────────────
-echo "Initializing submodules..."
-git -C "$DOTFILES" submodule update --init --recursive || warn "submodule init failed (SSH key not on GitHub?)"
+# ─── Phase 5: (was git submodules) ─────────────────────────
+# nvim/ used to be a submodule pointing at a kickstart.nvim fork. It is plain
+# files in this repo now: the fork had diverged past the point where upstream
+# merges were realistic, so the submodule was costing a two-step commit dance
+# and a clone that broke whenever the submodule had not been pushed.
 
 # ─── Phase 6: Symlinks ─────────────────────────────────────
 link() {
