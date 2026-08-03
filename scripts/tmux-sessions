@@ -35,7 +35,7 @@
 # A session with no key (a hand-made name like `cctap`) belongs to no project,
 # so it lists everything and Tab has nothing to toggle.
 #
-# Usage: tmux-sessions [--list] [--toggle] [--prompt] [--header]
+# Usage: tmux-sessions [--list] [--flip] [--prompt] [--header]
 
 set -uo pipefail
 
@@ -121,9 +121,15 @@ header_label() {
 
 # ─── Helper modes (invoked by fzf bindings) ────────────────
 case "${1:-}" in
-  --toggle)
+  # Flips the scope and prints NOTHING. Flipping and rendering must not be split
+  # across two fzf actions: `reload` runs its command asynchronously while
+  # `transform-prompt` runs synchronously, so `reload(--flip)+transform-prompt`
+  # renders the prompt from the scope file *before* the reload subprocess has
+  # updated it — the list changes but the label shows the previous scope. The tab
+  # binding calls this inside a single `transform`, which completes before any of
+  # the actions it emits are run.
+  --flip)
     if [ "$(scope_read)" = project ]; then scope_write all; else scope_write project; fi
-    list
     exit 0
     ;;
   --list)   list; exit 0 ;;
@@ -155,7 +161,7 @@ selected=$(
     --bind 'q:abort' \
     --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
     --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+transform-prompt($self --prompt)' || echo abort" \
-    --bind "tab:reload($self --toggle)+transform-prompt($self --prompt)+transform-header($self --header)+first" \
+    --bind "tab:transform:$self --flip; echo \"reload($self --list)+transform-prompt($self --prompt)+transform-header($self --header)+first\"" \
     --bind "ctrl-x:execute-silent(tmux kill-session -t {1})+reload($self --list)" \
     --preview='tmux list-windows -t {1} -F "#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}"' \
     --preview-window='right,48%,border-left'
