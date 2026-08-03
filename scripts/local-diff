@@ -33,7 +33,8 @@ diff_shell() {
     local extra
     extra=$(comm -23 \
         <(shell_significant "$local_file" | sort -u) \
-        <(shell_significant "$shared_file" | sort -u))
+        <(shell_significant "$shared_file" | sort -u) \
+        | grep -v "dot_zshrc\"\?$")   # the stub's own load line, not drift
 
     [[ -z "$extra" ]] && return 0
     found=1
@@ -47,9 +48,11 @@ diff_gitconfig() {
     [[ -f "$local_file" ]] || return 0
 
     local extra
+    # No --includes: we want the stub's OWN keys, not the shared ones it pulls in.
     extra=$(comm -23 \
         <(git config --file "$local_file" --list 2>/dev/null | sort -u) \
-        <(git config --file "$shared_file" --list 2>/dev/null | sort -u))
+        <(git config --file "$shared_file" --list 2>/dev/null | sort -u) \
+        | grep -v '^include\.path=')  # the stub's own load line, not drift
 
     [[ -z "$extra" ]] && return 0
     found=1
@@ -79,25 +82,31 @@ diff_json() {
     echo "$extra" | emit
 }
 
-diff_shell     "$HOME/.zshrc.local"                        "$DOTFILES/dot_zshrc"
-diff_gitconfig "$HOME/.gitconfig.local"                    "$DOTFILES/dot_gitconfig"
+# ~/.zshrc and ~/.gitconfig are stubs, not symlinks: they load the tracked config
+# and everything machine-local sits below that line (see install.sh). So the
+# local file to compare IS the stub — minus the load line itself, which is
+# scaffolding rather than drift.
+diff_shell     "$HOME/.zshrc"                              "$DOTFILES/dot_zshrc"
+diff_gitconfig "$HOME/.gitconfig"                          "$DOTFILES/dot_gitconfig"
 # Claude Code has no user-scope local settings file, so the override lives in the
 # repo dir (untracked) and claude-settings-sync merges it. Anything listed here
 # accumulated on this machine and will not reach your other machines until you
 # promote it into dot_claude/settings.json by hand.
 diff_json      "$DOTFILES/dot_claude/settings.local.json"  "$DOTFILES/dot_claude/settings.json"
 
-# ─── Orphans: local files nothing knows about ──────────────
-known=(".zshrc.local" ".gitconfig.local")
+# ─── Legacy *.local files ──────────────────────────────────
+# The paired-local-file layout is gone: machine config now lives in the stubs
+# themselves. Any ~/.*.local left here is either a leftover install.sh has not
+# migrated yet, or a file nothing reads at all — both worth surfacing, because
+# a config nobody sources is indistinguishable from one that stopped working.
 orphans=""
 for f in "$HOME"/.*.local; do
     [[ -e "$f" ]] || continue
-    base="$(basename "$f")"
-    printf '%s\n' "${known[@]}" | grep -qx "$base" || orphans+="  $base"$'\n'
+    orphans+="  $(basename "$f")"$'\n'
 done
 if [[ -n "$orphans" ]]; then
     found=1
-    header "Unpaired local files" "no shared counterpart is being compared"
+    header "Legacy .local files" "nothing sources these — run install.sh to migrate them into the stubs"
     printf '%s\n' "${orphans%$'\n'}" | sed "s/^ *//" | emit
 fi
 

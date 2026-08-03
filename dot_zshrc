@@ -57,5 +57,7 @@ alias "cl-yolo"="claude --dangerously-skip-permissions"
 [[ -f "$HOME/.local/bin/env" ]] && . "$HOME/.local/bin/env"
 
 # ─── Machine-specific config ──────────────────────────────
-# Add local overrides to ~/.zshrc.local, not here.
-[[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
+# There is nothing to source here. ~/.zshrc is NOT a symlink to this file: it is
+# a small stub that sources it, so anything a machine adds — by hand or by an
+# installer appending to ~/.zshrc — lands below that line, outside this repo.
+# Put local overrides straight into ~/.zshrc. See install.sh (stub()).
