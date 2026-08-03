@@ -102,6 +102,7 @@ link "dot_claude/hooks"                "$HOME/.claude/hooks"
 # would hide them.
 mkdir -p "$HOME/.claude/skills"
 link "dot_claude/skills/tmux-tasks"    "$HOME/.claude/skills/tmux-tasks"
+link "dot_claude/skills/grove"         "$HOME/.claude/skills/grove"
 
 # Scripts
 mkdir -p "$HOME/.local/bin"
