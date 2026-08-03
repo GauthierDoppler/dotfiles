@@ -105,6 +105,24 @@ deep. Never write a task that depends on the pane's cwd.
 Shared logic goes in `.tmux/lib/*.sh`, sourced via `"$TMUX_TASK_ROOT/.tmux/lib/common.sh"`, and
 must stay non-executable.
 
+## Surviving a new worktree
+
+`.tmux/` is untracked, so a worktree created by a worktree manager starts without it and
+`Prefix + e` will report no tasks there.
+
+If the project uses grove, add a line to its `.grove/setup.sh` — which runs after a worktree is
+created, with `GROVE_REPO_ROOT` and `GROVE_WORKTREE_PATH` set:
+
+```bash
+[ -d "$GROVE_REPO_ROOT/.tmux" ] && cp -R "$GROVE_REPO_ROOT/.tmux" "$GROVE_WORKTREE_PATH/.tmux"
+```
+
+`cp -R`, not the `cp_if_exists` helper those scripts usually define — that helper tests `[ -f ]`
+and silently skips directories.
+
+This is the only place the two systems touch, and the dependency points one way: tmux tasks know
+how to survive a worktree; grove knows nothing about tmux tasks.
+
 ## Worked examples
 
 ```bash

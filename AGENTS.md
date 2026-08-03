@@ -113,9 +113,11 @@ They are symlinked **one by one** in `install.sh`, never as a directory:
 `~/.claude/skills` also holds skills installed by Claude Code itself (several of
 them symlinks into `~/.agents/skills`), and linking the parent would hide them.
 
-The two are deliberately cross-referenced: `.tmux/` is untracked, so a new grove
-worktree starts without it, and the `grove` skill documents the `setup.sh` line
-that copies it across.
+**Grove and the tmux tooling stay separate.** Grove is a general worktree
+manager and must not grow knowledge of `.tmux/`. The one place they touch is
+documented in the `tmux-tasks` skill, not the `grove` one: `.tmux/` is untracked,
+so a project that uses both copies it across in its own `.grove/setup.sh`. The
+dependency points one way only.
 
 ## Neovim Config (submodule)
 

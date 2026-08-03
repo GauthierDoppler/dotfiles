@@ -116,21 +116,17 @@ cp_if_exists "$ROOT/.claude/settings.local.json" "$WT/.claude/settings.local.jso
 
 Two things to respect when extending it:
 
-- **`cp_if_exists` is files-only** (`[ -f ]`). A directory silently does nothing. For a
-  directory use `[ -d "$1" ] && cp -R`, and `mkdir -p` the parent first.
+- **`cp_if_exists` is files-only** (`[ -f ]`). Passing a directory silently does nothing — no
+  error, no copy, and `set -e` will not catch it. Copying an untracked *directory* needs a
+  separate helper:
+
+  ```bash
+  cp_dir_if_exists() { [ -d "$1" ] && cp -R "$1" "$2"; return 0; }
+  ```
+
+  `mkdir -p` the destination's parent first if it is not at the worktree root.
 - **The main-worktree guard is load-bearing.** Without it, `cp x x` on the main worktree either
   errors under `set -e` or truncates the file.
-
-### Propagating tmux tasks
-
-`.tmux/` (see the `tmux-tasks` skill) is untracked, so new worktrees start without it. If the
-project uses tmux tasks, add this to `setup.sh`:
-
-```bash
-[ -d "$ROOT/.tmux" ] && cp -R "$ROOT/.tmux" "$WT/.tmux"
-```
-
-Note `cp -R` — `cp_if_exists` will not do it.
 
 ## Setting up a new project
 
