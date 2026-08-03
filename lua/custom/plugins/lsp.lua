@@ -225,7 +225,8 @@ return {
         'debugpy',
       })
 
-      require('mason-tool-installer').setup { ensure_installed = ensure_installed }
+      -- See vim.g.headless in init.lua.
+      if not vim.g.headless then require('mason-tool-installer').setup { ensure_installed = ensure_installed } end
 
       for name, server in pairs(servers) do
         server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})

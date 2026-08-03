@@ -7,6 +7,12 @@ vim.g.maplocalleader = ' '
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = false
 
+-- No UI attached — this is `nvim --headless`, i.e. scripts/test-config.sh.
+-- Guards the install-on-startup paths (treesitter parsers, mason tools): the
+-- test harness wipes XDG on every run, so those would re-download everything
+-- and then get killed mid-flight by `+qa`. Must be set before config.lazy.
+vim.g.headless = #vim.api.nvim_list_uis() == 0
+
 require 'config.options'
 require 'config.keymaps'
 require 'config.autocmds'
