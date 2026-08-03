@@ -7,7 +7,7 @@ Personal development environment for macOS — managed with symlinks.
 | Config | Path | Description |
 |--------|------|-------------|
 | **Zsh** | `dot_zshrc` | Oh My Zsh with robbyrussell theme, fnm, bun, Android SDK paths |
-| **Tmux** | `dot_tmux.conf` | Zellij-style modal keybindings, Catppuccin Mocha theme, Neovim integration |
+| **Tmux** | `dot_tmux.conf` | Pane/tab modes, git-aware status bar, session + task + URL pickers, Catppuccin Frappe |
 | **Git** | `dot_gitconfig` | Worktree helpers (`git wt`), skip/unskip aliases, delta pager |
 | **Neovim** | `nvim/` | originally forked from [kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim), since diverged |
 | **Ghostty** | `ghostty/config` | Catppuccin Frappe theme, split navigation keybinds |
@@ -31,9 +31,7 @@ All dependencies are auto-installed via `Brewfile`. Existing files are backed up
 ### Symlink map
 
 ```
-dot_zshrc          → ~/.zshrc
 dot_tmux.conf      → ~/.tmux.conf
-dot_gitconfig      → ~/.gitconfig
 nvim/              → ~/.config/nvim
 ghostty/           → ~/.config/ghostty
 zed/               → ~/.config/zed
@@ -46,17 +44,35 @@ dot_claude/hooks                → ~/.claude/hooks
 dot_claude/statusline-custom.sh → ~/.claude/statusline-custom.sh
 ```
 
-`~/.claude/settings.json` is deliberately **not** symlinked — see below.
+`~/.zshrc`, `~/.gitconfig` and `~/.claude/settings.json` are deliberately **not**
+symlinked — see below.
 
 ### Machine-specific config
 
-Every tracked config is portable. Anything specific to one machine (project
-paths, work tools, credential helpers) goes in an untracked local file:
+Every tracked config is portable. **`~/.zshrc` and `~/.gitconfig` are stubs, not
+symlinks**: `install.sh` writes a small real file that loads the tracked config,
+and everything machine-local accumulates below that line.
+
+```sh
+# ~/.zshrc
+source "$HOME/dotfiles/dot_zshrc"
+```
+```gitconfig
+# ~/.gitconfig
+[include]
+	path = ~/dotfiles/dot_gitconfig
+```
+
+This exists because third-party installers append to those two files directly.
+Through a symlink those appends land in tracked files, which is how a
+`/Users/<name>` socket path once got staged here. `git config --global` writes
+to the stub too, which is now the correct outcome — and for git, later values
+win, so anything below the include overrides the shared config.
 
 | Shared (tracked)           | Local (untracked)                |
 | -------------------------- | -------------------------------- |
-| `dot_zshrc`                | `~/.zshrc.local` (sourced last)  |
-| `dot_gitconfig`            | `~/.gitconfig.local` (included)  |
+| `dot_zshrc`                | `~/.zshrc`, below the load line   |
+| `dot_gitconfig`            | `~/.gitconfig`, below the include |
 | `dot_claude/settings.json` | `dot_claude/settings.local.json` |
 
 `local-diff` lists what has accumulated locally, so you can decide whether to
@@ -76,6 +92,10 @@ Symlinked into `~/.local/bin` by `install.sh`:
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
 - `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
 - `claude-settings-sync` — regenerates `~/.claude/settings.json` from base + local override
+- `tmux-sessions` — session picker behind `Prefix + Space`
+- `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
+- `tmux-pick` — URL/path picker behind `Prefix + u`
+- `tmux-status-left` — renders project · root/wt · branch in the status bar
 
 ## Dependencies
 
@@ -85,6 +105,7 @@ Auto-installed by `install.sh` via `Brewfile`:
 - [fnm](https://github.com/Schniz/fnm), [bun](https://bun.sh/), [Go](https://go.dev/)
 - [delta](https://github.com/dandavison/delta), [lazygit](https://github.com/jesseduffield/lazygit), [lazydocker](https://github.com/jesseduffield/lazydocker), [ripgrep](https://github.com/BurntSushi/ripgrep)
 - [Oh My Zsh](https://ohmyz.sh/), [pipx](https://pipx.pypa.io/), [terminal-notifier](https://github.com/julienXX/terminal-notifier)
+- [stylua](https://github.com/JohnnyMorganz/StyLua) — CI checks `nvim/` formatting, so it must be runnable locally
 
 ## Tmux cheatsheet
 
@@ -92,12 +113,26 @@ Prefix is `Ctrl+a`. Modes are displayed in the status bar.
 
 | Shortcut | Action |
 |----------|--------|
+| `Prefix → 1-9` | Jump to tab N (N > count → last tab) |
 | `Prefix → p` | **Pane mode** — `d` split down, `r` split right, `x` close, `z` zoom, `hjkl` navigate |
-| `Prefix → t` | **Tab mode** — `n` new, `x` close, `,` rename, `hl` prev/next, `1-9` jump |
-| `Prefix → R` | **Resize mode** (sticky) — `hjkl` resize 2px, `HJKL` resize 5px, `Esc` exit |
-| `Prefix → m` | **Move mode** (sticky) — `hjkl` swap panes, `Esc` exit |
+| `Prefix → t` | **Tab mode** — `n` new, `x` close, `,` rename, `hl` prev/next, `Tab` last used |
+| `Prefix → Space` | Session picker (`s` does the same) |
+| `Prefix → e` | Task picker — scripts from `<project>/.tmux/` |
+| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies |
+| `Prefix → v` | Copy mode, then select with the mouse (`[` is an alias) |
 | `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware) |
-| `Prefix → [` | Copy mode (vi keys: `v` select, `y` copy, `/` search) |
+
+Resize and move modes were removed — unused, and dragging a pane border resizes.
+
+**Copying:** `Prefix + u` for a token (URL, file path), `Prefix + v` for a
+region. Plain dragging is unreliable — tmux only selects when the pane's
+application has not grabbed the mouse, which Neovim always does and Claude Code
+does intermittently. Ghostty's `Shift`+drag also works but selects by screen
+column, so it ignores split boundaries.
+
+Status bar shows **project · root/wt · branch**, resolved with git rather than
+from the session name, plus per-window task markers: `●` running, `✓` ok,
+`✗` failed.
 
 ## Git aliases
 

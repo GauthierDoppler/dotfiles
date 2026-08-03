@@ -192,6 +192,8 @@ a workflow under `nvim/.github/` would silently never run.
 **LSP keymaps** are consolidated in a single `LspAttach` autocommand inside the Telescope config section of `lazy.lua`. The lspconfig `LspAttach` handles only document highlight and inlay hints. `grn`/`gra` are Neovim 0.11+ built-in defaults (not explicitly mapped).
 
 **Formatting:** Stylua with 2-space indent, single quotes (see `nvim/.stylua.toml`).
+It is in the `Brewfile` so `stylua --check nvim/` can be run before pushing —
+without that the CI gate could only ever fail after the fact.
 
 **Smoke test:** `nvim/scripts/test-config.sh` runs headless Neovim validation.
 
@@ -200,8 +202,71 @@ a workflow under `nvim/.github/` would silently never run.
 - **Tmux ↔ Neovim**: `vim-tmux-navigator` for Ctrl+h/j/k/l pane navigation. Tmux has `focus-events on` for Neovim autoread and gitsigns refresh.
 - **Git ↔ Delta**: `dot_gitconfig` includes `delta/themes.gitconfig` for diff rendering. Lazygit also uses delta with custom side-by-side/inline pagers.
 - **Ghostty ↔ Tmux**: Extended key sequences for Shift+Enter compatibility.
-- **Tmux modes**: Zellij-style modal keybindings (Prefix → p/t/R/m for pane/tab/resize/move).
+- **Tmux modes**: two one-shot modal tables, `Prefix → p` (pane) and `Prefix → t` (tab).
+
+## Tmux status bar
+
+`scripts/tmux-status-left` renders the left segment: **project · root-or-wt ·
+branch**, resolved from `#{session_path}` with git.
+
+It does not parse the session name. Grove builds names as
+`{prefix}{project}_{branch}_{key}` with a sanitizer that maps `/[.\s:/@]/` to
+`_` and leaves existing `_` alone, so `grove_my_repo_main_f2d1` cannot be split
+from the left — the same ambiguity that makes `tmux-sessions` group by the
+trailing key instead. A name also freezes the branch at session creation, so it
+starts lying after the first `git checkout`. Nothing about the bar is
+grove-specific: any session in any repo gets the same treatment, and a session
+outside a repo falls back to its own name.
+
+**Every field is fixed-width** (16 / 4 / 22, padded to 48 columns total) so the
+closing `` cap always lands in the same column and the window list never
+shifts when you switch session. That is also why the worktree segment is just
+`root`/`wt` rather than the worktree's name: the name is nearly always a
+sanitized copy of the branch beside it, and it changed width on every switch.
+
+Truncation happens inside the script, never via `status-left-length`: tmux
+truncates the *expanded* string, which by then contains `#[fg=...]` escapes, and
+will happily cut one in half and print the remainder as literal text.
+
+**Colour rule: the bar is greyscale except where colour carries information.**
+Blue is "you are here" (active window pill, active pane border); yellow/green/red
+are task state (`●` `✓` `✗`, see below). Nothing else is coloured — an earlier
+version had a green active-window block that made a green `✓` invisible.
+
+The palette is Catppuccin **Frappe**, matching ghostty. The bar background
+(`#414559`) is one step *lighter* than the terminal (`#303446`) so it reads as
+chrome on top rather than a hole punched in the window.
+
+## Copying out of a pane
+
+Two mechanisms, for two shapes of thing:
+
+- **`Prefix + u`** (`scripts/tmux-pick`) — fuzzy-pick a **token**: URL or file
+  path. `Enter` opens (URL → Chrome, file → the nvim in this session, or a new
+  `nvim` window at the session root if there is none), `Ctrl-y` copies,
+  `Ctrl-o` hands it to `open`.
+- **`Prefix + v`** — copy-mode, then drag with the mouse. For a **region**.
+
+`Prefix + v` matters because tmux's default `MouseDrag1Pane` only starts a
+selection when `#{mouse_any_flag}` is unset — i.e. when the pane's application
+has not asked for mouse events. Neovim holds it permanently and Claude Code
+toggles it while rendering interactive UI, which is why dragging works
+sometimes and not others. Inside copy-mode the `copy-mode-vi` table owns the
+mouse unconditionally, and it respects pane borders (Ghostty's own
+Shift+drag does not — it selects by screen column, so a vertical split gives you
+both panes on every line).
+
+`tmux-pick` checks path candidates against the filesystem and drops the ones
+that do not exist. This is load-bearing: TUIs truncate long paths to fit their
+width, and a fragment is indistinguishable from a real path by shape. Each grep
+runs **once over the whole capture** — an earlier version grepped per line and
+spawned ~6000 processes, which hung the popup long enough that it echoed
+keystrokes as raw escape sequences.
 
 ## Theming
 
-Catppuccin across the stack: Mocha for tmux/lazygit, Frappe for ghostty/neovim. `have_nerd_font = false` in neovim.
+Catppuccin across the stack: **Frappe** for ghostty, tmux and neovim; Mocha for
+lazygit. `ghostty/config` pins `font-family = JetBrainsMono Nerd Font Mono` —
+without it `font-family` is empty, ghostty falls back to a font with no Nerd
+Font coverage, and every powerline separator and icon renders as a blank cell.
+`have_nerd_font = true` in neovim depends on that pin.
