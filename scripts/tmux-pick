@@ -94,9 +94,24 @@ if [ "${1:-}" = --open ]; then
     tmux send-keys -t "$nvim_pane" Enter
     tmux select-window -t "$nvim_pane"
     tmux select-pane -t "$nvim_pane"
-  else
-    open "$target" 2>/dev/null
+    exit 0
   fi
+
+  # No nvim in this session — open one in a new window rather than handing the
+  # file to `open`. macOS resolves .ts to whatever GUI editor claimed the
+  # extension (Cursor, here), which is never the intent behind picking a path out
+  # of a terminal: you wanted it in the editor you work in.
+  #
+  # A directory still goes to `open` (Finder), which IS the sensible default
+  # there.
+  if [ -d "$target" ]; then
+    open "$target" 2>/dev/null
+    exit 0
+  fi
+
+  dir="$(dirname "$target")"
+  [ -d "$dir" ] || dir="$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null)"
+  tmux new-window -t "$sess" -c "$dir" -n nvim "nvim ${target// /\\ }"
   exit 0
 fi
 
