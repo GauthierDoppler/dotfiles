@@ -1,0 +1,24 @@
+scripts/tmux-tasks
+  s_bcca654f79f73b::t_b5c3c09d3a4bcb 284
+  s_bcca654f79f73b::t_beb1124d9f9bd5 264-269
+  s_bcca654f79f73b::t_ca636cae0531ba 44
+  s_bcca654f79f73b::t_0ccdafa00126fc 285
+  s_bcca654f79f73b::t_3092dfeb644681 163-170
+  s_bcca654f79f73b::t_4c6d6eed75090c 240-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "52bd4abdecb1a9060b2d304e7bbbad266eef86ec",
+  "prompts": {},
+  "sessions": {
+    "s_bcca654f79f73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b182cc66-a9ab-48c8-8734-67f9dd4b0b48",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
