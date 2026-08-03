@@ -1,0 +1,32 @@
+AGENTS.md
+  s_bcca654f79f73b::t_61939c13bffc24 116-120
+dot_claude/skills/grove/SKILL.md
+  s_bcca654f79f73b::t_c7b13b7b4ba7e6 119-121,123-125,127
+  s_a3522790b8d773::t_1b7c5bae9683ef 128-129
+dot_claude/skills/tmux-tasks/SKILL.md
+  s_bcca654f79f73b::t_2aa8b469f6a360 108-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "2a7904de3a61f3b7703b881441f38c7aef9d60dd",
+  "prompts": {},
+  "sessions": {
+    "s_a3522790b8d773": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f705775f-5ffa-4f46-b3cf-e00df6a93ee9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    },
+    "s_bcca654f79f73b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b182cc66-a9ab-48c8-8734-67f9dd4b0b48",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Gauthier Doppler <gauthier.doppler@theodo.com>"
+    }
+  }
+}
