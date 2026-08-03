@@ -3,12 +3,8 @@
 # and publishes its state so the status bar can render it.
 #
 # Usage: tmux-task-run <root> <name> <script> <mark>
-#   mark = 1  ->  publish @task_status (running | ok | fail) on this window
-#
-# Split out of `tmux-tasks` because the payload stopped being a one-liner. It
-# used to be assembled with printf %q into a single string; adding the state
-# publishing made that unreadable, and quoting bugs in a string like that fail
-# at run time inside a window you are not looking at.
+#   mark = 1  ->  publish @task_status (running | ok | fail) on this window,
+#                 and notify on completion
 #
 # Invoked with an explicit bash shebang on purpose: tmux runs commands through
 # `default-shell` (zsh here), where `read -rsn1` does not parse.
@@ -20,15 +16,14 @@ name="$2"
 script="$3"
 mark="${4:-0}"
 
-# ─── Window state ───────────────────────────────────────────
-# @task_status is read by window-status-format in dot_tmux.conf. It is set on
-# the window, so it survives `respawn-window` on a re-run — which is why the
-# first thing a run does is reset it to `running`, otherwise the previous run's
-# ✗ would sit over a task that is currently succeeding.
+# @task_status is read by window-status-format in dot_tmux.conf. It is set on the
+# window, so it survives `respawn-window` on a re-run — hence the reset to
+# `running` first, otherwise the previous run's ✗ would sit over a task that is
+# currently succeeding.
 #
 # The window is resolved from $TMUX_PANE explicitly. Without -t, tmux resolves
-# the session's *active* window, which for a `detach` task is the window the
-# user is looking at — the marker would land on the wrong tab.
+# the session's *active* window, which for a `detach` task is the window the user
+# is looking at — the marker would land on the wrong tab.
 win=""
 if [ "$mark" = 1 ] && [ -n "${TMUX_PANE:-}" ]; then
   win="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null)"
@@ -36,6 +31,28 @@ fi
 
 mark_state() {
   [ -n "$win" ] && tmux set-option -w -t "$win" @task_status "$1" 2>/dev/null
+  return 0
+}
+
+# Bell (-> monitor-bell -> ghostty bell-features) plus a macOS notification, for
+# the placements that own a window. Skipped when this window is the active one of
+# an attached client: notifying about output the user is staring at is noise.
+notify() {
+  [ -n "$win" ] || return 0
+  [ "$(tmux display-message -p -t "$win" \
+        '#{&&:#{window_active},#{session_attached}}' 2>/dev/null)" = 1 ] && return 0
+
+  printf '\a'
+
+  local PATH="/opt/homebrew/bin:$PATH"
+  command -v terminal-notifier >/dev/null 2>&1 || return 0
+  terminal-notifier \
+    -title "tmux task" \
+    -subtitle "$name" \
+    -message "$1" \
+    -sender com.mitchellh.ghostty \
+    -group "tmux-task-$name" \
+    > /dev/null 2>&1
   return 0
 }
 
@@ -49,9 +66,11 @@ status=$?
 if [ "$status" -eq 0 ]; then
   mark_state ok
   printf '\n\033[32m✓ %s\033[0m' "$name"
+  notify "✓ succeeded"
 else
   mark_state fail
   printf '\n\033[31m✗ %s — exit %s\033[0m' "$name" "$status"
+  notify "✗ failed — exit $status"
 fi
 
 # Wait for a keypress so a fast failure never scrolls away.

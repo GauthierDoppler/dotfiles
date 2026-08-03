@@ -76,6 +76,27 @@ link() {
   echo "linked: $dest -> $src"
 }
 
+# macOS scans ~/Library/Keyboard Layouts/ at login and its input-source daemon
+# does not reliably follow a symlink there, so the layout is copied.
+copy_bundle() {
+  local src="$DOTFILES/$1"
+  local dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  if [ -e "$dest" ] && diff -rq "$src" "$dest" &>/dev/null; then
+    echo "copy ok: $dest"
+    return 0
+  fi
+  if [ -L "$dest" ]; then
+    rm "$dest"
+  elif [ -e "$dest" ]; then
+    echo "backup: $dest -> ${dest}.bak"
+    rm -rf "${dest}.bak"
+    mv "$dest" "${dest}.bak"
+  fi
+  cp -R "$src" "$dest"
+  echo "copied: $dest <- $src"
+}
+
 # Creates a small REAL file that loads the tracked config, instead of symlinking.
 #
 # Why: third-party installers (git-ai, nvm, rbenv, conda...) append to ~/.zshrc
@@ -145,6 +166,13 @@ link "git/ignore"          "$HOME/.config/git/ignore"
 
 # ~/ dotfiles (dot_ prefix becomes .)
 link "dot_tmux.conf"       "$HOME/.tmux.conf"
+
+# Keyboard layout (AZERTY with an unshifted number row — the tmux Prefix + 1..9
+# bindings depend on it). Installing it does not SELECT it: that is a one-time
+# manual step in System Settings → Keyboard → Input Sources. Writing
+# AppleEnabledInputSources / AppleSelectedInputSources with `defaults` is cached
+# by the input-source daemon, needs a logout to take, and half-works meanwhile.
+copy_bundle "keyboard/FR-AZERTY-num.bundle" "$HOME/Library/Keyboard Layouts/FR-AZERTY-num.bundle"
 
 # ~/.zshrc and ~/.gitconfig are stubbed, not linked — third-party installers
 # append to them directly, and a symlink would put those appends in this repo.
@@ -229,24 +257,6 @@ fi
 if [[ -d "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app" ]]; then
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app"
   echo "registered: ClaudeCodeNotifier.app"
-fi
-
-# ─── Phase 12: .zshrc.local ────────────────────────────────
-if [[ ! -f "$HOME/.zshrc.local" ]]; then
-  cat > "$HOME/.zshrc.local" << 'EOF'
-# Machine-specific config — not tracked in dotfiles.
-# Add local PATH additions, project-specific tools, etc. here.
-EOF
-  echo "created: ~/.zshrc.local"
-fi
-
-# ─── Phase 13: .gitconfig.local ────────────────────────────
-if [[ ! -f "$HOME/.gitconfig.local" ]]; then
-  cat > "$HOME/.gitconfig.local" << 'EOF'
-# Machine-specific config — not tracked in dotfiles.
-# Add local credential helpers, daemon sockets, per-machine identities, etc. here.
-EOF
-  echo "created: ~/.gitconfig.local"
 fi
 
 echo ""

@@ -15,26 +15,16 @@
 # unbinding esc makes it inert and, with `q` unbound during search, leaves no way
 # out of the popup at all.
 #
-# Why this exists: dragging to select is the unreliable path. tmux only starts a
-# selection when the pane's application has NOT asked for mouse events (see the
-# copy-mode block in dot_tmux.conf), and most of what you want off a terminal is
-# a token — a URL or a path — not a region. This skips selection entirely.
-#
 # ─── Noise control ──────────────────────────────────────────
-# The naive version matched anything shaped like a path and produced 174
-# candidates on a Claude Code pane, most of them junk: TUIs truncate long paths
-# to fit their width, so the captured text contains fragments like
-# `core/use-cases/get-mission-progress.tes`. There is no way to tell a truncated
-# path from a real one by shape.
-#
-# So paths are checked against the filesystem and dropped if they do not exist.
-# That is what makes the list usable, and it costs one stat per candidate.
-# URLs are kept unconditionally — they cannot be verified without fetching them,
-# and a truncated URL is rare because they are usually printed alone on a line.
+# TUIs truncate long paths to fit their width, so the capture is full of
+# fragments like `core/use-cases/get-mission-progress.tes`, and there is no way
+# to tell a truncated path from a real one by shape. So paths are checked against
+# the filesystem and dropped if they do not exist — one stat per candidate, and
+# it is what makes the list usable at all. URLs are kept unconditionally: they
+# cannot be verified without fetching them.
 #
 # Everything runs with cwd at the pane's directory, so a relative path resolves
-# the same way it would if you typed it in that pane — which is also what makes
-# `Ctrl-o` work on relative paths.
+# the way it would if you typed it in that pane.
 #
 # Usage: tmux-pick [pane-id]
 
@@ -59,17 +49,13 @@ resolve_pane() {
 }
 
 # ─── Enter: open, don't copy ────────────────────────────────
-# A URL goes to Chrome. A file goes to the Neovim already running in THIS
-# session, because opening a source file in a new GUI app is never what you
-# meant — you wanted it in the editor you are already working in.
+# A URL goes to Chrome, a file to the Neovim already running in THIS session,
+# falling back to `open`.
 #
-# Driven with send-keys rather than `nvr`: neovim-remote needs the instance to
-# be listening on a socket, and this config never sets --listen, so nvr has
-# nothing to connect to. send-keys needs no cooperation from nvim at all.
-# Escape first because nvim may be in insert mode; the path is sent with -l so
-# it is taken literally, with spaces backslash-escaped for the : command line.
-#
-# Falls back to `open` when the session has no nvim pane.
+# Driven with send-keys rather than `nvr`: neovim-remote needs the instance to be
+# listening on a socket, and this config never sets --listen, so nvr has nothing
+# to connect to. Escape first because nvim may be in insert mode; the path goes
+# through -l to be taken literally, with spaces escaped for the : command line.
 if [ "${1:-}" = --open ]; then
   target="${2:-}"
   pane="$(resolve_pane "${3:-}")"
@@ -85,11 +71,9 @@ if [ "${1:-}" = --open ]; then
   sess="$(tmux display-message -p -t "$pane" '#{session_name}' 2>/dev/null)"
   pane_cwd="$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null)"
 
-  # Make the path ABSOLUTE before doing anything with it. Candidates are kept as
-  # they appeared on screen, so `scripts/seed-dev-user.ts` is relative to the
-  # PANE's directory — but it is about to be handed either to an nvim whose cwd
-  # is something else, or to a new window opened at the session root. Resolving
-  # here is what stops it opening the wrong file, or a new empty buffer.
+  # Candidates are kept as they appeared on screen, so a relative one is relative
+  # to the PANE's directory — but it is about to be handed to an nvim whose cwd is
+  # something else, or to a new window opened at the session root.
   case "$target" in
     /*) ;;
     "~"/*) target="$HOME/${target#"~"/}" ;;
@@ -111,21 +95,16 @@ if [ "${1:-}" = --open ]; then
   fi
 
   # No nvim in this session — open one in a new window rather than handing the
-  # file to `open`. macOS resolves .ts to whatever GUI editor claimed the
-  # extension (Cursor, here), which is never the intent behind picking a path out
-  # of a terminal: you wanted it in the editor you work in.
-  #
-  # A directory still goes to `open` (Finder), which IS the sensible default
-  # there.
+  # file to `open`, which resolves .ts to whatever GUI editor claimed the
+  # extension. A directory still goes to `open` (Finder).
   if [ -d "$target" ]; then
     open "$target" 2>/dev/null
     exit 0
   fi
 
-  # cwd is the SESSION root, not the file's directory. Opening at dirname puts
-  # nvim's :pwd somewhere deep in the tree, so the file resolves but every
-  # project-wide thing after it — Telescope, :grep, LSP root detection — is
-  # scoped to that subdirectory instead of the repo.
+  # cwd is the SESSION root, not the file's directory: opening at dirname puts
+  # nvim's :pwd deep in the tree, and Telescope, :grep and LSP root detection all
+  # scope to that subdirectory instead of the repo.
   dir="$(tmux display-message -p -t "$pane" '#{session_path}' 2>/dev/null)"
   [ -d "${dir:-}" ] || dir="$(dirname "$target")"
   tmux new-window -t "$sess" -c "$dir" -n nvim "nvim ${target// /\\ }"
@@ -146,15 +125,13 @@ if [ "${1:-}" = --list ]; then
   content="$(tmux capture-pane -p -J -S -2000 -t "$pane" 2>/dev/null)"
   [ -n "$content" ] || exit 0
 
-  # Reverse the WHOLE buffer once: the bottom of the pane is the most recent
-  # output, and that is almost always what you are reaching for. Dedup below then
-  # keeps the newest copy of anything printed twice.
+  # Reversed once so the dedup below keeps the newest copy of anything printed
+  # twice.
   #
   # Each grep runs ONCE over the whole buffer, never per line. A previous version
   # looped over ~2000 captured lines spawning two greps and a sed each — roughly
   # 6000 processes — which took long enough that the popup sat there echoing
-  # keystrokes as raw escape sequences while it churned. Per-line shelling out
-  # inside a capture loop is the mistake to avoid here; the only per-candidate
+  # keystrokes as raw escape sequences while it churned. The only per-candidate
   # work left is one `test -e`, on a list that is already deduped.
   reversed="$(printf '%s\n' "$content" | tail -r 2>/dev/null || printf '%s\n' "$content")"
 
@@ -183,7 +160,6 @@ if [ "${1:-}" = --list ]; then
     done
   )"
 
-  # URLs first: they are what you reach for most, and there are few of them.
   { printf '%s\n' "$urls"; printf '%s\n' "$paths"; } |
     awk 'NF && !seen[$0]++' | head -200
   exit 0
