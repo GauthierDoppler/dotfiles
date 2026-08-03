@@ -98,9 +98,24 @@ The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
 popup only for the script to find no tasks and exit reads as a flash, so in that
 case tmux shows a status message instead and the popup never opens.
 
-`dot_claude/skills/tmux-tasks/` documents all of this for Claude Code. Skills are
-symlinked **one by one** rather than as a directory — `~/.claude/skills` also
-holds skills installed by the app, and linking the parent would hide them.
+## Skills
+
+`dot_claude/skills/` holds the user-scope skills that document this setup's own
+tooling, so they are versioned and portable rather than living loose in
+`~/.claude/skills`:
+
+| skill | covers |
+| ----- | ------ |
+| `tmux-tasks` | writing `<project>/.tmux/` task scripts for the `Prefix + e` picker |
+| `grove`      | `.grove/config.yaml` and `.grove/setup.sh` for worktree setup |
+
+They are symlinked **one by one** in `install.sh`, never as a directory:
+`~/.claude/skills` also holds skills installed by Claude Code itself (several of
+them symlinks into `~/.agents/skills`), and linking the parent would hide them.
+
+The two are deliberately cross-referenced: `.tmux/` is untracked, so a new grove
+worktree starts without it, and the `grove` skill documents the `setup.sh` line
+that copies it across.
 
 ## Neovim Config (submodule)
 
