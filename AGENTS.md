@@ -94,6 +94,14 @@ per project under `$TMPDIR`.
 The payload is wrapped in an explicit `bash -c`: tmux runs commands through
 `default-shell` (zsh), where the wrapper's `read -rsn1` would not parse.
 
+The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
+popup only for the script to find no tasks and exit reads as a flash, so in that
+case tmux shows a status message instead and the popup never opens.
+
+`dot_claude/skills/tmux-tasks/` documents all of this for Claude Code. Skills are
+symlinked **one by one** rather than as a directory — `~/.claude/skills` also
+holds skills installed by the app, and linking the parent would hide them.
+
 ## Neovim Config (submodule)
 
 The `nvim/` directory is a git submodule pointing to a custom fork of kickstart.nvim (`GauthierDoppler/kickstart.nvim`). Changes to neovim config must be committed inside the submodule first, then the submodule ref updated in this repo.

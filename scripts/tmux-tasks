@@ -41,7 +41,11 @@
 # task name ("android/build" -> window "android-build") rather than configured,
 # so there is nothing to keep in sync.
 #
-# Usage: tmux-tasks [--list] [--cycle] [--prompt] [--header] [--run <task>]
+# Usage: tmux-tasks [--check] [--list] [--cycle] [--prompt] [--header] [--run <task>]
+#
+# --check exits 0 when this project has at least one task. The tmux binding
+# gates on it with `if-shell` so the popup is never opened just to be closed
+# again — opening and exiting immediately reads as a flash.
 
 set -uo pipefail
 
@@ -225,6 +229,7 @@ run_task() {
 
 # ─── Helper modes (invoked by fzf bindings) ────────────────
 case "${1:-}" in
+  --check)  [ -d "$tasks_dir" ] && [ -n "$(discover)" ]; exit $? ;;
   --list)   list; exit 0 ;;
   --cycle)  cycle_group; list; exit 0 ;;
   --prompt) prompt_label; exit 0 ;;

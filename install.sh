@@ -97,6 +97,12 @@ link "dot_claude/CLAUDE.md"            "$HOME/.claude/CLAUDE.md"
 link "dot_claude/statusline-custom.sh" "$HOME/.claude/statusline-custom.sh"
 link "dot_claude/hooks"                "$HOME/.claude/hooks"
 
+# Skills are linked one by one, never as a whole directory: ~/.claude/skills
+# also holds skills installed by Claude Code itself, and linking the parent
+# would hide them.
+mkdir -p "$HOME/.claude/skills"
+link "dot_claude/skills/tmux-tasks"    "$HOME/.claude/skills/tmux-tasks"
+
 # Scripts
 mkdir -p "$HOME/.local/bin"
 link "scripts/local-diff"            "$HOME/.local/bin/local-diff"
