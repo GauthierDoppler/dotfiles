@@ -59,6 +59,41 @@ and the snapshot are gitignored.
 
 Run `claude-settings-sync --dry-run` to preview what would be captured.
 
+## Per-project tmux tasks
+
+`Prefix + e` opens a task picker (`scripts/tmux-tasks`) over `<project>/.tmux/`.
+Build, run and debug loops live there rather than in Neovim, so they can be
+driven from any window of the session.
+
+`.tmux/` is ignored globally via `git/ignore`, so tasks stay untracked in any
+repo — including ones we don't own — without editing that project's
+`.gitignore`.
+
+**A task is any executable file at depth 1 or 2 under `.tmux/`.** The executable
+bit is the only filter, which is what lets `.tmux/lib/common.sh` stay out of the
+picker with no naming convention and no ignore list. Subfolders become groups
+(`Tab` cycles them); depth-1 files are ungrouped.
+
+```bash
+#!/usr/bin/env bash
+# task: assemble the debug APK and install it     <- picker description
+# tmux: window    window | split | popup | detach  (default: window)
+```
+
+Read from the first 20 lines only. `window` and `detach` reuse a window named
+after the task (`android/build` → `android-build`), respawning it rather than
+piling up duplicates. `detach` runs unselected — `monitor-activity` flags the
+window in the status bar when it finishes, which is the notification.
+
+Every task runs with cwd at the project root and `TMUX_TASK_ROOT` /
+`TMUX_TASK_NAME` set, resolved from `#{session_path}` — the session's working
+directory, **not** the pane's. That is what makes the picker behave identically
+from a pane three directories deep. Ordering is most-recently-run first, cached
+per project under `$TMPDIR`.
+
+The payload is wrapped in an explicit `bash -c`: tmux runs commands through
+`default-shell` (zsh), where the wrapper's `read -rsn1` would not parse.
+
 ## Neovim Config (submodule)
 
 The `nvim/` directory is a git submodule pointing to a custom fork of kickstart.nvim (`GauthierDoppler/kickstart.nvim`). Changes to neovim config must be committed inside the submodule first, then the submodule ref updated in this repo.

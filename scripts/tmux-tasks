@@ -1,0 +1,275 @@
+#!/bin/bash
+# Modal fuzzy task runner for per-project scripts, meant to be run inside
+# `display-popup -E`.
+#
+#   j / k     move down / up
+#   Enter     run the highlighted task
+#   Tab       cycle the group filter (all -> android -> ios -> ...)
+#   i         start filtering by name
+#   Ctrl-e    open the script in $EDITOR
+#   Esc       leave search if searching, otherwise close
+#   q         close (navigation only — in search it is a plain character)
+#
+# The interaction model is deliberately identical to `tmux-sessions`; see that
+# file for why search is off by default and why Esc branches on
+# $FZF_INPUT_STATE instead of using fzf's `unbind(esc)`.
+#
+# The test is POSIX `[` on purpose: fzf runs bindings with `$SHELL -c`, falling
+# back to `sh -c`, so bash's `[[` is not guaranteed to be available.
+#
+# ─── Where tasks come from ──────────────────────────────────
+# `<root>/.tmux/` where <root> is the SESSION's working directory, never the
+# pane's. Running the picker from a pane sitting three directories deep, or in
+# /tmp, resolves to the same project — that is the whole point of anchoring on
+# `#{session_path}`.
+#
+# A task is any *executable* regular file at depth 1 or 2 under .tmux/. The
+# executable bit is the only filter, which is what lets `.tmux/lib/common.sh`
+# stay out of the list without a naming convention or an ignore file: it simply
+# is not chmod +x.
+#
+#   .tmux/android/build   -> task "android/build", group "android"
+#   .tmux/doctor          -> task "doctor",        group ""  (ungrouped)
+#
+# ─── Header metadata ────────────────────────────────────────
+# Read from the first 20 lines only, so scanning stays cheap:
+#
+#   # task: assemble the debug APK and install it
+#   # tmux: window        window | split | popup | detach   (default: window)
+#
+# Both are optional. The reuse target for `window`/`detach` is derived from the
+# task name ("android/build" -> window "android-build") rather than configured,
+# so there is nothing to keep in sync.
+#
+# Usage: tmux-tasks [--list] [--cycle] [--prompt] [--header] [--run <task>]
+
+set -uo pipefail
+
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+# ─── Project root ───────────────────────────────────────────
+# `#{session_path}` is the session's working directory, fixed at creation by
+# `new-session -c`. Unlike pane_current_path it does not follow the shell, so it
+# is stable no matter where the current pane has wandered.
+session_root() {
+  local root
+  root="$(tmux display-message -p '#{session_path}' 2>/dev/null)"
+  [ -n "$root" ] || root="$PWD"
+
+  # Sessions created pointing at a subdirectory still resolve: walk up looking
+  # for a .tmux/ directory, then give up and return the original.
+  local dir="$root"
+  while [ "$dir" != "/" ]; do
+    [ -d "$dir/.tmux" ] && { printf '%s' "$dir"; return; }
+    dir="$(dirname "$dir")"
+  done
+  printf '%s' "$root"
+}
+
+root="$(session_root)"
+tasks_dir="$root/.tmux"
+
+# ─── MRU state ──────────────────────────────────────────────
+# Keyed by the project path so worktrees of the same repo share one history,
+# matching how `tmux-sessions` treats a project. `cksum` is enough here: this is
+# a cache filename, not a security boundary.
+mru_file="${TMPDIR:-/tmp}/tmux-tasks.$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
+group_file="${TMPDIR:-/tmp}/tmux-tasks.group"
+
+group_read()  { [ -r "$group_file" ] && cat "$group_file" || echo all; }
+group_write() { printf '%s' "$1" > "$group_file"; }
+
+# Most recent first. Rewritten whole each run — the file only ever holds as many
+# lines as there are tasks, so there is nothing to prune.
+mru_touch() {
+  local name="$1" tmp
+  tmp="$mru_file.tmp.$$"
+  { printf '%s\n' "$name"; [ -r "$mru_file" ] && grep -vxF "$name" "$mru_file"; } > "$tmp" 2>/dev/null
+  mv -f "$tmp" "$mru_file" 2>/dev/null
+}
+
+# ─── Discovery ──────────────────────────────────────────────
+# -perm -u+x rather than -executable: BSD find (macOS) has no -executable.
+discover() {
+  [ -d "$tasks_dir" ] || return 0
+  find "$tasks_dir" -mindepth 1 -maxdepth 2 -type f -perm -u+x 2>/dev/null |
+    sed "s|^$tasks_dir/||" |
+    grep -v '^\.' |
+    sort
+}
+
+# Header value for a key, from the first 20 lines. Anchored on '# <key>:' so a
+# mention of the word inside the script body cannot match.
+meta() {
+  sed -n "1,20{s/^# *$2: *//p;}" "$tasks_dir/$1" 2>/dev/null | head -1
+}
+
+groups() {
+  discover | awk -F/ 'NF>1 {print $1}' | sort -u
+}
+
+# ─── Listing ────────────────────────────────────────────────
+# Columns are padded to the widest entry actually present rather than a fixed
+# width, so alignment holds for both "doctor" and "android/install-debug".
+list() {
+  local group names name width=0 order
+  group="$(group_read)"
+
+  names="$(discover)"
+  [ -n "$names" ] || return 0
+
+  if [ "$group" != all ]; then
+    names="$(printf '%s\n' "$names" | grep "^$group/")"
+    [ -n "$names" ] || return 0
+  fi
+
+  # MRU first, then everything unseen in alphabetical order.
+  if [ -r "$mru_file" ]; then
+    order="$(
+      while IFS= read -r name; do
+        printf '%s\n' "$names" | grep -qxF "$name" && printf '%s\n' "$name"
+      done < "$mru_file"
+      printf '%s\n' "$names" | grep -vxF -f "$mru_file" 2>/dev/null
+    )"
+    [ -n "$order" ] && names="$order"
+  fi
+
+  while IFS= read -r name; do
+    [ "${#name}" -gt "$width" ] && width=${#name}
+  done <<<"$names"
+
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    printf "%-${width}s  %s\n" "$name" "$(meta "$name" task)"
+  done <<<"$names"
+}
+
+# ─── Labels ─────────────────────────────────────────────────
+prompt_label() { printf '  %s  ' "$(group_read)"; }
+
+header_label() {
+  if [ -z "$(groups)" ]; then
+    printf 'j/k move   enter run   i search   ctrl-e edit'
+  else
+    printf 'j/k move   enter run   tab group   i search   ctrl-e edit'
+  fi
+}
+
+# Next group in the ring: all -> <groups in order> -> all
+cycle_group() {
+  local current all next found=0
+  current="$(group_read)"
+  all="$(printf 'all\n%s\n' "$(groups)")"
+  next="$(
+    printf '%s\n' "$all" | while IFS= read -r g; do
+      [ "$found" = 1 ] && { printf '%s' "$g"; break; }
+      [ "$g" = "$current" ] && found=1
+    done
+  )"
+  [ -n "$next" ] || next=all
+  group_write "$next"
+}
+
+# ─── Running ────────────────────────────────────────────────
+# The wrapper keeps the window alive after the script exits so the output of a
+# fast failure survives. `remain-on-exit` would leave a dead pane that has to be
+# respawned by hand; a keypress is more predictable.
+#
+# cwd is the project root for every task, whatever the pane was doing, so
+# scripts can assume ./gradlew resolves.
+run_task() {
+  local name="$1" script placement slug inner cmd
+  script="$tasks_dir/$name"
+  [ -x "$script" ] || { tmux display-message "  no such task: $name"; return 1; }
+
+  placement="$(meta "$name" tmux)"
+  [ -n "$placement" ] || placement=window
+  slug="$(printf '%s' "$name" | tr '/' '-')"
+
+  mru_touch "$name"
+
+  # `read -rsn1` is bash syntax and tmux runs commands through default-shell
+  # (zsh here), where -s/-n1 mean something else. So the payload is built as a
+  # string and handed to bash explicitly rather than relying on the login shell.
+  # shellcheck disable=SC2016  # $s and the escapes are for the inner shell
+  inner=$(printf 'cd %q && TMUX_TASK_ROOT=%q TMUX_TASK_NAME=%q %q; s=$?; printf "\\n"; if [ "$s" -eq 0 ]; then printf "\\033[32m✓ %s\\033[0m"; else printf "\\033[31m✗ %s — exit %%s\\033[0m" "$s"; fi; printf "  ·  any key to close"; read -rsn1' \
+    "$root" "$root" "$name" "$script" "$name" "$name")
+  cmd="exec bash -c $(printf '%q' "$inner")"
+
+  case "$placement" in
+    popup)
+      tmux display-popup -E -w 80% -h 60% "$cmd"
+      ;;
+    split)
+      tmux split-window -v -l 30% -c "$root" "$cmd"
+      ;;
+    detach)
+      # Not selected. `monitor-activity` flags the window in the status bar the
+      # moment it produces output, which is the notification.
+      if tmux list-windows -F '#{window_name}' | grep -qxF "$slug"; then
+        tmux respawn-window -k -t "$slug" -c "$root" "$cmd"
+      else
+        tmux new-window -d -n "$slug" -c "$root" "$cmd"
+      fi
+      ;;
+    *)
+      if tmux list-windows -F '#{window_name}' | grep -qxF "$slug"; then
+        tmux respawn-window -k -t "$slug" -c "$root" "$cmd"
+        tmux select-window -t "$slug"
+      else
+        tmux new-window -n "$slug" -c "$root" "$cmd"
+      fi
+      ;;
+  esac
+}
+
+# ─── Helper modes (invoked by fzf bindings) ────────────────
+case "${1:-}" in
+  --list)   list; exit 0 ;;
+  --cycle)  cycle_group; list; exit 0 ;;
+  --prompt) prompt_label; exit 0 ;;
+  --header) header_label; exit 0 ;;
+  --run)    run_task "${2:-}"; exit $? ;;
+esac
+
+# ─── Interactive ───────────────────────────────────────────
+if [ ! -d "$tasks_dir" ]; then
+  tmux display-message "  no .tmux/ tasks in $root"
+  exit 0
+fi
+
+group_write all   # deterministic default on every invocation
+
+entries=$(list)
+if [ -z "$entries" ]; then
+  tmux display-message "  no executable task in $tasks_dir"
+  exit 0
+fi
+
+# fzf's default delimiter is whitespace, so {1} is the task name. Task names are
+# file paths under .tmux/ and must not contain spaces.
+# shellcheck disable=SC2016  # $f is expanded by fzf's preview shell, not here
+preview='f="'"$tasks_dir"'/{1}"; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 "$f"; else cat "$f"; fi'
+
+selected=$(
+  printf '%s\n' "$entries" | fzf \
+    --disabled \
+    --prompt="$(prompt_label)" \
+    --header="$(header_label)" \
+    --header-first \
+    --pointer='▸' \
+    --no-multi \
+    --cycle \
+    --bind 'j:down,k:up' \
+    --bind 'q:abort' \
+    --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
+    --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+transform-prompt($self --prompt)' || echo abort" \
+    --bind "tab:reload($self --cycle)+transform-prompt($self --prompt)+transform-header($self --header)+first" \
+    --bind "ctrl-e:execute(\${EDITOR:-vi} '$tasks_dir/{1}')" \
+    --preview="$preview" \
+    --preview-window='right,55%,border-left'
+) || exit 0
+
+[ -n "$selected" ] || exit 0
+
+run_task "${selected%% *}"

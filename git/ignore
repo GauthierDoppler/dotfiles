@@ -1,1 +1,6 @@
 **/.claude/settings.local.json
+
+# Per-project tmux task scripts (see scripts/tmux-tasks). Ignored globally so
+# they can live next to the code in any repo — including ones we don't own —
+# without touching that project's own .gitignore.
+.tmux/
