@@ -84,7 +84,7 @@ This is the decision that makes a task pleasant or annoying. Pick by lifetime, n
 | placement | use for | behaviour |
 | --- | --- | --- |
 | `window` | anything slow or interactive — builds, test runs, REPLs | reuses a window named after the task (`android/build` → `android-build`), respawning it. Re-running never piles up duplicates. Gets selected. |
-| `detach` | long-lived streams and fire-and-forget — `logcat`, watchers, deploys | same window reuse, but **not** selected. `monitor-activity` flags it in the status bar when it produces output. That flag *is* the notification — do not add `terminal-notifier`. |
+| `detach` | long-lived streams and fire-and-forget — `logcat`, watchers, deploys | same window reuse, but **not** selected. The status bar shows `●` while it runs and `✓`/`✗` when it ends. That marker *is* the notification — do not add `terminal-notifier`. |
 | `popup` | quick checks under ~2s where only the exit code matters — `doctor`, a lint, a version probe | floats over the current window, no window created. Reuses the picker's own popup — tmux allows only one popup per client, so a second one would silently do nothing. |
 | `split-down` / `split-right` | something you want beside the current work | splits the current window, 30% by default |
 
@@ -100,6 +100,11 @@ Guaranteed for every task, whatever the placement:
 - `TMUX_TASK_NAME` — e.g. `android/build`.
 - On exit the wrapper prints `✓ <name>` or `✗ <name> — exit <n>` and **waits for a keypress**.
   A fast failure never scrolls away. Do not add your own "press enter to continue".
+- For `window` and `detach`, the wrapper also sets `@task_status` on the window — `running`,
+  `ok` or `fail` — which the status bar renders as `●` / `✓` / `✗`. It persists until the task
+  is re-run, so a failure is still visible when you come back to it. **The exit code is the
+  whole signal, so a task must exit non-zero when it fails**; a script that swallows errors
+  will report a green `✓`.
 
 The root is resolved from tmux's `#{session_path}` — the session's working directory, **not**
 the pane's. That is what makes the picker behave identically from a pane three directories

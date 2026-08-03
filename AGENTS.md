@@ -87,8 +87,7 @@ nested `display-popup` silently does nothing while still exiting 0.
 
 Read from the first 20 lines only. `window` and `detach` reuse a window named
 after the task (`android/build` → `android-build`), respawning it rather than
-piling up duplicates. `detach` runs unselected — `monitor-activity` flags the
-window in the status bar when it finishes, which is the notification.
+piling up duplicates. `detach` runs unselected.
 
 Every task runs with cwd at the project root and `TMUX_TASK_ROOT` /
 `TMUX_TASK_NAME` set, resolved from `#{session_path}` — the session's working
@@ -96,8 +95,28 @@ directory, **not** the pane's. That is what makes the picker behave identically
 from a pane three directories deep. Ordering is most-recently-run first, cached
 per project under `$TMPDIR`.
 
-The payload is wrapped in an explicit `bash -c`: tmux runs commands through
-`default-shell` (zsh), where the wrapper's `read -rsn1` would not parse.
+`scripts/tmux-task-run` is the wrapper that actually runs the task. It exists as
+a separate file, invoked with an explicit `bash` shebang, because tmux runs
+commands through `default-shell` (zsh) where `read -rsn1` would not parse — and
+because building it as a `printf %q` string stopped being readable once it had
+to publish state.
+
+**Task completion is signalled by `@task_status`**, a per-window user option the
+wrapper sets to `running` / `ok` / `fail`; the `window-status-*` formats render
+it as `●` / `✓` / `✗`. It is set on the *window*, so it survives
+`respawn-window`, which is why every run resets it to `running` first —
+otherwise the previous run's `✗` would sit over a task that is now succeeding.
+The window is resolved from `$TMUX_PANE`, not the session's active window, or a
+`detach` task would mark whichever tab you happen to be looking at.
+
+Only `window` and `detach` are marked. A split or popup shares the window you
+are working in, where a `✗` would be ambiguous — and the output is right in
+front of you anyway.
+
+`monitor-activity` is deliberately **off**. It flags a window on any output at
+all, so Neovim and Claude Code kept it permanently lit and it carried no
+information. "Claude is waiting" comes from its own Notification hook →
+`terminal-notifier`, not from tmux.
 
 The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
 popup only for the script to find no tasks and exit reads as a flash, so in that
