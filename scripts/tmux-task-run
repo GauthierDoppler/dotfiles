@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Runs one task script inside the window or pane tmux has just created for it,
+# and publishes its state so the status bar can render it.
+#
+# Usage: tmux-task-run <root> <name> <script> <mark>
+#   mark = 1  ->  publish @task_status (running | ok | fail) on this window
+#
+# Split out of `tmux-tasks` because the payload stopped being a one-liner. It
+# used to be assembled with printf %q into a single string; adding the state
+# publishing made that unreadable, and quoting bugs in a string like that fail
+# at run time inside a window you are not looking at.
+#
+# Invoked with an explicit bash shebang on purpose: tmux runs commands through
+# `default-shell` (zsh here), where `read -rsn1` does not parse.
+
+set -uo pipefail
+
+root="$1"
+name="$2"
+script="$3"
+mark="${4:-0}"
+
+# ─── Window state ───────────────────────────────────────────
+# @task_status is read by window-status-format in dot_tmux.conf. It is set on
+# the window, so it survives `respawn-window` on a re-run — which is why the
+# first thing a run does is reset it to `running`, otherwise the previous run's
+# ✗ would sit over a task that is currently succeeding.
+#
+# The window is resolved from $TMUX_PANE explicitly. Without -t, tmux resolves
+# the session's *active* window, which for a `detach` task is the window the
+# user is looking at — the marker would land on the wrong tab.
+win=""
+if [ "$mark" = 1 ] && [ -n "${TMUX_PANE:-}" ]; then
+  win="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null)"
+fi
+
+mark_state() {
+  [ -n "$win" ] && tmux set-option -w -t "$win" @task_status "$1" 2>/dev/null
+  return 0
+}
+
+mark_state running
+
+cd "$root" || { printf '\033[31mcannot cd to %s\033[0m\n' "$root"; mark_state fail; read -rsn1; exit 1; }
+
+TMUX_TASK_ROOT="$root" TMUX_TASK_NAME="$name" "$script"
+status=$?
+
+if [ "$status" -eq 0 ]; then
+  mark_state ok
+  printf '\n\033[32m✓ %s\033[0m' "$name"
+else
+  mark_state fail
+  printf '\n\033[31m✗ %s — exit %s\033[0m' "$name" "$status"
+fi
+
+# Wait for a keypress so a fast failure never scrolls away.
+printf '  ·  any key to close'
+read -rsn1

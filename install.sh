@@ -111,6 +111,7 @@ link "scripts/ssh-setup"             "$HOME/.local/bin/ssh-setup"
 link "scripts/claude-settings-sync"  "$HOME/.local/bin/claude-settings-sync"
 link "scripts/tmux-sessions"         "$HOME/.local/bin/tmux-sessions"
 link "scripts/tmux-tasks"            "$HOME/.local/bin/tmux-tasks"
+link "scripts/tmux-task-run"         "$HOME/.local/bin/tmux-task-run"
 
 # ─── Phase 6b: Claude Code settings ────────────────────────
 # Merge the tracked base with this machine's local overrides. Runs after the

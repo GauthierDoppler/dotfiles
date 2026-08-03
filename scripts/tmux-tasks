@@ -54,6 +54,7 @@
 set -uo pipefail
 
 self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+runner="${self%/*}/tmux-task-run"
 
 # ─── Project root ───────────────────────────────────────────
 # `#{session_path}` is the session's working directory, fixed at creation by
@@ -202,7 +203,7 @@ cycle_group() {
 # for a second one. `split` and `new-window` have no such restriction and work
 # untargeted from inside a popup.
 run_task() {
-  local name="$1" inline="${2:-0}" script placement size slug inner cmd
+  local name="$1" inline="${2:-0}" script placement size slug mark cmd
   script="$tasks_dir/$name"
   [ -x "$script" ] || { tmux display-message "  no such task: $name"; return 1; }
 
@@ -218,20 +219,24 @@ run_task() {
 
   mru_touch "$name"
 
-  # `read -rsn1` is bash syntax and tmux runs commands through default-shell
-  # (zsh here), where -s/-n1 mean something else. So the payload is built as a
-  # string and handed to bash explicitly rather than relying on the login shell.
-  # shellcheck disable=SC2016  # $s and the escapes are for the inner shell
-  inner=$(printf 'cd %q && TMUX_TASK_ROOT=%q TMUX_TASK_NAME=%q %q; s=$?; printf "\\n"; if [ "$s" -eq 0 ]; then printf "\\033[32m✓ %s\\033[0m"; else printf "\\033[31m✗ %s — exit %%s\\033[0m" "$s"; fi; printf "  ·  any key to close"; read -rsn1' \
-    "$root" "$root" "$name" "$script" "$name" "$name")
-  cmd="exec bash -c $(printf '%q' "$inner")"
+  # The task is wrapped by `tmux-task-run`, which runs it with the right cwd and
+  # environment and publishes @task_status on the window for the status bar.
+  #
+  # Marked only for the placements that OWN a window. On a split or a popup the
+  # task shares the window you are working in, where a ✗ would be ambiguous —
+  # and you are looking straight at the output anyway, so it adds nothing.
+  case "$placement" in
+    window|detach) mark=1 ;;
+    *)             mark=0 ;;
+  esac
+  cmd="exec $(printf '%q %q %q %q %q' "$runner" "$root" "$name" "$script" "$mark")"
 
   case "$placement" in
     popup)
       # Replacing this process runs the task in the popup that is already open,
       # which is the same result the user asked for — a floating window that
       # closes on a keypress — without a second popup tmux would refuse.
-      if [ "$inline" = 1 ]; then exec bash -c "$inner"; fi
+      if [ "$inline" = 1 ]; then exec "$runner" "$root" "$name" "$script" 0; fi
       tmux display-popup -E -w 80% -h 60% "$cmd"
       ;;
     split|split-down)
@@ -241,8 +246,8 @@ run_task() {
       tmux split-window -h -l "$size" -c "$root" "$cmd"
       ;;
     detach)
-      # Not selected. `monitor-activity` flags the window in the status bar the
-      # moment it produces output, which is the notification.
+      # Not selected. @task_status marks the window in the status bar with
+      # running / ✓ / ✗, which is the notification.
       if tmux list-windows -F '#{window_name}' | grep -qxF "$slug"; then
         tmux respawn-window -k -t "$slug" -c "$root" "$cmd"
       else
