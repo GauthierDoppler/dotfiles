@@ -1,11 +1,9 @@
 local function assertf(cond, msg)
-  if not cond then
-    error(msg)
-  end
+  if not cond then error(msg) end
 end
 
 -- Navigation specs: vim-tmux-navigator + nvim-window-picker
-local nav_specs = require('custom.plugins.navigation')
+local nav_specs = require 'custom.plugins.navigation'
 assertf(type(nav_specs) == 'table', 'navigation specs missing')
 
 local has_window_picker = false
@@ -40,4 +38,4 @@ assertf(vim.fn.maparg('<leader>e', 'n') ~= '', '<leader>e (explorer) mapping is 
 assertf(vim.fn.maparg('<leader>sf', 'n') ~= '', '<leader>sf (find files) mapping is missing')
 assertf(vim.fn.maparg('<leader>gg', 'n') ~= '', '<leader>gg (lazygit) mapping is missing')
 
-print('smoke:ok')
+print 'smoke:ok'

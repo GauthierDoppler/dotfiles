@@ -23,9 +23,7 @@ return {
       function()
         -- Wipe old dap-terminal buffers to avoid "unmodified buffer" error with integratedTerminal
         for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-          if vim.bo[buf].buftype == 'terminal' and vim.api.nvim_buf_get_name(buf):match 'dap%-terminal' then
-            vim.api.nvim_buf_delete(buf, { force = true })
-          end
+          if vim.bo[buf].buftype == 'terminal' and vim.api.nvim_buf_get_name(buf):match 'dap%-terminal' then vim.api.nvim_buf_delete(buf, { force = true }) end
         end
         require('dap').run_last()
       end,
@@ -53,7 +51,7 @@ return {
     local vscode = require 'dap.ext.vscode'
     vscode.json_decode = function(str)
       local lines = {}
-      for line in str:gmatch('[^\n]*') do
+      for line in str:gmatch '[^\n]*' do
         local in_string = false
         local i = 1
         while i <= #line do
@@ -82,9 +80,7 @@ return {
         'js',
       },
       handlers = {
-        function(config)
-          require('mason-nvim-dap').default_setup(config)
-        end,
+        function(config) require('mason-nvim-dap').default_setup(config) end,
         js = function(config)
           config.adapters = {
             type = 'server',
@@ -110,7 +106,7 @@ return {
               name = 'Debug vitest (current file)',
               runtimeExecutable = 'node',
               runtimeArgs = function()
-                local vitest = find_nearest('vitest/vitest.mjs')
+                local vitest = find_nearest 'vitest/vitest.mjs'
                 if not vitest then
                   vim.notify('vitest not found in any parent node_modules', vim.log.levels.ERROR)
                   return {}
@@ -118,7 +114,7 @@ return {
                 return { vitest, '--no-file-parallelism', 'run', vim.fn.expand '%:p' }
               end,
               cwd = function()
-                local _, pkg_dir = find_nearest('vitest/vitest.mjs')
+                local _, pkg_dir = find_nearest 'vitest/vitest.mjs'
                 return pkg_dir or vim.fn.getcwd()
               end,
               console = 'integratedTerminal',

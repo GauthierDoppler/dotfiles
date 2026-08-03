@@ -26,12 +26,7 @@ vim.keymap.set('n', '<leader>cr', function() Snacks.picker.registers() end, { de
 
 vim.keymap.set('n', '<leader>/', function() Snacks.picker.lines() end, { desc = '[/] Fuzzily search in current buffer' })
 
-vim.keymap.set(
-  'n',
-  '<leader>s/',
-  function() Snacks.picker.grep { buffers = true } end,
-  { desc = '[S]earch [/] in Open Files' }
-)
+vim.keymap.set('n', '<leader>s/', function() Snacks.picker.grep { buffers = true } end, { desc = '[S]earch [/] in Open Files' })
 
 -- LSP navigation keymaps (set per buffer on LspAttach)
 vim.api.nvim_create_autocmd('LspAttach', {
