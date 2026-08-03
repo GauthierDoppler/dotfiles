@@ -12,5 +12,12 @@ bell-features = title,attention
 desktop-notifications = true
 
 # ─── Appearance ────────────────────────────────────────────
+# Explicit Nerd Font. Without this, font-family is empty and Ghostty falls back
+# to its built-in font, where every powerline separator and icon renders as a
+# blank cell — which is why the tmux status bar looked like unstyled text and
+# why nvim/init.lua still had have_nerd_font = false. The font is already
+# installed in ~/Library/Fonts (Nerd Fonts 3.4.0).
+font-family = JetBrainsMono Nerd Font Mono
+
 theme = Catppuccin Frappe
 unfocused-split-opacity = 0.55
