@@ -27,9 +27,16 @@
 # you will land there next time you attach. That is the intended behaviour —
 # lining up the window you want before pressing Enter is the point.
 #
-# capture-pane returns lines at the SOURCE pane's width, which is usually far
-# wider than this popup, hence `nowrap`: truncating a full-screen TUI reads, while
-# wrapping it does not.
+# The capture comes back at the SOURCE pane's geometry, which is bigger than this
+# popup in both directions, and the two mismatches need opposite treatment:
+#
+#   width   `nowrap`, and the popup is deliberately wider than the other pickers
+#           (90%/80% vs 70%/60%). A full-screen TUI cannot be reflowed, so the
+#           right edge is simply lost — truncating it reads, wrapping it does not.
+#   height  take the TAIL, not the head. Printing the capture raw makes fzf clip
+#           the BOTTOM, which is precisely the part worth seeing: the prompt, the
+#           last command, the error. Trailing blank lines are dropped first, or a
+#           half-empty pane would tail into nothing but whitespace.
 #
 # Esc is a single binding that branches on $FZF_INPUT_STATE (enabled/disabled/
 # hidden). Do NOT implement this with `unbind(esc)`: fzf's unbind REMOVES a key's
@@ -120,11 +127,31 @@ list() {
 # its active pane, which is exactly the window the list above marks with ←.
 # `-e` keeps the SGR sequences so a coloured TUI comes back looking like itself.
 preview() {
-  local name="$1"
-  tmux list-windows -t "$name" \
-    -F '#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}' 2>/dev/null
-  printf '\n'
-  tmux capture-pane -pe -t "$name" 2>/dev/null
+  local name="$1" windows avail
+  windows="$(
+    tmux list-windows -t "$name" \
+      -F '#{window_index}: #{window_name}  (#{window_panes}p)#{?window_active, ←,}' 2>/dev/null
+  )"
+  [ -n "$windows" ] || return 0
+  printf '%s\n\n' "$windows"
+
+  # Rows left over once the window list and its blank separator are on screen.
+  # FZF_PREVIEW_LINES is exported by fzf into the preview process; the fallback is
+  # only for running `--preview` by hand.
+  avail=$(( ${FZF_PREVIEW_LINES:-24} - $(printf '%s\n' "$windows" | wc -l) - 1 ))
+  [ "$avail" -gt 0 ] || return 0
+
+  # ESC comes in via -v: a literal \033 in an awk regex is not portable, and macOS
+  # awk is not gawk. Blankness is judged with the SGR sequences stripped, since a
+  # visually empty line still carries a colour reset.
+  tmux capture-pane -pe -t "$name" 2>/dev/null |
+    awk -v esc="$(printf '\033')" '
+      { line[NR] = $0
+        bare = $0; gsub(esc "\\[[0-9;?]*[a-zA-Z]", "", bare)
+        if (bare ~ /[^ \t]/) last = NR }
+      END { for (i = 1; i <= last; i++) print line[i] }
+    ' |
+    tail -n "$avail"
 }
 
 # `no next window` on a single-window session is a failure exit, not a problem to
