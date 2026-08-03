@@ -35,7 +35,11 @@
 # Read from the first 20 lines only, so scanning stays cheap:
 #
 #   # task: assemble the debug APK and install it
-#   # tmux: window        window | split | popup | detach   (default: window)
+#   # tmux: window
+#
+# Placements: window (default) | split-down | split-right | popup | detach
+#   `split` is an alias for split-down. Both splits take an optional size after
+#   the placement — `split-right 40%`, `split-down 15` — defaulting to 30%.
 #
 # Both are optional. The reuse target for `window`/`detach` is derived from the
 # task name ("android/build" -> window "android-build") rather than configured,
@@ -189,12 +193,26 @@ cycle_group() {
 #
 # cwd is the project root for every task, whatever the pane was doing, so
 # scripts can assume ./gradlew resolves.
+# run_task <name> [inline]
+#
+# `inline` is set by the interactive path, which is already running inside the
+# `display-popup -E` opened by the tmux binding. tmux allows exactly ONE popup
+# per client: a nested `display-popup` silently does nothing and still exits 0,
+# so `popup` placement has to reuse the popup we are already in rather than ask
+# for a second one. `split` and `new-window` have no such restriction and work
+# untargeted from inside a popup.
 run_task() {
-  local name="$1" script placement slug inner cmd
+  local name="$1" inline="${2:-0}" script placement size slug inner cmd
   script="$tasks_dir/$name"
   [ -x "$script" ] || { tmux display-message "  no such task: $name"; return 1; }
 
+  # `# tmux:` may carry a size after the placement, e.g. `split-right 40%`.
+  # Deliberately NOT named split-v/split-h: -v and -h mean opposite things in
+  # tmux (-v = below) and vim (:vsplit = beside), so the direction is spelled out.
   placement="$(meta "$name" tmux)"
+  size="${placement#* }"
+  placement="${placement%% *}"
+  [ "$size" = "$placement" ] && size=30%      # no second field -> default
   [ -n "$placement" ] || placement=window
   slug="$(printf '%s' "$name" | tr '/' '-')"
 
@@ -210,10 +228,17 @@ run_task() {
 
   case "$placement" in
     popup)
+      # Replacing this process runs the task in the popup that is already open,
+      # which is the same result the user asked for — a floating window that
+      # closes on a keypress — without a second popup tmux would refuse.
+      if [ "$inline" = 1 ]; then exec bash -c "$inner"; fi
       tmux display-popup -E -w 80% -h 60% "$cmd"
       ;;
-    split)
-      tmux split-window -v -l 30% -c "$root" "$cmd"
+    split|split-down)
+      tmux split-window -v -l "$size" -c "$root" "$cmd"
+      ;;
+    split-right)
+      tmux split-window -h -l "$size" -c "$root" "$cmd"
       ;;
     detach)
       # Not selected. `monitor-activity` flags the window in the status bar the
@@ -289,4 +314,4 @@ selected=$(
 
 [ -n "$selected" ] || exit 0
 
-run_task "${selected%% *}"
+run_task "${selected%% *}" 1
