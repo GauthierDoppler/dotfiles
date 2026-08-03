@@ -77,8 +77,13 @@ picker with no naming convention and no ignore list. Subfolders become groups
 ```bash
 #!/usr/bin/env bash
 # task: assemble the debug APK and install it     <- picker description
-# tmux: window    window | split | popup | detach  (default: window)
+# tmux: window    window | split-down | split-right | popup | detach
 ```
+
+Splits take an optional size (`split-right 40%`, default 30%). They are named by
+direction, not `-v`/`-h`, because those are inverted between tmux and vim.
+`popup` reuses the picker's own popup: tmux allows one popup per client, and a
+nested `display-popup` silently does nothing while still exiting 0.
 
 Read from the first 20 lines only. `window` and `detach` reuse a window named
 after the task (`android/build` → `android-build`), respawning it rather than

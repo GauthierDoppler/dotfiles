@@ -61,7 +61,19 @@ Two optional header keys, read from the **first 20 lines only**:
 | key | meaning |
 | --- | --- |
 | `# task:` | one-line description shown in the picker |
-| `# tmux:` | placement — `window` (default) \| `split` \| `popup` \| `detach` |
+| `# tmux:` | placement — `window` (default) \| `split-down` \| `split-right` \| `popup` \| `detach` |
+
+Both splits take an optional size after the placement, defaulting to 30%:
+
+```bash
+# tmux: split-right        # 30% of the width
+# tmux: split-right 50%    # half the window
+# tmux: split-down 15      # 15 rows
+```
+
+`split` alone is an alias for `split-down`. The directions are spelled out rather than named
+`-v`/`-h` on purpose: those mean **opposite** things in tmux (`-v` = below) and vim (`:vsplit` =
+beside), so a short name would be ambiguous whichever convention it followed.
 
 Always `chmod +x` after creating a task, or it will not appear.
 
@@ -73,8 +85,8 @@ This is the decision that makes a task pleasant or annoying. Pick by lifetime, n
 | --- | --- | --- |
 | `window` | anything slow or interactive — builds, test runs, REPLs | reuses a window named after the task (`android/build` → `android-build`), respawning it. Re-running never piles up duplicates. Gets selected. |
 | `detach` | long-lived streams and fire-and-forget — `logcat`, watchers, deploys | same window reuse, but **not** selected. `monitor-activity` flags it in the status bar when it produces output. That flag *is* the notification — do not add `terminal-notifier`. |
-| `popup` | quick checks under ~2s where only the exit code matters — `doctor`, a lint, a version probe | floats over the current window, no window created |
-| `split` | something you want beside the current work | 30% horizontal split of the current window |
+| `popup` | quick checks under ~2s where only the exit code matters — `doctor`, a lint, a version probe | floats over the current window, no window created. Reuses the picker's own popup — tmux allows only one popup per client, so a second one would silently do nothing. |
+| `split-down` / `split-right` | something you want beside the current work | splits the current window, 30% by default |
 
 When unsure, use `window`. It is the default for a reason.
 
