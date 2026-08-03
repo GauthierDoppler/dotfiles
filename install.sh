@@ -74,6 +74,62 @@ link() {
   echo "linked: $dest -> $src"
 }
 
+# Creates a small REAL file that loads the tracked config, instead of symlinking.
+#
+# Why: third-party installers (git-ai, nvm, rbenv, conda...) append to ~/.zshrc
+# and ~/.gitconfig directly. When those are symlinks into this repo, the append
+# lands in a tracked file — machine-specific absolute paths staged into a repo we
+# push. With a stub, the append goes below the load line and stays untracked.
+#
+# `git config --global` writes here too, which is now the correct outcome.
+#
+# MUST be idempotent: re-running install.sh has to leave everything accumulated
+# below the load line untouched. That is the whole point, so the "already
+# stubbed" check comes before any write.
+stub() {
+  local dest="$1" load="$2"
+  mkdir -p "$(dirname "$dest")"
+
+  # Match on the LAST line of the load block, not the first: for a gitconfig the
+  # first line is a bare `[include]`, which any unrelated include would satisfy.
+  # The last line carries the path, so it is unique to this stub.
+  if [ -e "$dest" ] && [ ! -L "$dest" ] && grep -qxF "${load##*$'\n'}" "$dest" 2>/dev/null; then
+    echo "stub ok: $dest (local content untouched)"
+    return 0
+  fi
+
+  if [ -L "$dest" ]; then
+    rm "$dest"                                   # migrating off the old symlink
+  elif [ -e "$dest" ]; then
+    echo "backup: $dest -> ${dest}.bak"
+    mv "$dest" "${dest}.bak"
+  fi
+
+  {
+    echo "# Loads the shared dotfiles config. Everything BELOW this block is"
+    echo "# machine-local and stays out of the dotfiles repo — put local overrides"
+    echo "# here, and let installers append here too."
+    echo "$load"
+    echo
+  } > "$dest"
+  echo "stubbed: $dest"
+}
+
+# One-time move of the old ~/.<name>.local files into their stub. Kept as
+# .migrated rather than deleted: losing a machine's only copy of its local
+# config to a convenience rename is not a recoverable mistake.
+migrate_local() {
+  local legacy="$1" dest="$2"
+  [ -f "$legacy" ] || return 0
+  {
+    echo
+    echo "# ─── migrated from $(basename "$legacy") ───"
+    cat "$legacy"
+  } >> "$dest"
+  mv "$legacy" "${legacy}.migrated"
+  echo "migrated: $legacy -> $dest (kept as ${legacy}.migrated)"
+}
+
 # ~/.config/* folders (whole directory symlinks)
 link "delta"               "$HOME/.config/delta"
 link "ghostty"             "$HOME/.config/ghostty"
@@ -86,9 +142,22 @@ link "zed"                 "$HOME/.config/zed"
 link "git/ignore"          "$HOME/.config/git/ignore"
 
 # ~/ dotfiles (dot_ prefix becomes .)
-link "dot_gitconfig"       "$HOME/.gitconfig"
 link "dot_tmux.conf"       "$HOME/.tmux.conf"
-link "dot_zshrc"           "$HOME/.zshrc"
+
+# ~/.zshrc and ~/.gitconfig are stubbed, not linked — third-party installers
+# append to them directly, and a symlink would put those appends in this repo.
+# Written as $HOME / ~ rather than the absolute path, so the stub itself carries
+# no machine-specific path. Built via variables: inside double quotes bash leaves
+# `\~` as a literal backslash-tilde, which git then fails to parse.
+# shellcheck disable=SC2016  # literal $HOME, expanded by zsh when it reads the stub
+dollar_home='$HOME'
+tilde='~'
+stub "$HOME/.zshrc"     "source \"${DOTFILES/#$HOME/$dollar_home}/dot_zshrc\""
+migrate_local "$HOME/.zshrc.local" "$HOME/.zshrc"
+
+stub "$HOME/.gitconfig" "[include]
+	path = ${DOTFILES/#$HOME/$tilde}/dot_gitconfig"
+migrate_local "$HOME/.gitconfig.local" "$HOME/.gitconfig"
 
 # ~/.claude/*
 # settings.json is deliberately NOT linked: Claude Code rewrites it in place, so

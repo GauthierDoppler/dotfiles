@@ -21,6 +21,6 @@ name = Gauthier Doppler
 	sync-safe = "!stashed=$(git stash); git fetch && git rebase origin/main; [ \"$stashed\" != \"No local changes to save\" ] && git stash pop"
 [include]
 	path = ~/dotfiles/delta/themes.gitconfig
-# Machine-specific config — not tracked in dotfiles.
-[include]
-	path = ~/.gitconfig.local
+# No local include here: ~/.gitconfig is NOT a symlink to this file, it is a stub
+# that includes it. Machine-specific keys live in ~/.gitconfig below that include
+# — which is also where `git config --global` writes them. See install.sh (stub()).

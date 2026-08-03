@@ -27,17 +27,43 @@ The `link()` function creates symlinks and backs up existing files as `*.bak`. W
 ## Machine-local vs shared config
 
 Every tracked config must be portable — no `/Users/<name>` paths, no per-machine
-sockets, no work-specific tooling. Machine-local settings go in a paired local
-file that is never committed:
+sockets, no work-specific tooling.
+
+**`~/.zshrc` and `~/.gitconfig` are stubs, not symlinks.** `install.sh` writes a
+small real file that loads the tracked config, and everything machine-local
+accumulates below that line:
+
+```sh
+# ~/.zshrc
+source "$HOME/dotfiles/dot_zshrc"
+```
+```gitconfig
+# ~/.gitconfig
+[include]
+	path = ~/dotfiles/dot_gitconfig
+```
+
+This exists because third-party installers append to `~/.zshrc` and
+`~/.gitconfig` directly — through a symlink, those appends land in tracked
+files, which is how a `/Users/<name>` socket path once ended up staged here.
+`git config --global` writes to the stub too, which is now correct. For git,
+later values win, so anything below the include overrides the shared config.
+
+`stub()` is idempotent by design: if the load line is already present it writes
+nothing, so re-running `install.sh` never touches accumulated local content.
+There are no paired `*.local` files any more — `migrate_local()` folds legacy
+ones into the stub on the next run and keeps them as `*.local.migrated`.
 
 | Shared (tracked)              | Local (untracked)                     |
 | ----------------------------- | ------------------------------------- |
-| `dot_zshrc`                   | `~/.zshrc.local`                      |
-| `dot_gitconfig`               | `~/.gitconfig.local`                  |
+| `dot_zshrc`                   | `~/.zshrc`, below the load line        |
+| `dot_gitconfig`               | `~/.gitconfig`, below the include      |
 | `dot_claude/settings.json`    | `dot_claude/settings.local.json`      |
 
-Run `local-diff` to list what has accumulated in the local files. Each finding is
-a decision: promote it into the tracked config, or leave it local.
+`dot_tmux.conf` is still a plain symlink: nothing appends to `~/.tmux.conf`.
+
+Run `local-diff` to list what has accumulated locally. Each finding is a
+decision: promote it into the tracked config, or leave it local.
 
 **Claude Code settings are a special case.** Claude Code has no user-scope
 `settings.local.json`, and it *rewrites* `~/.claude/settings.json` in place —
