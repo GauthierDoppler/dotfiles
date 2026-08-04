@@ -6,7 +6,7 @@ Personal development environment for macOS — managed with symlinks.
 
 | Config | Path | Description |
 |--------|------|-------------|
-| **Zsh** | `dot_zshrc` | Oh My Zsh with robbyrussell theme, fnm, bun, keg-only brew paths |
+| **Zsh** | `dot_zshrc` | Oh My Zsh with robbyrussell theme, fnm, bun, keg-only brew paths, `project` jump aliases |
 | **Zsh (login env)** | `dot_zprofile` | Locale, `JAVA_HOME`, Android SDK — each block inert when the tool is absent |
 | **Tmux** | `dot_tmux.conf` | Pane/tab modes, git-aware status bar, session + task + URL pickers, Catppuccin Frappe |
 | **Git** | `dot_gitconfig` | Worktree helpers (`git wt`), skip/unskip aliases, delta pager |
@@ -85,7 +85,36 @@ win, so anything below the include overrides the shared config.
 | `dot_claude/settings.json` | `dot_claude/settings.local.json`  |
 
 `local-diff` lists what has accumulated locally, so you can decide whether to
-promote it into the tracked config or leave it machine-specific.
+promote it into the tracked config or leave it machine-specific. Some of what it
+reports is permanently local — project registrations below are the main case, and
+they stay flagged on every run rather than being filtered out, because a diff
+tool that silently drops lines stops being trustworthy for the ones that matter.
+
+#### Project setups
+
+`project <name> <path> [tab name]` defines a shell function that enters a
+project in its default state: `cd`, rename the ghostty tab, and `grove attach`
+on the main worktree's branch — creating that session if it does not exist, or
+switching to it if you are already in tmux. So `biogroup` gets you from anywhere
+to the right project on its main session.
+
+The function is tracked in `dot_zshrc`; the registrations are not, since they
+carry absolute paths. Add them to `~/.zshrc` **below the load line**:
+
+```sh
+project biogroup ~/Developer/theodo/bp-api "Biogroup"
+project grove    ~/Developer/perso/grove-ai
+```
+
+Three fields, and nothing per-project anywhere else. The tab name defaults to
+the project name. You get tab-completion on the name for free — it is an
+ordinary shell function.
+
+A registration whose path does not exist is skipped silently, so one block can
+be carried to a machine that has not cloned everything. A name that already
+resolves to a command is skipped with a warning, rather than shadowing it. With
+no `grove` on `PATH`, or a path that is not a git repo, the `cd` still happens
+and nothing else does.
 
 Claude Code is the awkward one: it has no user-scope local settings file, and it
 rewrites `~/.claude/settings.json` in place (reordering keys, absolutising

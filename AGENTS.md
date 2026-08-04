@@ -275,6 +275,14 @@ project biogroup ~/Developer/theodo/biogroup "Biogroup"
 project grove    ~/Developer/perso/grove-ai  "Grove"
 ```
 
+`local-diff` therefore reports every registration as a local addition, on every
+run, and that is accepted rather than filtered. Its premise is that each finding
+is a decision — and for a `project` line the decision is always "leave it local",
+so the lines are pure noise that grows one per project. Teaching it to skip them
+was rejected anyway: it is currently a plain line-set diff with no knowledge of
+zsh syntax, and a diff tool that silently drops lines stops being trustworthy
+about the ones it does report.
+
 Three fields, and nothing per-project anywhere else. A registration whose path
 does not exist is skipped silently, so the same block is safe to carry to a
 machine that has not cloned everything; one whose name already resolves to a
