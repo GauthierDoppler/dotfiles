@@ -220,11 +220,48 @@ output the user is staring at is noise — and `terminal-notifier` is probed wit
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
 information. `monitor-bell` stays on: a BEL is rare enough to mean something.
-"Claude is waiting" comes from its own Notification hook → `terminal-notifier`.
+Claude Code's own state is a window marker instead — see below.
 
 The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
 popup only for the script to find no tasks and exit reads as a flash, so in that
 case tmux shows a status message instead and the popup never opens.
+
+## Claude Code window marker
+
+`dot_claude/hooks/notify.sh` publishes `@claude_status` on the window Claude Code
+is running in — `waiting` on the `Notification` event, `done` on `Stop`, cleared
+on `UserPromptSubmit` — and the window list renders it as a yellow or green `✻`.
+All three hook entries are the same command; the event comes from
+`hook_event_name` in the payload rather than an argument.
+
+**It replaced a `terminal-notifier` banner, which failed for reasons no amount of
+fixing addressed**: with several sessions running there was no telling which
+instance had fired, so the first one visible got opened and corrected afterwards;
+the banner was not clickable back to the right window; and it was in the wrong
+place — a notification asks you to leave the terminal to learn something about
+the terminal. The `\a` bell is kept, because when ghostty is not frontmost the
+dock badge is the only signal left. It is written to `/dev/tty`, not stdout,
+which Claude Code consumes; the redirection is what fails when there is no
+controlling terminal, and `2>/dev/null` on the `printf` does not silence that, so
+it runs in a subshell.
+
+**It reuses the `@task_status` slot rather than adding a second marker.** That is
+the whole reason this was cheap: the slot is already 3 columns wide with its
+width parity solved across state and focus, and a second independent marker would
+have meant redoing that accounting over a much larger matrix. Task state takes
+precedence where both are set, which in practice does not happen — Claude runs in
+its own window. `✻` is U+273B, East Asian Width **N** like `✓` and `✗`, so it
+occupies the same single cell.
+
+The states reuse the task palette because they mean the same things — yellow is
+"needs you", green is "finished" — which keeps the rule that the window list
+carries exactly two signals, blue for focus and the marker for state. Only the
+glyph says which subsystem is talking.
+
+A marker is not set when its window is the active one of an attached client, and
+`after-select-window` clears it, so going to look is what dismisses it. Without
+that skip the marker would appear on the window being watched with nothing left
+to clear it, since selecting it has already happened.
 
 ## One-shot command popup
 
