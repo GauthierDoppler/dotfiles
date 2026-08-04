@@ -50,6 +50,12 @@ n() { if [ "$#" -eq 0 ]; then command nvim .; else command nvim "$@"; fi; }
 alias c="clear"
 alias cl="claude"
 alias "cl-yolo"="claude --dangerously-skip-permissions"
+# Xcode already ships `xed` (`xed .`, `xed -l 42 File.swift`). Android Studio's
+# launcher exists but is not on PATH. `open -a` hands the path to the running
+# instance; the launcher binary would tie the IDE's lifetime to this shell.
+if [[ -d "/Applications/Android Studio.app" ]]; then
+  studio() { if [ "$#" -eq 0 ]; then open -a "Android Studio" .; else open -a "Android Studio" "$@"; fi; }
+fi
 # Le cheat sheet tmux vit dans dot_tmux.conf et s'affiche avec Prefix + ? —
 # une seule source de vérité, lue directement depuis le fichier.
 

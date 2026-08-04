@@ -34,7 +34,7 @@ diff_shell() {
     extra=$(comm -23 \
         <(shell_significant "$local_file" | sort -u) \
         <(shell_significant "$shared_file" | sort -u) \
-        | grep -v "dot_zshrc\"\?$")   # the stub's own load line, not drift
+        | grep -v "$(basename "$shared_file")\"\?$")   # the stub's own load line, not drift
 
     [[ -z "$extra" ]] && return 0
     found=1
@@ -87,6 +87,7 @@ diff_json() {
 # local file to compare IS the stub — minus the load line itself, which is
 # scaffolding rather than drift.
 diff_shell     "$HOME/.zshrc"                              "$DOTFILES/dot_zshrc"
+diff_shell     "$HOME/.zprofile"                           "$DOTFILES/dot_zprofile"
 diff_gitconfig "$HOME/.gitconfig"                          "$DOTFILES/dot_gitconfig"
 # Claude Code has no user-scope local settings file, so the override lives in the
 # repo dir (untracked) and claude-settings-sync merges it. Anything listed here
