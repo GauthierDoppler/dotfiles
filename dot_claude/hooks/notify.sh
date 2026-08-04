@@ -36,10 +36,4 @@ fi
 
 tmux set-option -w -t "$win" @claude_status "$state" 2>/dev/null
 
-# The hook's stdout is consumed by Claude Code, so the bell has to go to the
-# pane's tty directly -> monitor-bell -> ghostty bell-features. The redirection
-# itself is what fails without a controlling terminal, and a `2>/dev/null` on
-# printf does not silence that — the subshell does.
-( printf '\a' > /dev/tty ) 2>/dev/null
-
 exit 0
