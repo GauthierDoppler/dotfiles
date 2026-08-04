@@ -239,11 +239,19 @@ fixing addressed**: with several sessions running there was no telling which
 instance had fired, so the first one visible got opened and corrected afterwards;
 the banner was not clickable back to the right window; and it was in the wrong
 place — a notification asks you to leave the terminal to learn something about
-the terminal. The `\a` bell is kept, because when ghostty is not frontmost the
-dock badge is the only signal left. It is written to `/dev/tty`, not stdout,
-which Claude Code consumes; the redirection is what fails when there is no
-controlling terminal, and `2>/dev/null` on the `printf` does not silence that, so
-it runs in a subshell.
+the terminal.
+
+**The marker is the only signal: there is no bell.** The hook used to send one so
+that ghostty's `bell-features` gave a dock badge when the terminal was not
+frontmost, and Claude Code's own notification channel — unset, i.e. `auto`, which
+resolves to `terminal_bell` outside iTerm — sent a second one. Two
+indistinguishable beeps, neither of them locating anything, and only one of them
+gated on whether the window was already in front. A beep that cannot be
+attributed to a window is a beep that stops being trusted, and an untrusted
+signal is pure noise, so both are gone: the `printf '\a'` from the hook and
+`preferredNotifChannel: notifications_disabled` in `dot_claude/settings.json`.
+Nothing signals from outside the terminal any more — that is the accepted cost.
+`monitor-bell` stays on for tasks, which do still bell.
 
 **It reuses the `@task_status` slot rather than adding a second marker.** That is
 the whole reason this was cheap: the slot is already 3 columns wide with its
