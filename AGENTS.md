@@ -226,6 +226,26 @@ The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
 popup only for the script to find no tasks and exit reads as a flash, so in that
 case tmux shows a status message instead and the popup never opens.
 
+## Scratch popup
+
+`Prefix + Enter` opens a throwaway shell in a popup, rooted on
+`#{session_path}` — the same session-root rule as tasks, so `grove` or a
+`g sync` act on the right repo from any window, including one running Neovim.
+`display-popup` with no command runs `default-shell`, and `-E` closes the popup
+when that shell exits, so `Ctrl-D` discards it.
+
+It is deliberately **not** one-shot. A version that auto-closed on a zero exit
+status was built and worked (a `precmd` hook in a private `ZDOTDIR`), but `cd`
+succeeds too — the popup would vanish before the command you changed directory
+for. Closing on success suits a command launcher, not a scratch terminal. Since
+nothing closes on its own, failed output also stays readable for as long as you
+want, which is the only thing the auto-close version was protecting.
+
+This is why grove needs no entry in the task picker, and why the picker has no
+"run an arbitrary command" mode: an unplanned one-off belongs in a shell, and
+this is a shell one keystroke away. Note that tmux allows one popup per client,
+so it cannot be opened from inside the task picker.
+
 ## Skills
 
 `dot_claude/skills/` holds the user-scope skills that document this setup's own
