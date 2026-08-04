@@ -217,6 +217,7 @@ link "scripts/tmux-sessions"         "$HOME/.local/bin/tmux-sessions"
 link "scripts/tmux-tasks"            "$HOME/.local/bin/tmux-tasks"
 link "scripts/tmux-task-run"         "$HOME/.local/bin/tmux-task-run"
 link "scripts/tmux-status-left"      "$HOME/.local/bin/tmux-status-left"
+link "scripts/tmux-status-right"     "$HOME/.local/bin/tmux-status-right"
 link "scripts/tmux-pick"             "$HOME/.local/bin/tmux-pick"
 
 # ─── Phase 6b: Claude Code settings ────────────────────────

@@ -325,8 +325,11 @@ project's `.tmux/` tasks.
 
 ## Tmux status bar
 
-`scripts/tmux-status-left` renders the left segment: **project · root-or-wt ·
-branch**, resolved from `#{session_path}` with git.
+`scripts/tmux-status-left` renders the left segment as two adjacent capsules —
+**project** and **root/wt** — resolved from `#{session_path}` with git. They are
+separate blocks on purpose: which repo you are in and which checkout of it you
+are in are two different questions, and a flag glued onto the project name reads
+as part of the name.
 
 It does not parse the session name. Grove builds names as
 `{prefix}{project}_{branch}_{key}` with a sanitizer that maps `/[.\s:/@]/` to
@@ -341,20 +344,113 @@ starts lying after the first `git checkout`. Nothing about the bar is
 grove-specific: any session in any repo gets the same treatment, and a session
 outside a repo falls back to its own name.
 
-**Every field is fixed-width** (16 / 4 / 22, padded to 48 columns total) so the
-closing `` cap always lands in the same column and the window list never
-shifts when you switch session. That is also why the worktree segment is just
-`root`/`wt` rather than the worktree's name: the name is nearly always a
-sanitized copy of the branch beside it, and it changed width on every switch.
+**The branch is deliberately not shown.** It is already visible in lazygit, in
+the prompt and in nvim's own status line, and at 22 columns it was the single
+widest field on the bar.
+
+**The block pads out to match the right-hand one** so the window list starts in
+the same place whatever session is attached. The padding sits *outside* the
+capsules, not inside them: an internally padded pill leaves a visibly empty
+capsule for a short name, which is exactly what made the previous 48-column
+version read as a slab of dead space. The checkout segment stays `root`/`wt`
+rather than the worktree's name because that name is nearly always a sanitized
+copy of the branch, and it changed width on every switch.
+
+The project pill hugs its name up to `MAX_PROJECT` characters and then truncates
+with `…`. It never changes the block width — a longer name spends padding, not
+layout — so that cap is a purely visual choice and there is room to raise it.
+
+`scripts/tmux-status-right` renders the *entire* right block — key table, repo
+state, battery, date, clock. The date and clock are not left to `dot_tmux.conf`
+even though strftime is free there: the block has to know its own total width
+(see below), and a piece it does not render is a piece it cannot measure.
+
+Repo state is `+412 −89 ↑2 ↓1` — **lines** changed against HEAD, then divergence
+from the upstream. Two cheap calls, `diff --shortstat HEAD` and `rev-list
+--left-right --count @{upstream}...HEAD`, rather than one `status --porcelain=v2
+--branch`, which would cost a full worktree scan for the ahead/behind alone.
+Untracked files contribute nothing: `--shortstat` only walks tracked content.
+Both calls use `--no-optional-locks`, or git refreshes and rewrites the index on
+every tick and collides with an interactive git in the same repo.
+
+The counts are padded on the *left*, so they grow away from the clock instead of
+shoving it. Their width accounting charges the separator space where it is
+emitted, not a flat +2 per part: a flat charge makes a segment whose first part
+is `−` or `↑` come out one column narrow, which drifts the whole centred window
+list by one — visible only when switching to a session that has no local edits
+but is ahead or behind.
+
+Both scripts `export LANG` if it is unset. Without a UTF-8 locale bash counts
+`${#s}` in bytes and slices `${s:0:n}` the same way, so the ellipsis and every
+`± ↑ ↓` glyph would throw its padding out by two or three columns — and tmux
+runs `#()` commands with the *server's* environment, which is whatever the shell
+that started the server happened to export.
 
 Truncation happens inside the script, never via `status-left-length`: tmux
 truncates the *expanded* string, which by then contains `#[fg=...]` escapes, and
 will happily cut one in half and print the remainder as literal text.
 
-**Colour rule: the bar is greyscale except where colour carries information.**
-Blue is "you are here" (active window pill, active pane border); yellow/green/red
-are task state (`●` `✓` `✗`, see below). Nothing else is coloured — an earlier
-version had a green active-window block that made a green `✓` invisible.
+**Colour rule: the window list is greyscale; everything else gets one accent per
+concept.** The list itself must stay neutral so its two signals read — blue is
+"you are here" (active window pill, active pane border) and yellow/green/red are
+task state (`●` `✓` `✗`, see below). An earlier version had a green
+active-window block that made a green `✓` invisible. Outside the list, each
+segment owns a hue and no hue is reused: mauve `#ca9ee6` project, peach
+`#ef9f76` worktree (absent when at the root, where the chip is grey), flamingo
+`#eebebe` repo state, teal `#81c8be` battery, red `#e78284` battery under 20 %.
+None of them may be `#8caaee` or a task-state colour.
+
+**Centring is only true while the two blocks are the same width.**
+`status-justify centre` centres the list in the space *remaining* after
+`status-left` and `status-right`, not in the terminal: measured on a 120-column
+client, growing the right block by 36 columns moved the list 18 columns left —
+exactly half. So `tmux-status-left` pads out to match, and asks
+`tmux-status-right --width` for the number instead of hardcoding it. A copy of
+the tier table on the left would drift; `--width` returns before any `git` or
+`pmset` call, so the extra fork is cheap.
+
+Everything on the right is therefore fixed-width, including the key table slot,
+which stays reserved at rest — letting it collapse would change the block width
+every time a mode is entered and slide the list. For the same reason the date is
+`%a %d %b` and never `%-d`, which would lose a column from the 1st to the 9th.
+
+**Narrowing sheds whole segments** rather than crushing the list: date, then
+battery, then the repo counts, leaving the clock. Before that, an 80-column
+client rendered date and battery in full and dropped the *window list* entirely
+— the one thing on the bar worth keeping. Below the widest tier the left block
+also stops padding to match, so the list drifts off centre instead of
+overflowing. None of this engages above 120 columns.
+
+**A window occupies the same width whether or not it is active**: the active
+format's two `` capsules are replaced by two plain spaces in the inactive one.
+Without that, focusing a window widened it by a column and shoved every window
+to its right. The `@task_status` marker is worth +3 columns on *both* sides, so
+parity holds in all twelve combinations of state and focus.
+
+**The task marker belongs to a window, visibly.** On the active window it is the
+coloured *tail of the pill* — dark glyph on a yellow/green/red ground, with the
+closing cap taking that colour — rather than a glyph outside the capsule, which
+read as unattached. It cannot simply be drawn onto the blue pill: `#e5c890` on
+`#8caaee` is the same low-contrast trap that already cost a green active-window
+block. On inactive windows the marker sits one space after its own name and four
+before the next, because centred between two windows there was no telling which
+one it belonged to.
+
+**A comma inside a `#[...]` must be escaped as `#,` when the style sits inside a
+`#{?...}`** — otherwise it ends that branch of the conditional and the rest of
+the style is silently dropped, leaving the branch rendering as if empty. So
+`#[bg=#a6d189#,fg=#303446]`, not `#[bg=#a6d189,fg=#303446]`.
+
+The right-hand segments are separated by spacing alone. An earlier version used
+dim `·` bullets between them; at `#626880` they read as empty slots rather than
+as separators.
+
+**Shape carries as much as colour.** Only two things on the bar are filled
+capsules — the project, always leftmost, and the active window, which moves.
+Position tells them apart. The `` `` caps are U+E0B6 / U+E0B4; a Nerd Font is
+required, which `ghostty/config` already pins. Note that these live in the
+private-use area and some editors silently drop them on write — check with
+`grep -c` after touching either file.
 
 The palette is Catppuccin **Frappe**, matching ghostty. The bar background
 (`#414559`) is one step *lighter* than the terminal (`#303446`) so it reads as
