@@ -293,7 +293,7 @@ selected=$(
     --bind "tab:transform:$self --advance; echo \"reload($self --list)+transform-prompt($self --prompt)+transform-header($self --header)+first\"" \
     --bind "ctrl-e:execute(f={1}; \${EDITOR:-vi} '$tasks_dir'/\"\$f\")" \
     --preview="$preview" \
-    --preview-window='right,55%,border-left'
+    --preview-window='right,40%,border-left'
 ) || exit 0
 
 [ -n "$selected" ] || exit 0
