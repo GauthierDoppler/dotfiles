@@ -1,0 +1,200 @@
+#!/bin/bash
+# Renders the whole right-hand block of the tmux status bar: key table, repo
+# line counts, battery, date, clock.
+#
+# Usage (from tmux.conf, inside a #() substitution):
+#   tmux-status-right "#{session_path}" "#{client_width}" "#{client_key_table}"
+#
+#   pane_mode      +412 −89    󰂁 87%    Tue 04 Aug   11:16
+#
+#   tmux-status-right --width <client_width>
+#
+# The second form prints just the rendered width. `status-justify centre` centres
+# the window list in the space REMAINING after both blocks, so the list is only
+# truly centred while they are the same width -- tmux-status-left calls this to
+# learn how far to pad rather than duplicating the tier table below.
+
+set -uo pipefail
+
+# Without a UTF-8 locale bash counts ${#s} in BYTES, so every ± − ↑ ↓ and
+# battery glyph would over-pad its segment by two or three columns. tmux runs
+# #() commands with the server's environment, which is whatever the shell that
+# started the server happened to export.
+export LANG="${LANG:-en_US.UTF-8}"
+
+# Catppuccin Frappe. Warm = local edits, cool = divergence from the remote, teal
+# = battery. None may be #8caaee (active window) nor a task-state
+# yellow/green/red, and the greyscale rule only binds the window list.
+KEYS='#[fg=#8caaee,bold]'
+INS='#[fg=#eebebe,nobold]'
+DEL='#[fg=#ea999c,nobold]'
+SYNC='#[fg=#99d1db,nobold]'
+BATT='#[fg=#81c8be,nobold]'
+WARN='#[fg=#e78284,bold]'
+DATE='#[fg=#949cbb,nobold]'
+CLOCK='#[fg=#c6d0f5,bold]'
+
+W_KEYS=10
+W_GIT=15   # fits the realistic worst case: +9999 −999 ↑9
+W_BATT=6
+W_DATE=10  # %a %d %b, never %-d: the 1st to the 9th would render a column short
+W_CLOCK=5
+
+# Narrowing sheds whole segments, cheapest information first, so that the window
+# list is the LAST thing to lose room rather than the first. Before this, an
+# 80-column client rendered the date and battery in full and dropped the window
+# list entirely.
+tier() {
+  if   [ "$1" -ge 120 ]; then printf 'git batt date clock'
+  elif [ "$1" -ge 100 ]; then printf 'git batt clock'
+  elif [ "$1" -ge 90  ]; then printf 'git clock'
+  else                        printf 'clock'
+  fi
+}
+
+# Gap before a segment, given what precedes it. Kept in one place so `--width`
+# and the renderer can never disagree.
+gap_before() {
+  case "$1" in
+    git)   printf 0 ;;
+    batt)  printf 4 ;;
+    date)  printf 4 ;;
+    clock) printf 3 ;;
+  esac
+}
+
+seg_width() {
+  case "$1" in
+    git)   printf '%s' "$W_GIT" ;;
+    batt)  printf '%s' "$W_BATT" ;;
+    date)  printf '%s' "$W_DATE" ;;
+    clock) printf '%s' "$W_CLOCK" ;;
+  esac
+}
+
+block_width() {
+  local total=$(( W_KEYS + 2 )) s   # +2 trailing
+  for s in $(tier "$1"); do
+    total=$(( total + $(gap_before "$s") + $(seg_width "$s") ))
+  done
+  printf '%s' "$total"
+}
+
+if [ "${1:-}" = '--width' ]; then
+  block_width "${2:-200}"
+  exit 0
+fi
+
+path="${1:-}"
+client_width="${2:-200}"
+key_table="${3:-root}"
+
+pad() {
+  local n=$(( $2 - $1 ))
+  while [ "$n" -gt 0 ]; do printf ' '; n=$(( n - 1 )); done
+}
+
+# Appends "<glyph><number>" to $body and keeps $width in step (bash is
+# dynamically scoped, so both are git_seg's locals). The separator has to be
+# counted where it is emitted: an earlier version charged every part a flat +2
+# for "glyph plus leading space", so a segment whose FIRST part was ↑ or −
+# over-counted by one and rendered a column narrow. That is a one-column drift
+# of the whole centred window list, visible only when switching to a session
+# with no local edits but a non-zero ahead/behind.
+add() {
+  [ -n "${3:-}" ] && [ "${3:-0}" != '0' ] || return 0
+  if [ "$width" -gt 0 ]; then
+    body="$body "
+    width=$(( width + 1 ))
+  fi
+  body="$body$1$2$3"
+  width=$(( width + 1 + ${#3} ))
+}
+
+# ── key table ────────────────────────────────────────────────────────────────
+# The slot is reserved even at rest. Letting it collapse would change the block
+# width every time a mode is entered, which slides the centred window list.
+keys_seg() {
+  local body=''
+  [ "$key_table" != 'root' ] && body="$key_table"
+  printf '%s%s' "$KEYS" "$body"
+  pad "${#body}" "$W_KEYS"
+}
+
+# ── repo state ───────────────────────────────────────────────────────────────
+# Lines changed against HEAD (staged and unstaged both), then divergence from
+# the upstream. Untracked files contribute nothing: --shortstat only walks
+# tracked content, and counting lines in untracked files would mean reading
+# every one of them on every tick.
+#
+# --no-optional-locks keeps both calls out of .git/index.lock: git otherwise
+# refreshes and rewrites the index, which at status-interval collides with an
+# interactive git in the same repo.
+git_seg() {
+  local stat ins del ab ahead behind body='' width=0
+
+  [ -n "$path" ] && [ -d "$path" ] || { pad 0 "$W_GIT"; return; }
+
+  stat="$(git -C "$path" --no-optional-locks diff --shortstat HEAD 2>/dev/null)" \
+    || { pad 0 "$W_GIT"; return; }
+  ins="$(printf '%s' "$stat" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) insertion.*/\1/p')"
+  del="$(printf '%s' "$stat" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) deletion.*/\1/p')"
+
+  # --left-right --count over the symmetric difference prints "<behind> <ahead>"
+  # in one call; branch.ab from `status` would cost a full worktree scan.
+  ab="$(git -C "$path" --no-optional-locks rev-list --left-right --count '@{upstream}...HEAD' 2>/dev/null)"
+  behind="${ab%%[!0-9]*}"
+  ahead="${ab##*[!0-9]}"
+
+  add "$INS"  '+' "$ins"
+  add "$DEL"  '−' "$del"
+  add "$SYNC" '↑' "$ahead"
+  add "$SYNC" '↓' "$behind"
+
+  # Padded on the LEFT so the counts stay tucked against the battery and grow
+  # away from it, instead of stranding the gap between them.
+  pad "$width" "$W_GIT"
+  printf '%s' "$body"
+}
+
+# ── battery ──────────────────────────────────────────────────────────────────
+batt_seg() {
+  local raw pct icon style body
+
+  raw="$(pmset -g batt 2>/dev/null)" || { pad 0 "$W_BATT"; return; }
+  pct="$(printf '%s' "$raw" | grep -o '[0-9]\{1,3\}%' | head -1 | tr -d '%')"
+  [ -n "$pct" ] || { pad 0 "$W_BATT"; return; }
+
+  if printf '%s' "$raw" | grep -q '; \(charging\|charged\|AC attached\)'; then
+    icon='󰂄'
+    style="$BATT"
+  else
+    case $(( pct / 10 )) in
+      0|1) icon='󰁺' ;;
+      2)   icon='󰁻' ;;
+      3)   icon='󰁼' ;;
+      4)   icon='󰁽' ;;
+      5)   icon='󰁾' ;;
+      6)   icon='󰁿' ;;
+      7)   icon='󰂀' ;;
+      8)   icon='󰂁' ;;
+      9)   icon='󰂂' ;;
+      *)   icon='󰁹' ;;
+    esac
+    if [ "$pct" -lt 20 ]; then style="$WARN"; else style="$BATT"; fi
+  fi
+
+  body="$icon $pct%"
+  printf '%s%s' "$style" "$body"
+  pad "${#body}" "$W_BATT"
+}
+
+date_seg()  { printf '%s%s' "$DATE"  "$(date '+%a %d %b')"; }
+clock_seg() { printf '%s%s' "$CLOCK" "$(date '+%H:%M')"; }
+
+keys_seg
+for s in $(tier "$client_width"); do
+  pad 0 "$(gap_before "$s")"
+  "${s}_seg"
+done
+printf '#[nobold]  '

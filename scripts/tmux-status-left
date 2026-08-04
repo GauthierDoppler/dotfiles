@@ -1,41 +1,69 @@
 #!/bin/bash
-# Renders the left-hand identity segment of the tmux status bar.
+# Renders the left-hand identity block of the tmux status bar: two adjacent
+# capsules, project and checkout kind.
 #
 # Usage (from tmux.conf, inside a #() substitution):
 #   tmux-status-left "#{session_path}" "#{session_name}"
 #
-#    bp-api      root             main                  (primary checkout)
-#    bp-api      wt              chore/add-vitepress   (linked worktree)
-#
-#   project  ·  root-or-wt  ·  branch
+#    bp-api    root       (primary checkout)
+#    bp-api    wt         (linked worktree)
 #
 # Identity comes from #{session_path} + git, so any session in any repo gets the
 # same treatment and a session outside a repo falls back to its own name.
 
 set -uo pipefail
 
+# Without a UTF-8 locale bash counts ${#s} in BYTES and slices ${s:0:n} the same
+# way, so the ellipsis would throw the padding out by two columns. tmux runs #()
+# commands with the server's environment, which is whatever the shell that
+# started the server happened to export.
+export LANG="${LANG:-en_US.UTF-8}"
+
 path="${1:-}"
 name="${2:-}"
+client_width="${3:-200}"
 
-# Catppuccin Frappe. Ascending tone across the three fields, with the separator
-# below all of them. None of these may be #a5adce: that is
-# `window-status-style`, and a field sharing it reads as part of the window list
-# rather than as part of this block.
-DIM='#[fg=#949cbb]'
-MID='#[fg=#b5bfe2]'
-BRIGHT='#[fg=#c6d0f5,bold]'
-SEP='#[fg=#838ba7,nobold] '     # U+E0B1 thin powerline divider
+# Catppuccin Frappe. Mauve is the project anchor and peach the worktree flag;
+# neither may be #8caaee (active window) nor the task-state yellow/green/red.
+BAR='#414559'
+CHIP='#51576d'
+CRUST='#303446'
+MAUVE='#ca9ee6'
+PEACH='#ef9f76'
+DIM='#949cbb'
+
+LCAP=''
+RCAP=''
+
+# `status-justify centre` centres the window list in the space REMAINING after
+# status-left and status-right, NOT in the terminal: measured on a 120-column
+# client, growing status-right by 36 columns moved the list 18 columns left.
+# The list is therefore only truly centred while the two blocks are the SAME
+# width, so this one pads out to match the other.
+#
+# The other block sheds segments as the client narrows, so its width is asked
+# for rather than hardcoded -- a copy of its tier table here would drift.
+# --width returns before any git or pmset call, so the extra fork is cheap.
+RIGHT="$("$(dirname "$0")/tmux-status-right" --width "$client_width" 2>/dev/null)"
+[ -n "$RIGHT" ] || RIGHT=59
+
+# Below RIGHT + RIGHT + MIN_LIST columns there is not enough room to both centre
+# the list and keep it legible, so the padding gives way rather than crushing
+# it: the block shrinks back towards its own content and the list drifts off
+# centre instead of overflowing.
+MIN_LIST=36
 
 # Truncation happens HERE, not via status-left-length: tmux truncates the
 # expanded string, which by then contains #[fg=...] escapes, so it happily cuts
 # one in half and prints the remainder as literal text. tmux.conf sets a length
 # large enough to never trigger.
-MAX_PROJECT=16
-MAX_WORKTREE=4
-MAX_BRANCH=22
+# The hard ceiling is 46: the block is RIGHT columns wide and the pill's own
+# chrome plus the gap and the `root` chip account for 13 of them. 24 keeps some
+# padding while covering any repo name worth reading.
+MAX_PROJECT=24
 
-# clip then pad, both counting CHARACTERS not bytes: the ellipsis is 3 bytes in
-# UTF-8, so printf '%-16s' would under-pad every truncated field by two columns.
+width=0
+
 clip() {
   local s="$1" max="$2"
   if [ "${#s}" -gt "$max" ]; then
@@ -45,24 +73,29 @@ clip() {
   fi
 }
 
-pad() {
-  local s="$1" w="$2" n
-  n=$(( w - ${#s} ))
-  printf '%s' "$s"
-  while [ "$n" -gt 0 ]; do printf ' '; n=$(( n - 1 )); done
+# capsule <bg> <fg> <text>
+capsule() {
+  printf '#[fg=%s,bg=%s]%s#[bg=%s,fg=%s,bold] %s #[fg=%s,bg=%s,nobold]%s' \
+    "$1" "$BAR" "$LCAP" "$1" "$2" "$3" "$1" "$BAR" "$RCAP"
+  width=$(( width + ${#3} + 4 ))
 }
 
-field() { pad "$(clip "$1" "$2")" "$2"; }
-
-# Total visible width of the three padded fields plus their separators, so the
-# window list starts at the same column whatever the session.
-TOTAL=48
+flush() {
+  printf '#[bg=%s,fg=%s,nobold]' "$BAR" "$DIM"
+  local target=$RIGHT
+  local avail=$(( client_width - RIGHT - MIN_LIST ))
+  [ "$target" -gt "$avail" ] && target=$avail
+  [ "$target" -lt "$width" ] && target=$width
+  local n=$(( target - width ))
+  while [ "$n" -gt 0 ]; do printf ' '; n=$(( n - 1 )); done
+  exit 0
+}
 
 # No path, a session whose directory has gone away, or a directory that is not a
-# git repo at all.
+# git repo at all: no checkout kind to report, so the second capsule is dropped.
 bare() {
-  printf '%s %s' "$BRIGHT" "$(field "$name" "$(( TOTAL - 1 ))")"
-  exit 0
+  capsule "$CHIP" '#c6d0f5' "$(clip "$name" "$MAX_PROJECT")"
+  flush
 }
 
 [ -n "$path" ] && [ -d "$path" ] || bare
@@ -80,20 +113,17 @@ gitdir="$(git -C "$path" rev-parse --path-format=absolute --git-dir 2>/dev/null)
 toplevel="$(git -C "$path" rev-parse --show-toplevel 2>/dev/null)"
 
 if [ "$gitdir" != "$common" ] && [ -n "$toplevel" ]; then
-  worktree='wt'
+  kind='wt'
+  kind_fg="$PEACH"
 else
-  worktree='root'
-fi
-
-branch="$(git -C "$path" branch --show-current 2>/dev/null)"
-if [ -z "$branch" ]; then
-  branch="$(git -C "$path" rev-parse --short HEAD 2>/dev/null)"
-  [ -n "$branch" ] || branch='detached'
+  kind='root'
+  kind_fg="$DIM"
 fi
 
 # tmux expands the output of #() as a format string, so the styles are emitted
 # here rather than set in tmux.conf.
-printf '%s %s%s%s %s%s%s  %s' \
-  "$DIM"    "$(field "$project"  "$MAX_PROJECT")"  "$SEP" \
-  "$MID"    "$(field "$worktree" "$MAX_WORKTREE")" "$SEP" \
-  "$BRIGHT" "$(field "$branch"   "$MAX_BRANCH")"
+capsule "$MAUVE" "$CRUST" "$(clip "$project" "$MAX_PROJECT")"
+printf '#[bg=%s] ' "$BAR"
+width=$(( width + 1 ))
+capsule "$CHIP" "$kind_fg" "$kind"
+flush
