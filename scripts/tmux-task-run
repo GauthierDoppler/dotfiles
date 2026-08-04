@@ -46,13 +46,20 @@ notify() {
 
   local PATH="/opt/homebrew/bin:$PATH"
   command -v terminal-notifier >/dev/null 2>&1 || return 0
+
+  # Backgrounded because terminal-notifier does NOT exit once the banner is
+  # posted -- it lingers to service a click, for minutes. Run in the foreground
+  # it sits between the task finishing and the `read` below, so the window never
+  # printed its prompt and no keypress could close it. Nothing is lost by
+  # killing it with the pane: -sender re-attributes the notification through the
+  # bundle id, so clicking it still focuses ghostty with the process gone.
   terminal-notifier \
     -title "tmux task" \
     -subtitle "$name" \
     -message "$1" \
     -sender com.mitchellh.ghostty \
     -group "tmux-task-$name" \
-    > /dev/null 2>&1
+    > /dev/null 2>&1 &
   return 0
 }
 
