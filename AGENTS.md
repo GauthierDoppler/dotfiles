@@ -226,25 +226,39 @@ The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
 popup only for the script to find no tasks and exit reads as a flash, so in that
 case tmux shows a status message instead and the popup never opens.
 
-## Scratch popup
+## One-shot command popup
 
-`Prefix + Enter` opens a throwaway shell in a popup, rooted on
-`#{session_path}` — the same session-root rule as tasks, so `grove` or a
-`g sync` act on the right repo from any window, including one running Neovim.
-`display-popup` with no command runs `default-shell`, and `-E` closes the popup
-when that shell exits, so `Ctrl-D` discards it.
+`Prefix + Enter` opens a popup that takes **one** command and then goes away.
+Rooted on `#{session_path}` like tasks are, never the pane, so `grove` or a
+`g sync` act on the right repo from any window — including one running Neovim,
+which is the case the shell alias cannot serve.
 
-It is deliberately **not** one-shot. A version that auto-closed on a zero exit
-status was built and worked (a `precmd` hook in a private `ZDOTDIR`), but `cd`
-succeeds too — the popup would vanish before the command you changed directory
-for. Closing on success suits a command launcher, not a scratch terminal. Since
-nothing closes on its own, failed output also stays readable for as long as you
-want, which is the only thing the auto-close version was protecting.
+It runs a real interactive zsh, not a `read` prompt: the point is to *type* a
+command, so aliases (`g`), completion and history all have to be there. The
+private `ZDOTDIR` at `tmux/oneshot/` sources `~/.zshrc` and adds two hooks.
+`preexec` marks that a command actually ran — so a bare Enter at the prompt does
+not spend the shot — and `precmd` then prints `✓` or `✗ exit N`, waits for a
+single keypress, and exits.
 
-This is why grove needs no entry in the task picker, and why the picker has no
-"run an arbitrary command" mode: an unplanned one-off belongs in a shell, and
-this is a shell one keystroke away. Note that tmux allows one popup per client,
-so it cannot be opened from inside the task picker.
+Setting `ZDOTDIR` has a sharp edge worth knowing: macOS's `/etc/zshrc` assigns
+`HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` unconditionally, and oh-my-zsh derives
+`ZSH_COMPDUMP` the same way — so zsh writes its history and completion dump into
+*this tracked directory*, and a `.zsh_history` from the popup was staged for
+commit once before being caught. Both are pinned back to `$HOME` in the file
+(`ZSH_COMPDUMP` before the source, since oh-my-zsh only fills in a default;
+`HISTFILE` after, since `/etc/zshrc` would otherwise overwrite it), with a
+`.gitignore` as a backstop. Pinning also means the popup shares the real
+history, so up-arrow reaches what was typed in an ordinary shell.
+
+**Both outcomes wait for a key.** An earlier version closed itself on a zero
+exit status, which reads well until a successful `git log` or `git status`
+vanishes before it can be read. The keypress is what replaces `Ctrl-D`: any key
+rather than a chord, and no opportunity to type a second command into a popup
+meant for one.
+
+Being able to run an arbitrary command in a popup is why grove needs no entry in
+the task picker, and why the picker has no free-form mode. Note that tmux allows
+one popup per client, so this cannot be opened from inside the task picker.
 
 ## Skills
 

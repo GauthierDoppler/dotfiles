@@ -1,0 +1,6 @@
+# zsh resolves HISTFILE and ZSH_COMPDUMP against ${ZDOTDIR:-$HOME}, so whatever
+# it decides to write lands in this tracked directory. .zshrc pins both to $HOME;
+# this is the backstop for anything else that ignores that.
+*
+!.gitignore
+!.zshrc

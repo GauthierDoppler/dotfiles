@@ -159,6 +159,7 @@ link "ghostty"             "$HOME/.config/ghostty"
 link "lazydocker"          "$HOME/.config/lazydocker"
 link "lazygit"             "$HOME/.config/lazygit"
 link "nvim"                "$HOME/.config/nvim"
+link "tmux/oneshot"        "$HOME/.config/tmux/oneshot"
 link "zed"                 "$HOME/.config/zed"
 
 # ~/.config/* individual files
