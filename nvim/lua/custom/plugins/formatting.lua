@@ -37,6 +37,14 @@ return {
         go = { 'goimports' },
         ruby = { 'rubocop' },
         python = { 'ruff_format', 'ruff_organize_imports' },
+        kotlin = { 'ktlint' },
+        swift = { 'swift_format' },
+      },
+      formatters = {
+        -- swift-format ships inside Xcode's toolchain and is not on PATH (unlike
+        -- sourcekit-lsp, which is shimmed into /usr/bin). xcrun is the only thing
+        -- that knows where it is for the selected Xcode.
+        swift_format = { command = 'xcrun', prepend_args = { 'swift-format' } },
       },
     },
   },

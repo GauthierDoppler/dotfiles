@@ -223,7 +223,13 @@ return {
         'rubocop',
         'ruff',
         'debugpy',
+        'ktlint',
       })
+
+      -- Added after ensure_installed on purpose: sourcekit-lsp ships inside
+      -- Xcode's toolchain (shimmed at /usr/bin/sourcekit-lsp) and mason has no
+      -- package for it, so it must never reach mason-tool-installer.
+      if vim.fn.executable 'sourcekit-lsp' == 1 then servers.sourcekit = {} end
 
       -- See vim.g.headless in init.lua.
       if not vim.g.headless then require('mason-tool-installer').setup { ensure_installed = ensure_installed } end

@@ -6,7 +6,8 @@ Personal development environment for macOS — managed with symlinks.
 
 | Config | Path | Description |
 |--------|------|-------------|
-| **Zsh** | `dot_zshrc` | Oh My Zsh with robbyrussell theme, fnm, bun, Android SDK paths |
+| **Zsh** | `dot_zshrc` | Oh My Zsh with robbyrussell theme, fnm, bun, keg-only brew paths |
+| **Zsh (login env)** | `dot_zprofile` | Locale, `JAVA_HOME`, Android SDK — each block inert when the tool is absent |
 | **Tmux** | `dot_tmux.conf` | Pane/tab modes, git-aware status bar, session + task + URL pickers, Catppuccin Frappe |
 | **Git** | `dot_gitconfig` | Worktree helpers (`git wt`), skip/unskip aliases, delta pager |
 | **Neovim** | `nvim/` | originally forked from [kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim), since diverged |
@@ -47,18 +48,22 @@ dot_claude/statusline-custom.sh → ~/.claude/statusline-custom.sh
 keyboard/FR-AZERTY-num.bundle   → ~/Library/Keyboard Layouts/  (copied, not linked)
 ```
 
-`~/.zshrc`, `~/.gitconfig` and `~/.claude/settings.json` are deliberately **not**
-symlinked — see below.
+`~/.zshrc`, `~/.zprofile`, `~/.gitconfig` and `~/.claude/settings.json` are
+deliberately **not** symlinked — see below.
 
 ### Machine-specific config
 
-Every tracked config is portable. **`~/.zshrc` and `~/.gitconfig` are stubs, not
-symlinks**: `install.sh` writes a small real file that loads the tracked config,
-and everything machine-local accumulates below that line.
+Every tracked config is portable. **`~/.zshrc`, `~/.zprofile` and `~/.gitconfig`
+are stubs, not symlinks**: `install.sh` writes a small real file that loads the
+tracked config, and everything machine-local accumulates below that line.
 
 ```sh
 # ~/.zshrc
 source "$HOME/dotfiles/dot_zshrc"
+```
+```sh
+# ~/.zprofile
+source "$HOME/dotfiles/dot_zprofile"
 ```
 ```gitconfig
 # ~/.gitconfig
@@ -66,17 +71,18 @@ source "$HOME/dotfiles/dot_zshrc"
 	path = ~/dotfiles/dot_gitconfig
 ```
 
-This exists because third-party installers append to those two files directly.
+This exists because third-party installers append to those files directly.
 Through a symlink those appends land in tracked files, which is how a
 `/Users/<name>` socket path once got staged here. `git config --global` writes
 to the stub too, which is now the correct outcome — and for git, later values
 win, so anything below the include overrides the shared config.
 
-| Shared (tracked)           | Local (untracked)                |
-| -------------------------- | -------------------------------- |
-| `dot_zshrc`                | `~/.zshrc`, below the load line   |
-| `dot_gitconfig`            | `~/.gitconfig`, below the include |
-| `dot_claude/settings.json` | `dot_claude/settings.local.json` |
+| Shared (tracked)           | Local (untracked)                 |
+| -------------------------- | --------------------------------- |
+| `dot_zshrc`                | `~/.zshrc`, below the load line    |
+| `dot_zprofile`             | `~/.zprofile`, below the load line |
+| `dot_gitconfig`            | `~/.gitconfig`, below the include  |
+| `dot_claude/settings.json` | `dot_claude/settings.local.json`  |
 
 `local-diff` lists what has accumulated locally, so you can decide whether to
 promote it into the tracked config or leave it machine-specific.

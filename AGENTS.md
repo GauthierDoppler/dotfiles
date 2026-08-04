@@ -44,13 +44,17 @@ The `link()` function creates symlinks and backs up existing files as `*.bak`. W
 Every tracked config must be portable — no `/Users/<name>` paths, no per-machine
 sockets, no work-specific tooling.
 
-**`~/.zshrc` and `~/.gitconfig` are stubs, not symlinks.** `install.sh` writes a
-small real file that loads the tracked config, and everything machine-local
-accumulates below that line:
+**`~/.zshrc`, `~/.zprofile` and `~/.gitconfig` are stubs, not symlinks.**
+`install.sh` writes a small real file that loads the tracked config, and
+everything machine-local accumulates below that line:
 
 ```sh
 # ~/.zshrc
 source "$HOME/dotfiles/dot_zshrc"
+```
+```sh
+# ~/.zprofile
+source "$HOME/dotfiles/dot_zprofile"
 ```
 ```gitconfig
 # ~/.gitconfig
@@ -72,8 +76,22 @@ ones into the stub on the next run and keeps them as `*.local.migrated`.
 | Shared (tracked)              | Local (untracked)                     |
 | ----------------------------- | ------------------------------------- |
 | `dot_zshrc`                   | `~/.zshrc`, below the load line        |
+| `dot_zprofile`                | `~/.zprofile`, below the load line     |
 | `dot_gitconfig`               | `~/.gitconfig`, below the include      |
 | `dot_claude/settings.json`    | `dot_claude/settings.local.json`      |
+
+`dot_zprofile` holds login-shell **environment** — locale, `JAVA_HOME`, the
+Android SDK — while `dot_zshrc` holds interactive shell setup. Both files are
+loaded by a tmux pane, so the split is a convention, not a functional boundary.
+It exists because that env was living in an untracked `~/.zprofile` that
+`local-diff` did not watch: a config a new machine silently lacks, with nothing
+to surface the gap. Every block is guarded on the tool being present, so the file
+is inert on a machine with no JDK and no Android SDK.
+
+`JAVA_HOME` comes from `/usr/libexec/java_home` with no `-v`, so it follows the
+newest installed JDK rather than hardcoding a path this repo cannot make
+portable. A project needing a specific JDK pins it in its own Gradle toolchain
+config, or in `~/.zprofile` below the load line.
 
 `dot_tmux.conf` is still a plain symlink: nothing appends to `~/.tmux.conf`.
 
@@ -256,6 +274,47 @@ It is in the `Brewfile` so `stylua --check nvim/` can be run before pushing —
 without that the CI gate could only ever fail after the fact.
 
 **Smoke test:** `nvim/scripts/test-config.sh` runs headless Neovim validation.
+
+## Kotlin and Swift (KMP + native mobile)
+
+**Kotlin gets no language server, on purpose.** `kotlin-language-server` is
+effectively unmaintained and does not model multiplatform source sets or
+`expect`/`actual`; JetBrains' `kotlin-lsp` is pre-alpha and JVM-only. Both
+produce diagnostics that are wrong often enough to be worse than none. Kotlin in
+Neovim is treesitter (highlight, indent, text objects, symbol picker), ripgrep
+and ktlint. Completion, type-aware rename and debugging happen in Android
+Studio; the same split puts iOS debugging in Xcode. **Do not add a Kotlin LSP,
+and do not add DAP for Kotlin or Swift.**
+
+Swift is the exception: `sourcekit-lsp` is Apple's own and already on disk. It is
+added to `servers` in `lsp.lua` **after** `ensure_installed` is computed, because
+mason has no package for it, and guarded on `executable('sourcekit-lsp')` so it
+stays inert without Xcode. It is accurate for SwiftPM packages and weaker on an
+`.xcodeproj` — that would need a `buildServer.json` from `xcode-build-server`,
+which is deliberately not installed.
+
+**Formatters are not in the `Brewfile`.** `ktlint` comes from mason (brew's
+formula depends on `openjdk`, i.e. a second JDK next to the one `JAVA_HOME`
+already points at) and doubles as the Kotlin linter — it is the only entry in
+`nvim-lint`'s `linters_by_ft`. `swift-format` ships inside Xcode's toolchain and,
+unlike `sourcekit-lsp`, is **not** shimmed into `/usr/bin`, so conform invokes it
+as `xcrun swift-format`. Net effect: nothing new is installed on a machine that
+does no mobile work.
+
+`detekt` is intentionally absent: it is a Gradle plugin driven by project-level
+config, so it belongs in the project's build, not here.
+
+Gradle and Xcode generate very large trees, so the snacks explorer — which runs
+with `hidden`+`ignored` on and therefore gets no `.gitignore` filtering — carries
+an explicit exclude list (`build`, `.gradle`, `.kotlin`, `DerivedData`, `Pods`,
+`xcuserdata`, …). Treesitter installs `kotlin`, `swift`, `java`, `groovy`, `xml`
+and `properties` (filetype `jproperties`, for `gradle.properties` and
+`local.properties`).
+
+Opening a whole project in Studio or Xcode is a shell/tmux concern, not an editor
+one: `studio` in `dot_zshrc` (`open -a`, so the IDE outlives the shell) and
+`xed`, which Xcode already provides. Per-project variants belong in that
+project's `.tmux/` tasks.
 
 ## Key Integrations
 
