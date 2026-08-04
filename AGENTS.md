@@ -260,6 +260,56 @@ Being able to run an arbitrary command in a popup is why grove needs no entry in
 the task picker, and why the picker has no free-form mode. Note that tmux allows
 one popup per client, so this cannot be opened from inside the task picker.
 
+## Project jump
+
+`project <name> <path> [tab]` in `dot_zshrc` defines a function named `<name>`
+that enters a project in its default state: `cd`, rename the ghostty tab, then
+`grove attach` on the main worktree's branch. Typing `biogroup` lands on the
+project's main session from anywhere.
+
+The registrations themselves are **machine-local** — they carry absolute paths
+this repo cannot ship — so they live in `~/.zshrc` below the load line:
+
+```sh
+project biogroup ~/Developer/theodo/biogroup "Biogroup"
+project grove    ~/Developer/perso/grove-ai  "Grove"
+```
+
+Three fields, and nothing per-project anywhere else. A registration whose path
+does not exist is skipped silently, so the same block is safe to carry to a
+machine that has not cloned everything; one whose name already resolves to a
+command is skipped *loudly*, because a project called `make` or `ls` would
+otherwise shadow it with no clue as to why. Re-registering is allowed — the
+`_project_paths` membership test runs before the shadow check — so
+`source ~/.zshrc` does not start warning about the functions it just defined.
+
+**The branch is derived, never hardcoded to `main`.** `grove ls` names the root
+checkout after its branch, and not every repo here is on `main`. The main
+worktree is the first entry of `git worktree list --porcelain` (which is its
+definition, and unlike `awk '{print $2}'` on that line, `${root#worktree }`
+survives a path with a space in it); a detached HEAD there falls back to
+`origin/HEAD`. `grove attach` already creates the session if it is missing and
+switches the client instead of nesting when called from inside tmux, so both
+cold start and project switching are the same call. Everything after the `cd` is
+guarded on `grove` being on `PATH` and the directory being a git repo — without
+either, the `cd` still happens, which is the half that always works.
+
+**The tab name is set by the jump and never touched again.** tmux runs with
+`set-titles off` (its default; `dot_tmux.conf` never sets it), so tmux emits no
+title of its own and nothing overwrites what the function wrote — the same
+reason a manual ghostty rename sticks. Inside tmux the OSC 2 sequence has to go
+through tmux's passthrough wrapper, which requires every ESC of the inner
+sequence doubled and depends on `allow-passthrough on`, already set for other
+reasons.
+
+The alternative — `set-titles on` with a `set-titles-string` resolving the
+project from `#{session_path}` — was rejected as more machinery for a property
+that only has to be right at cold start. Its one advantage is that the title
+would follow the *attached session*: as it stands, jumping to `biogroup` and then
+switching to another session with `Prefix + Space` leaves the tab reading
+"Biogroup". That is already true of a hand-renamed tab, and the status bar's left
+block is the thing that stays truthful.
+
 ## Skills
 
 `dot_claude/skills/` holds the user-scope skills that document this setup's own

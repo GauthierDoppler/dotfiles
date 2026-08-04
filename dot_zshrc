@@ -59,6 +59,52 @@ fi
 # Le cheat sheet tmux vit dans dot_tmux.conf et s'affiche avec Prefix + ? —
 # une seule source de vérité, lue directement depuis le fichier.
 
+# ─── Project jump ──────────────────────────────────────────
+typeset -gA _project_paths _project_names
+
+project() {
+  local name=$1 dir=${2:A} tab=${3:-$1}
+
+  if [[ -z ${_project_paths[$name]} ]] && command -v "$name" &>/dev/null; then
+    print -u2 "project: skipping '$name' — shadows an existing command"
+    return 1
+  fi
+  [[ -d $dir ]] || return 0
+
+  _project_paths[$name]=$dir
+  _project_names[$name]=$tab
+  eval "$name() { _project_jump ${(q)name} }"
+}
+
+_project_jump() {
+  local dir=${_project_paths[$1]} tab=${_project_names[$1]}
+
+  cd -- "$dir" || return
+
+  # tmux's passthrough wrapper requires every ESC of the inner sequence doubled.
+  if [[ -n $TMUX ]]; then
+    printf '\ePtmux;\e\e]2;%s\a\e\\' "$tab"
+  else
+    printf '\e]2;%s\a' "$tab"
+  fi
+
+  command -v grove &>/dev/null || return 0
+
+  local root branch
+  root=$(git -C "$dir" worktree list --porcelain 2>/dev/null | head -1)
+  root=${root#worktree }
+  [[ -n $root ]] || return 0
+
+  branch=$(git -C "$root" branch --show-current)
+  if [[ -z $branch ]]; then
+    branch=$(git -C "$root" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
+    branch=${branch#origin/}
+  fi
+  [[ -n $branch ]] || return 0
+
+  grove attach "$branch"
+}
+
 # ─── Optional sources ─────────────────────────────────────
 [[ -f "$HOME/.local/bin/env" ]] && . "$HOME/.local/bin/env"
 
