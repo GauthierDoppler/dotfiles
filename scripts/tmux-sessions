@@ -24,9 +24,9 @@
 # The capture comes back at the SOURCE pane's geometry, bigger than this popup in
 # both directions, and the two mismatches need opposite treatment:
 #
-#   width   `nowrap`, and the popup is deliberately wider than the other pickers
-#           (90%/80% vs 70%/60%). A full-screen TUI cannot be reflowed, so the
-#           right edge is simply lost — truncating it reads, wrapping it does not.
+#   width   `nowrap`, and both the popup (90%/80%) and the preview window are
+#           sized around it. A full-screen TUI cannot be reflowed, so the right
+#           edge is simply lost — truncating it reads, wrapping it does not.
 #   height  take the TAIL, not the head. Printing the capture raw makes fzf clip
 #           the BOTTOM, which is precisely the part worth seeing: the prompt, the
 #           last command, the error. Trailing blank lines are dropped first, or a
@@ -286,7 +286,7 @@ selected=$(
     --bind "tab:transform:$self --flip; echo \"reload($self --list)+transform-prompt($self --prompt)+transform-header($self --header)+first\"" \
     --bind "ctrl-x:execute-silent(tmux kill-session -t {1})+reload($self --list)" \
     --preview="$self --preview {1}" \
-    --preview-window='right,48%,border-left,nowrap'
+    --preview-window='right,70%,border-left,nowrap'
 ) || exit 0
 
 [ -n "$selected" ] || exit 0
