@@ -43,16 +43,20 @@
 # task name ("android/build" -> window "android-build") rather than configured,
 # so there is nothing to keep in sync.
 #
-# Usage: tmux-tasks [--check] [--list] [--advance] [--prompt] [--header] [--run <task>]
+# The picker always opens, even when there is nothing to list: an empty list
+# saying why is the same answer as a status message, in the place the eye is
+# already looking. The placeholder row is a real fzf entry, so every action taken
+# on it — Enter, the preview, ctrl-e — has to be a no-op.
 #
-# --check exits 0 when this project has at least one task, so the tmux binding
-# can gate the popup on it: a popup that opens and immediately exits reads as a
-# flash.
+# Usage: tmux-tasks [--list] [--advance] [--prompt] [--header] [--run <task>]
 
 set -uo pipefail
 
 self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 runner="${self%/*}/tmux-task-run"
+
+empty_notice_dir='(no .tmux/ directory in this project)'
+empty_notice_tasks='(no executable task in .tmux/)'
 
 # ─── Project root ───────────────────────────────────────────
 # `#{session_path}` is fixed at creation by `new-session -c` and, unlike
@@ -115,7 +119,14 @@ list() {
   group="$(group_read)"
 
   names="$(discover)"
-  [ -n "$names" ] || return 0
+  if [ -z "$names" ]; then
+    if [ -d "$tasks_dir" ]; then
+      printf '%s\n' "$empty_notice_tasks"
+    else
+      printf '%s\n' "$empty_notice_dir"
+    fi
+    return 0
+  fi
 
   if [ "$group" != all ]; then
     names="$(printf '%s\n' "$names" | grep "^$group/")"
@@ -246,7 +257,6 @@ run_task() {
 
 # ─── Helper modes (invoked by fzf bindings) ────────────────
 case "${1:-}" in
-  --check)   [ -d "$tasks_dir" ] && [ -n "$(discover)" ]; exit $? ;;
   --list)    list; exit 0 ;;
   --advance) cycle_group; exit 0 ;;
   --prompt) prompt_label; exit 0 ;;
@@ -255,18 +265,9 @@ case "${1:-}" in
 esac
 
 # ─── Interactive ───────────────────────────────────────────
-if [ ! -d "$tasks_dir" ]; then
-  tmux display-message "  no .tmux/ tasks in $root"
-  exit 0
-fi
-
 group_write all   # deterministic default on every invocation
 
 entries=$(list)
-if [ -z "$entries" ]; then
-  tmux display-message "  no executable task in $tasks_dir"
-  exit 0
-fi
 
 # fzf's default delimiter is whitespace, so {1} is the task name. Task names are
 # file paths under .tmux/ and must not contain spaces.
@@ -275,7 +276,7 @@ fi
 # quotes land in the path itself. Assigning it bare (`f={1}`) is the only safe
 # form — fzf's quoting then does exactly what it is meant to do.
 # shellcheck disable=SC2016  # $f and $d are expanded by fzf's preview shell, not here
-preview='f={1}; d="'"$tasks_dir"'"; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 "$d/$f"; else cat "$d/$f"; fi'
+preview='f={1}; d="'"$tasks_dir"'"; [ -f "$d/$f" ] || exit 0; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 "$d/$f"; else cat "$d/$f"; fi'
 
 selected=$(
   printf '%s\n' "$entries" | fzf \
@@ -291,11 +292,13 @@ selected=$(
     --bind 'i:enable-search+unbind(j,k,q)+change-prompt(  search  )' \
     --bind "esc:transform:[ \"\$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+transform-prompt($self --prompt)' || echo abort" \
     --bind "tab:transform:$self --advance; echo \"reload($self --list)+transform-prompt($self --prompt)+transform-header($self --header)+first\"" \
-    --bind "ctrl-e:execute(f={1}; \${EDITOR:-vi} '$tasks_dir'/\"\$f\")" \
+    --bind "ctrl-e:execute(f={1}; [ -f '$tasks_dir'/\"\$f\" ] && \${EDITOR:-vi} '$tasks_dir'/\"\$f\")" \
     --preview="$preview" \
     --preview-window='right,40%,border-left'
 ) || exit 0
 
 [ -n "$selected" ] || exit 0
+[ "$selected" = "$empty_notice_dir" ] && exit 0
+[ "$selected" = "$empty_notice_tasks" ] && exit 0
 
 run_task "${selected%% *}" 1

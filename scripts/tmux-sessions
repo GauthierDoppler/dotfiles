@@ -55,10 +55,11 @@
 # A session with no key (a hand-made name like `cctap`) belongs to no project,
 # so it lists everything and Tab has nothing to toggle.
 #
-# A project whose only session is the current one still opens the picker, on an
-# empty project list, because Tab is the only way out to the other projects and
-# it cannot be pressed in a popup that never opened. The status message is for
-# the one case the picker genuinely cannot help with: no other session at all.
+# The picker always opens, even with nothing to list. A project whose only
+# session is the current one needs Tab to reach the other projects, and Tab
+# cannot be pressed in a popup that never opened; and when there is no other
+# session at all, an empty list saying so is the same answer as a status message,
+# in the place the eye is already looking.
 #
 # Usage: tmux-sessions [--list] [--flip] [--prompt] [--header] [--preview <session>]
 #                      [--next <session>] [--prev <session>]
@@ -68,9 +69,10 @@ set -uo pipefail
 self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 scope_file="${TMPDIR:-/tmp}/tmux-sessions.scope"
 
-# fzf has no non-selectable list row, so the placeholder shown when a project has
-# no other session is a real entry and every action taken on it has to be a no-op.
-empty_notice='(no other session in this project)'
+# fzf has no non-selectable list row, so the placeholder shown when there is
+# nothing to list is a real entry and every action taken on it has to be a no-op.
+empty_notice_project='(no other session in this project)'
+empty_notice_all='(no other session)'
 
 # ─── Scope state ───────────────────────────────────────────
 # Held in a file rather than in fzf, so `reload` subshells and the prompt/header
@@ -79,12 +81,6 @@ scope_read()  { [ -r "$scope_file" ] && cat "$scope_file" || echo project; }
 scope_write() { printf '%s' "$1" > "$scope_file"; }
 
 current_session() { tmux display-message -p '#{session_name}' 2>/dev/null || true; }
-
-other_sessions() {
-  local current
-  current="$(current_session)"
-  tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -vFx "$current"
-}
 
 # FNV-1a 32-bit, low 16 bits, 4 hex digits — grove's projectKey, byte for byte
 # (it mirrors Go's hash/fnv.New32a). LC_ALL=C so the loop walks BYTES, matching
@@ -153,7 +149,11 @@ list() {
       done
   )
   if [ -z "$rows" ]; then
-    [ "$scope" = project ] && printf '%s\n' "$empty_notice"
+    if [ "$scope" = project ]; then
+      printf '%s\n' "$empty_notice_project"
+    else
+      printf '%s\n' "$empty_notice_all"
+    fi
     return 0
   fi
 
@@ -259,11 +259,6 @@ esac
 # ─── Interactive ───────────────────────────────────────────
 scope_write project   # deterministic default on every invocation
 
-if [ -z "$(other_sessions)" ]; then
-  tmux display-message "  no other session"
-  exit 0
-fi
-
 entries=$(list)
 
 # fzf's default delimiter is whitespace, so {1} is the session name. Session
@@ -290,6 +285,7 @@ selected=$(
 ) || exit 0
 
 [ -n "$selected" ] || exit 0
-[ "$selected" = "$empty_notice" ] && exit 0
+[ "$selected" = "$empty_notice_project" ] && exit 0
+[ "$selected" = "$empty_notice_all" ] && exit 0
 
 tmux switch-client -t "${selected%% *}"

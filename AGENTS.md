@@ -222,9 +222,15 @@ all, so Neovim and Claude Code kept it permanently lit and it carried no
 information. `monitor-bell` stays on: a BEL is rare enough to mean something.
 Claude Code's own state is a window marker instead — see below.
 
-The `Prefix + e` binding gates on `tmux-tasks --check` via `if-shell`: opening a
-popup only for the script to find no tasks and exit reads as a flash, so in that
-case tmux shows a status message instead and the popup never opens.
+**Both pickers always open, even with nothing to list.** `Prefix + e` used to
+gate on `tmux-tasks --check` via `if-shell` and `Prefix + Space` bailed out with
+`display-message` when there was no other session; both now render a placeholder
+row instead — `(no executable task in .tmux/)`, `(no other session)`. The answer
+is the same either way, and putting it in the popup puts it where the eye
+already went. fzf has no non-selectable row, so the placeholder is a real entry
+and every action on it — Enter, the preview, `ctrl-e`, `ctrl-x` — is a no-op.
+The session picker needed this regardless: `Tab` is the only way out to the
+other projects, and it cannot be pressed in a popup that never opened.
 
 ## Claude Code window marker
 
