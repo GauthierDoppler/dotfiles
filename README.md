@@ -13,6 +13,7 @@ Personal development environment for macOS — managed with symlinks.
 | **Neovim** | `nvim/` | originally forked from [kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim), since diverged |
 | **Ghostty** | `ghostty/config` | Catppuccin Frappe theme, split navigation keybinds |
 | **Zed** | `zed/` | Anthropic default model, One Dark theme, auto-format TypeScript |
+| **Pi** | `dot_pi_agent/` | Pi extensions and reusable subagent definitions; settings/auth/sessions stay local |
 | **Lazygit** | `lazygit/config.yml` | Delta side-by-side and inline pagers (toggle with `\|`) |
 | **Delta** | `delta/themes.gitconfig` | Custom themes for lazygit (side-by-side + inline) |
 | **Git ignore** | `git/ignore` | Global gitignore (`.claude/settings.local.json`) |
@@ -44,6 +45,8 @@ lazydocker/        → ~/.config/lazydocker
 dot_claude/CLAUDE.md            → ~/.claude/CLAUDE.md
 dot_claude/hooks                → ~/.claude/hooks
 dot_claude/statusline-custom.sh → ~/.claude/statusline-custom.sh
+dot_pi_agent/extensions/subagents → ~/.pi/agent/extensions/subagents
+dot_pi_agent/agents/*.md          → ~/.pi/agent/agents/*.md
 
 keyboard/FR-AZERTY-num.bundle   → ~/Library/Keyboard Layouts/  (copied, not linked)
 ```

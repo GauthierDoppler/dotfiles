@@ -209,6 +209,15 @@ mkdir -p "$HOME/.claude/skills"
 link "dot_claude/skills/tmux-tasks"    "$HOME/.claude/skills/tmux-tasks"
 link "dot_claude/skills/grove"         "$HOME/.claude/skills/grove"
 
+# Pi coding agent resources. Settings/auth/sessions stay machine-local; only
+# reusable resources are linked from dotfiles.
+mkdir -p "$HOME/.pi/agent/extensions" "$HOME/.pi/agent/agents"
+link "dot_pi_agent/extensions/subagents" "$HOME/.pi/agent/extensions/subagents"
+for agent_file in "$DOTFILES"/dot_pi_agent/agents/*.md; do
+  [ -e "$agent_file" ] || continue
+  link "dot_pi_agent/agents/$(basename "$agent_file")" "$HOME/.pi/agent/agents/$(basename "$agent_file")"
+done
+
 # Scripts
 mkdir -p "$HOME/.local/bin"
 link "scripts/local-diff"            "$HOME/.local/bin/local-diff"
