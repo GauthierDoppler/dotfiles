@@ -49,6 +49,7 @@ fi
 n() { if [ "$#" -eq 0 ]; then command nvim .; else command nvim "$@"; fi; }
 alias c="clear"
 alias cl="claude"
+alias cl-p="ANTHROPIC_BASE_URL=http://localhost:8089 claude"
 alias "cl-yolo"="claude --dangerously-skip-permissions"
 # Xcode already ships `xed` (`xed .`, `xed -l 42 File.swift`). Android Studio's
 # launcher exists but is not on PATH. `open -a` hands the path to the running

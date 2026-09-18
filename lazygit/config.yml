@@ -3,11 +3,11 @@ refresher:
 git:
   # press | to cycle between pagers
   # delta themes defined in ~/dotfiles/delta/themes.gitconfig
-  pagers:
+  diffRenderers:
     - colorArg: always
-      pager: delta --features lazygit-side-by-side
+      command: delta --features lazygit-side-by-side
     - colorArg: always
-      pager: delta --features lazygit-inline
+      command: delta --features lazygit-inline
 os:
   editPreset: "nvim-remote"
   edit: 'nvim --server "$NVIM" --remote-send "<C-\\><C-n><cmd>close<cr>" && nvr --remote {{filename}}'

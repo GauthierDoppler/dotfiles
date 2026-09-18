@@ -4,7 +4,7 @@
 --  inside lua/custom/plugins/lsp.lua — split is intentional.)
 
 -- File explorer
-vim.keymap.set('n', '<leader>e', function() Snacks.explorer() end, { desc = 'File [E]xplorer toggl[e]' })
+vim.keymap.set('n', '<leader>e', function() Snacks.explorer() end, { desc = 'File [E]xplorer toggle' })
 vim.keymap.set('n', '\\', function() Snacks.explorer() end, { desc = 'File Explorer' })
 
 -- File and grep search
@@ -37,11 +37,11 @@ vim.api.nvim_create_autocmd('LspAttach', {
     vim.keymap.set('n', 'grr', function() Snacks.picker.lsp_references() end, { buffer = buf, desc = '[G]oto [R]eferences' })
     vim.keymap.set('n', 'gri', function() Snacks.picker.lsp_implementations() end, { buffer = buf, desc = '[G]oto [I]mplementation' })
     vim.keymap.set('n', 'grd', function() Snacks.picker.lsp_definitions() end, { buffer = buf, desc = '[G]oto [D]efinition' })
-    vim.keymap.set('n', 'gO', function() Snacks.picker.lsp_symbols() end, { buffer = buf, desc = 'Open Document Symbols' })
-    vim.keymap.set('n', 'gW', function() Snacks.picker.lsp_workspace_symbols() end, { buffer = buf, desc = 'Open Workspace Symbols' })
-    vim.keymap.set('n', 'grt', function() Snacks.picker.lsp_type_definitions() end, { buffer = buf, desc = '[G]oto [T]ype Definition' })
+    vim.keymap.set('n', 'gO', function() Snacks.picker.lsp_symbols() end, { buffer = buf, desc = 'Document symbols ([O]utline)' })
+    vim.keymap.set('n', 'gW', function() Snacks.picker.lsp_workspace_symbols() end, { buffer = buf, desc = '[W]orkspace symbols' })
+    vim.keymap.set('n', 'grt', function() Snacks.picker.lsp_type_definitions() end, { buffer = buf, desc = '[G]oto [T]ype definition' })
 
-    vim.keymap.set('n', 'grn', vim.lsp.buf.rename, { buffer = buf, desc = '[R]e[n]ame' })
+    vim.keymap.set('n', 'grn', vim.lsp.buf.rename, { buffer = buf, desc = '[R]e[n]ame symbol' })
     vim.keymap.set({ 'n', 'x' }, 'gra', vim.lsp.buf.code_action, { buffer = buf, desc = 'Code [A]ction' })
 
     -- Go to source definition (skips barrel files in TS), falls back to declaration
@@ -55,7 +55,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
       else
         vim.lsp.buf.declaration()
       end
-    end, { buffer = buf, desc = '[G]oto Source [D]efinition' })
+    end, { buffer = buf, desc = '[G]oto source [D]efinition' })
   end,
 })
 

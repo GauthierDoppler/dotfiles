@@ -18,14 +18,18 @@ return {
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
         local disable_filetypes = { c = true, cpp = true }
-        if disable_filetypes[vim.bo[bufnr].filetype] then
-          return nil
-        else
-          return {
-            timeout_ms = 500,
-            lsp_format = 'fallback',
-          }
-        end
+        if disable_filetypes[vim.bo[bufnr].filetype] then return nil end
+
+        -- ktlint is a JVM process: ~0.4s on a small file, ~0.8s on a 4k-line one.
+        -- At the default 500ms it silently times out and the buffer saves
+        -- unformatted (notify_on_error = false hides it), which then fails
+        -- `./gradlew ktlintCheck` in CI. Same for swift-format, which goes
+        -- through `xcrun` and pays that lookup on every run.
+        local slow_filetypes = { kotlin = true, swift = true }
+        return {
+          timeout_ms = slow_filetypes[vim.bo[bufnr].filetype] and 3000 or 500,
+          lsp_format = 'fallback',
+        }
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
