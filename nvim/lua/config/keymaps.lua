@@ -24,6 +24,25 @@ vim.diagnostic.config {
 
 -- <leader>q is mapped by trouble.nvim in custom/plugins/ui.lua
 
+-- Neovim 0.12 ships global LSP mappings (grn gra grr gri grt grx gO) whose `desc`
+-- is the literal call text -- which-key renders them as "vim.lsp.buf.rename()".
+-- custom/plugins/picker.lua overrides most of them buffer-locally on LspAttach with
+-- snacks pickers, but these globals are what you see in any buffer with no LSP
+-- attached, and `grx` is never overridden at all. Relabel them in place.
+local lsp_defaults = {
+  { 'n', 'grn', vim.lsp.buf.rename, '[R]e[n]ame symbol' },
+  { { 'n', 'x' }, 'gra', vim.lsp.buf.code_action, 'Code [A]ction' },
+  { 'n', 'grr', vim.lsp.buf.references, '[G]oto [R]eferences' },
+  { 'n', 'gri', vim.lsp.buf.implementation, '[G]oto [I]mplementation' },
+  { 'n', 'grt', vim.lsp.buf.type_definition, '[G]oto [T]ype definition' },
+  { 'n', 'grx', vim.lsp.codelens.run, 'Run code lens' },
+  { 'n', 'gO', vim.lsp.buf.document_symbol, 'Document symbols ([O]utline)' },
+}
+for _, m in ipairs(lsp_defaults) do
+  vim.keymap.set(m[1], m[2], m[3], { desc = m[4] })
+end
+
+
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
 -- is not what someone will guess without a bit more experience.
@@ -71,43 +90,63 @@ vim.keymap.set('n', '<leader>bQ', function() Snacks.bufdelete.all() end, { desc 
 vim.keymap.set('n', '<leader>bo', function() Snacks.bufdelete.other() end, { desc = '[B]uffer close [O]thers' })
 
 -- Copy file path
-vim.keymap.set('n', '<leader>cp', function() vim.fn.setreg('+', vim.fn.expand '%:~:.') end, { desc = '[C]opy relative [P]ath' })
-vim.keymap.set('n', '<leader>cP', function() vim.fn.setreg('+', vim.fn.expand '%:p') end, { desc = '[C]opy full [P]ath' })
+vim.keymap.set('n', '<leader>cp', function() vim.fn.setreg('+', vim.fn.expand '%:~:.') end, { desc = '[C]lipboard relative [P]ath' })
+vim.keymap.set('n', '<leader>cP', function() vim.fn.setreg('+', vim.fn.expand '%:p') end, { desc = '[C]lipboard full [P]ath' })
 -- IDE Cheatsheet
 vim.keymap.set('n', '<leader>?', function()
   local lines = {
     '',
     '   Code ─────────────────────────────',
-    '   grd            Go to definition',
-    '   grr            Go to references',
-    '   gri            Go to implementation',
-    '   grD            Go to source definition',
-    '   grt            Go to type definition',
-    '   gO             Document symbols',
-    '   gW             Workspace symbols',
+    '   grd            Goto definition',
+    '   grD            Goto source definition',
+    '   grr            Goto references',
+    '   gri            Goto implementation',
+    '   grt            Goto type definition',
     '   grn            Rename symbol',
     '   gra            Code action',
+    '   grx            Run code lens',
+    '   gO / gW        Document / workspace symbols',
     '   <leader>f      Format buffer',
+    '   <leader>th     Toggle inlay hints',
     '   [d  ]d         Prev / next diagnostic',
     '',
-    '   Debug  <leader>d ─────────────────',
-    '   dc             Continue / Start',
-    '   di             Step into',
-    '   do             Step over',
-    '   dO             Step out',
-    '   db             Toggle breakpoint',
-    '   dB             Conditional breakpoint',
-    '   dt             Terminate',
-    '   du             Toggle UI',
-    '   dl             Run last',
+    '   Search  <leader>s ───────────────',
+    '   sf sg sw       Files / grep / word',
+    '   sd sk sh       Diagnostics / keymaps / help',
+    '   sr s.          Resume / recent',
+    '   st             Todos',
+    '   <leader><leader>  Buffers',
+    '   <leader>/      Lines in buffer',
     '',
-    '   Git  <leader>h ──────────────────',
-    '   hs             Stage hunk',
-    '   hr             Reset hunk',
-    '   hp             Preview hunk',
-    '   hb             Blame line',
-    '   hd             Diff against index',
+    '   Git  <leader>g ──────────────────',
+    '   gs / gS        Stage hunk / buffer',
+    '   gr / gR        Reset hunk / buffer',
+    '   gu             Undo stage hunk',
+    '   gp             Preview hunk inline',
+    '   gb             Blame line',
+    '   gD             Diff against index',
+    '   go             Open in browser',
     '   [c  ]c         Prev / next hunk',
+    '',
+    '   Debug  <leader>d ─────────────────',
+    '   dc             Continue / start',
+    '   di do dO       Step into / over / out',
+    '   db / dB        Breakpoint / conditional',
+    '   dt du          Terminate / toggle UI',
+    '   dr dl          Toggle REPL / run last',
+    '',
+    '   Windows & buffers ────────────────',
+    '   <leader>w hjkl Focus window',
+    '   <leader>w svq  Split / vsplit / close',
+    '   <leader>b nqpo Buffer next/quit/prev/others',
+    '',
+    '   Tools & UI ──────────────────────',
+    '   <leader>kg kd  LazyGit / LazyDocker',
+    '   <leader>e  \\   File explorer',
+    '   <leader>q qbl  Trouble diagnostics / buf / loc',
+    '   <leader>t bd   Toggle git blame / deleted',
+    '   <leader>c pPr  Copy path / full / registers',
+    '   <leader>mr     Markdown render toggle',
     '',
     '   q / <Esc> to close',
     '',
@@ -118,8 +157,10 @@ vim.keymap.set('n', '<leader>?', function()
   vim.bo[buf].modifiable = false
   vim.bo[buf].bufhidden = 'wipe'
 
-  local width = 42
-  local height = #lines
+  local width = 48
+  -- Clamp so the float still opens on a short terminal (the list is ~57 lines);
+  -- the buffer scrolls for the overflow.
+  local height = math.min(#lines, vim.o.lines - 4)
   local win = vim.api.nvim_open_win(buf, true, {
     relative = 'editor',
     width = width,

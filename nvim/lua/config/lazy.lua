@@ -25,11 +25,13 @@ require('lazy').setup({
       -- Document existing key chains
       spec = {
         { '<leader>b', group = '[B]uffer' },
-        { '<leader>c', group = '[C]opy' },
+        { '<leader>c', group = '[C]lipboard' },
         { '<leader>d', group = '[D]ebug' },
         { '<leader>e', group = '[E]xplorer' },
         { '<leader>g', group = '[G]it', mode = { 'n', 'v' } },
+        { '<leader>k', group = '[K] Tools (TUI)' },
         { '<leader>m', group = '[M]arkdown' },
+        { '<leader>q', group = '[Q]uickfix / diagnostics' },
         { '<leader>s', group = '[S]earch', mode = { 'n', 'v' } },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>w', group = '[W]indow' },

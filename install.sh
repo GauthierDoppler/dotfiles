@@ -208,6 +208,7 @@ link "dot_claude/hooks"                "$HOME/.claude/hooks"
 mkdir -p "$HOME/.claude/skills"
 link "dot_claude/skills/tmux-tasks"    "$HOME/.claude/skills/tmux-tasks"
 link "dot_claude/skills/grove"         "$HOME/.claude/skills/grove"
+link "dot_claude/skills/notion"        "$HOME/.claude/skills/notion"
 
 # Pi coding agent resources. Settings/auth/sessions stay machine-local; only
 # reusable resources are linked from dotfiles.

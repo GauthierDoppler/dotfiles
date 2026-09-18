@@ -39,6 +39,8 @@ brew "gitleaks"
 
 # ─── AI tooling ─────────────────────────────────────────────
 brew "agent-browser"
+# Official Notion CLI; the binary is `ntn`.
+cask "notion-cli"
 
 # ─── Desktop apps ───────────────────────────────────────────
 cask "ghostty"
