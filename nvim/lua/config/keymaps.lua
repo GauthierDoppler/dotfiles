@@ -42,7 +42,6 @@ for _, m in ipairs(lsp_defaults) do
   vim.keymap.set(m[1], m[2], m[3], { desc = m[4] })
 end
 
-
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
 -- is not what someone will guess without a bit more experience.
@@ -92,6 +91,19 @@ vim.keymap.set('n', '<leader>bo', function() Snacks.bufdelete.other() end, { des
 -- Copy file path
 vim.keymap.set('n', '<leader>cp', function() vim.fn.setreg('+', vim.fn.expand '%:~:.') end, { desc = '[C]lipboard relative [P]ath' })
 vim.keymap.set('n', '<leader>cP', function() vim.fn.setreg('+', vim.fn.expand '%:p') end, { desc = '[C]lipboard full [P]ath' })
+
+-- Markdown preview: dotfiles/scripts/md-preview, watching the file on disk.
+vim.keymap.set('n', '<leader>mr', function()
+  local file = vim.fn.expand '%:p'
+  if file == '' then return vim.notify('md-preview: buffer has no file', vim.log.levels.WARN) end
+  if vim.fn.executable 'md-preview' == 0 then return vim.notify('md-preview: not on PATH -- run ./install.sh', vim.log.levels.ERROR) end
+  vim.system({ 'md-preview', file }, { text = true, detach = true }, function(res)
+    if res.code ~= 0 then
+      vim.schedule(function() vim.notify(vim.trim(res.stderr or '') ~= '' and res.stderr or 'md-preview failed', vim.log.levels.ERROR) end)
+    end
+  end)
+end, { desc = '[M]arkdown [R]ender in browser' })
+
 -- IDE Cheatsheet
 vim.keymap.set('n', '<leader>?', function()
   local lines = {
@@ -146,7 +158,7 @@ vim.keymap.set('n', '<leader>?', function()
     '   <leader>q qbl  Trouble diagnostics / buf / loc',
     '   <leader>t bd   Toggle git blame / deleted',
     '   <leader>c pPr  Copy path / full / registers',
-    '   <leader>mr     Markdown render toggle',
+    '   <leader>mr     Markdown preview in browser',
     '',
     '   q / <Esc> to close',
     '',
