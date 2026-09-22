@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>md-preview</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-footnote@4.0.0/dist/markdown-it-footnote.min.js"></script>
+    <!-- highlight.js ships no browser bundle on npm; @highlightjs/cdn-assets is the one that does. -->
+    <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+
+    <style>
+      :root {
+        --bg: #ffffff;
+        --bg-inset: #f6f8fa;
+        --surface: #f6f8fa;
+        --surface-hi: #eaeef2;
+        --border: #d1d9e0;
+        --fg: #1f2328;
+        --fg-strong: #010409;
+        --fg-muted: #59636e;
+        --accent: #0969da;
+        --accent-hi: #0550ae;
+        --on-accent: #ffffff;
+        --accent-wash: rgba(9, 105, 218, 0.12);
+        --danger: #cf222e;
+        --success: #1a7f37;
+        --attention: #9a6700;
+        --orange: #bc4c00;
+        --purple: #8250df;
+        --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 16px/1.7 var(--sans);
+      }
+
+      /* ─── chrome ─────────────────────────────────────────── */
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+
+      header .name {
+        font: 13px var(--mono);
+        color: var(--purple);
+        font-weight: 600;
+      }
+
+      header .path {
+        font: 11px var(--mono);
+        color: var(--fg-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+
+      .pill {
+        font: 11px var(--mono);
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: var(--border);
+        color: var(--fg-muted);
+        border: 0;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .pill:hover {
+        background: var(--surface-hi);
+        color: var(--fg);
+      }
+
+      .pill.accent {
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+      }
+
+      .pill.accent:hover {
+        background: var(--accent-hi);
+        color: var(--on-accent);
+      }
+
+      #status.live {
+        color: var(--success);
+      }
+      #status.stale {
+        color: var(--attention);
+      }
+      #status.dead {
+        color: var(--danger);
+      }
+
+      /* ─── layout ─────────────────────────────────────────── */
+
+      main {
+        display: flex;
+        align-items: flex-start;
+      }
+
+      #doc {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        padding: 40px 48px 55vh 68px;
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+
+      body.with-side #doc {
+        margin: 0;
+      }
+
+      #gutter {
+        position: absolute;
+        left: 22px;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        border: 1px solid var(--surface-hi);
+        background: var(--surface);
+        color: var(--accent);
+        font: 16px/1 var(--sans);
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        z-index: 5;
+      }
+
+      #gutter:hover {
+        background: var(--accent);
+        color: var(--on-accent);
+        border-color: var(--accent);
+      }
+
+      #gutter.shown {
+        display: flex;
+      }
+
+      /* ─── selection + annotation ─────────────────────────── */
+
+      #content [data-l0] {
+        scroll-margin-top: 70px;
+      }
+
+      #content [data-l0].sel {
+        background: var(--accent-wash);
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+
+      #content [data-l0].noted {
+        box-shadow: inset 3px 0 0 var(--attention);
+      }
+
+      #content [data-l0].noted.sel {
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+
+      body.dragging {
+        user-select: none;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--attention);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 14px 0;
+      }
+
+      .card.orphan {
+        border-left-color: var(--danger);
+      }
+
+      .card .meta {
+        font: 11px var(--mono);
+        color: var(--fg-muted);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .card .meta .lines {
+        color: var(--attention);
+      }
+
+      .card.orphan .meta .lines {
+        color: var(--danger);
+      }
+
+      .card .meta button {
+        background: none;
+        border: 0;
+        color: var(--fg-muted);
+        cursor: pointer;
+        font: 11px var(--mono);
+        padding: 0 2px;
+      }
+
+      .card .meta button:hover {
+        color: var(--danger);
+      }
+
+      .card .body {
+        white-space: pre-wrap;
+        font-size: 14px;
+        color: var(--fg);
+      }
+
+      .composer {
+        background: var(--surface);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin: 14px 0;
+      }
+
+      .composer .meta {
+        font: 11px var(--mono);
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 72px;
+        resize: vertical;
+        background: var(--bg-inset);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font: 14px/1.5 var(--sans);
+      }
+
+      .composer textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      .composer .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+      }
+
+      .composer .hint {
+        font: 11px var(--mono);
+        color: var(--fg-muted);
+        margin-left: auto;
+      }
+
+      /* ─── sidebar ────────────────────────────────────────── */
+
+      #side {
+        display: none;
+        position: sticky;
+        top: 45px;
+        width: 340px;
+        flex: none;
+        height: calc(100vh - 45px);
+        overflow-y: auto;
+        padding: 18px 16px;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+      }
+
+      body.with-side #side {
+        display: block;
+      }
+
+      #side h2 {
+        font: 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fg-muted);
+        margin: 0 0 12px;
+      }
+
+      #side .empty {
+        font-size: 13px;
+        color: var(--fg-muted);
+      }
+
+      #side .item {
+        background: var(--bg);
+        border: 1px solid var(--surface);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+
+      #side .item:hover {
+        border-color: var(--accent);
+      }
+
+      #side .item .lines {
+        font: 11px var(--mono);
+        color: var(--attention);
+      }
+
+      #side .item.orphan .lines {
+        color: var(--danger);
+      }
+
+      #side .item .body {
+        font-size: 13px;
+        color: var(--fg-muted);
+        white-space: pre-wrap;
+        margin-top: 2px;
+      }
+
+      /* ─── markdown ───────────────────────────────────────── */
+
+      #content h1,
+      #content h2,
+      #content h3,
+      #content h4 {
+        line-height: 1.3;
+        margin: 1.6em 0 0.6em;
+        color: var(--fg-strong);
+      }
+
+      #content h1 {
+        font-size: 2em;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.25em;
+      }
+
+      #content h2 {
+        font-size: 1.5em;
+        border-bottom: 1px solid var(--surface);
+        padding-bottom: 0.2em;
+      }
+
+      #content h3 {
+        font-size: 1.22em;
+      }
+
+      #content > :first-child {
+        margin-top: 0;
+      }
+
+      #content p,
+      #content ul,
+      #content ol {
+        margin: 0.9em 0;
+      }
+
+      #content a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      #content a:hover {
+        text-decoration: underline;
+      }
+
+      #content img {
+        max-width: 100%;
+        border-radius: 6px;
+      }
+
+      #content blockquote {
+        margin: 1em 0;
+        padding: 0.1em 1em;
+        border-left: 3px solid var(--surface-hi);
+        color: var(--fg-muted);
+      }
+
+      #content hr {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: 2em 0;
+      }
+
+      #content code {
+        font: 0.87em var(--mono);
+        background: var(--bg-inset);
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        color: var(--orange);
+      }
+
+      #content pre {
+        background: var(--bg-inset);
+        border: 1px solid var(--surface);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 1em 0;
+      }
+
+      #content pre code {
+        background: none;
+        padding: 0;
+        color: var(--fg);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      #content pre.mermaid {
+        background: var(--surface);
+        text-align: center;
+        line-height: 1;
+      }
+
+      #content table {
+        border-collapse: collapse;
+        margin: 1.2em 0;
+        width: 100%;
+        table-layout: auto;
+      }
+
+      #content th,
+      #content td {
+        border: 1px solid var(--border);
+        padding: 7px 13px;
+        text-align: left;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+
+      #content td code,
+      #content th code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+
+      #content th {
+        background: var(--surface);
+        color: var(--fg-strong);
+        font-weight: 600;
+      }
+
+      #content tbody tr:nth-child(even) {
+        background: rgba(0, 0, 0, 0.03);
+      }
+
+      #content input[type='checkbox'] {
+        margin-right: 6px;
+        accent-color: var(--success);
+      }
+
+      #content li > p {
+        margin: 0.25em 0;
+      }
+
+      #content .contains-task-list {
+        list-style: none;
+        padding-left: 1em;
+      }
+
+      #content .task-list-item label {
+        cursor: default;
+      }
+
+      #content .footnotes {
+        border-top: 1px solid var(--border);
+        margin-top: 2.5em;
+        font-size: 0.9em;
+        color: var(--fg-muted);
+      }
+
+      #content .footnote-backref {
+        text-decoration: none;
+      }
+
+      /* highlight.js */
+      .hljs-comment,
+      .hljs-quote {
+        color: var(--fg-muted);
+        font-style: italic;
+      }
+      .hljs-keyword,
+      .hljs-selector-tag,
+      .hljs-literal {
+        color: var(--purple);
+      }
+      .hljs-string,
+      .hljs-regexp,
+      .hljs-addition {
+        color: var(--success);
+      }
+      .hljs-number,
+      .hljs-built_in {
+        color: var(--orange);
+      }
+      .hljs-title,
+      .hljs-section,
+      .hljs-title.function_ {
+        color: var(--accent);
+      }
+      .hljs-attr,
+      .hljs-attribute,
+      .hljs-variable,
+      .hljs-template-variable {
+        color: var(--attention);
+      }
+      .hljs-type,
+      .hljs-class .hljs-title,
+      .hljs-title.class_ {
+        color: var(--attention);
+      }
+      .hljs-symbol,
+      .hljs-bullet,
+      .hljs-link {
+        color: var(--success);
+      }
+      .hljs-meta {
+        color: var(--accent);
+      }
+      .hljs-deletion {
+        color: var(--danger);
+      }
+      .hljs-emphasis {
+        font-style: italic;
+      }
+      .hljs-strong {
+        font-weight: 700;
+      }
+
+      #toast {
+        position: fixed;
+        bottom: 22px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--border);
+        color: var(--fg);
+        font: 12px var(--mono);
+        padding: 8px 16px;
+        border-radius: 999px;
+        opacity: 0;
+        transition: all 0.16s;
+        pointer-events: none;
+        z-index: 40;
+      }
+
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <span class="name" id="name"></span>
+      <span class="path" id="path"></span>
+      <span class="pill" id="status">connecting</span>
+      <button class="pill" id="toggle-side">notes <span id="count">0</span></button>
+      <button class="pill accent" id="copy-all">copy all</button>
+    </header>
+
+    <main>
+      <div id="doc">
+        <button id="gutter" title="Comment on this line — drag down the margin for a range">+</button>
+        <article id="content"></article>
+      </div>
+      <aside id="side">
+        <h2>Annotations</h2>
+        <div id="side-list"></div>
+      </aside>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+      const cfg = "__MD_PREVIEW_CONFIG__"
+      const STORE = 'md-preview:' + cfg.path
+
+      document.getElementById('name').textContent = cfg.name
+      document.getElementById('path').textContent = cfg.path
+      document.title = cfg.name + ' — md-preview'
+
+      const contentEl = document.getElementById('content')
+      const gutterEl = document.getElementById('gutter')
+      const statusEl = document.getElementById('status')
+      const sideList = document.getElementById('side-list')
+      const countEl = document.getElementById('count')
+      const toastEl = document.getElementById('toast')
+
+      let srcLines = []
+      let notes = load()
+      let anchor = null // {l0, l1} of the last gutter click
+      let pending = null // {l0, l1} currently being commented on
+
+      // ─── storage ──────────────────────────────────────────
+
+      function load() {
+        try {
+          return JSON.parse(localStorage.getItem(STORE) || '[]')
+        } catch {
+          return []
+        }
+      }
+
+      function save() {
+        try {
+          localStorage.setItem(STORE, JSON.stringify(notes))
+        } catch {}
+        countEl.textContent = notes.length
+      }
+
+      function toast(msg) {
+        toastEl.textContent = msg
+        toastEl.classList.add('show')
+        clearTimeout(toast.t)
+        toast.t = setTimeout(() => toastEl.classList.remove('show'), 1600)
+      }
+
+      // ─── markdown ─────────────────────────────────────────
+
+      const md = window.markdownit({ html: true, linkify: true, breaks: false })
+        .use(window.markdownitTaskLists, { label: true })
+        .use(window.markdownitFootnote)
+
+      md.core.ruler.push('source_lines', (state) => {
+        for (const tok of state.tokens) {
+          if (!tok.map) continue
+          if (!tok.type.endsWith('_open') && !['fence', 'hr', 'code_block'].includes(tok.type)) continue
+          tok.attrSet('data-l0', String(tok.map[0] + 1))
+          tok.attrSet('data-l1', String(tok.map[1]))
+        }
+      })
+
+      // markdown-it's own fence renderer puts the token's attributes on the
+      // inner <code>, leaving the <pre> unanchored.
+      md.renderer.rules.fence = (tokens, idx) => {
+        const tok = tokens[idx]
+        const lang = (tok.info || '').trim().split(/\s+/)[0]
+        const l0 = tok.attrGet('data-l0')
+        const anchor = l0 ? ` data-l0="${l0}" data-l1="${tok.attrGet('data-l1')}"` : ''
+        if (lang === 'mermaid') {
+          return `<pre class="mermaid"${anchor}>${md.utils.escapeHtml(tok.content)}</pre>\n`
+        }
+        let body = ''
+        if (lang && hljs.getLanguage(lang)) {
+          try {
+            body = hljs.highlight(tok.content, { language: lang }).value
+          } catch {}
+        }
+        if (!body) body = md.utils.escapeHtml(tok.content)
+        const cls = lang ? ` class="language-${md.utils.escapeHtml(lang)}"` : ''
+        return `<pre${anchor}><code${cls}>${body}</code></pre>\n`
+      }
+
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+        theme: 'base',
+        fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--sans'),
+        themeVariables: {
+          background: '#ffffff',
+          primaryColor: '#f6f8fa',
+          primaryTextColor: '#1f2328',
+          primaryBorderColor: '#0969da',
+          secondaryColor: '#eaeef2',
+          tertiaryColor: '#ffffff',
+          lineColor: '#59636e',
+          textColor: '#1f2328',
+          mainBkg: '#f6f8fa',
+          nodeBorder: '#0969da',
+          clusterBkg: '#f6f8fa',
+          clusterBorder: '#d1d9e0',
+          titleColor: '#010409',
+        },
+      })
+
+      function rebaseAssets() {
+        const fix = (el, attr) => {
+          const v = el.getAttribute(attr)
+          if (!v || /^([a-z]+:|\/\/|#|\/)/i.test(v)) return
+          el.setAttribute(attr, '/_/' + v)
+        }
+        contentEl.querySelectorAll('img[src]').forEach((el) => fix(el, 'src'))
+        contentEl.querySelectorAll('a[href]').forEach((el) => fix(el, 'href'))
+      }
+
+      async function render(src) {
+        const y = window.scrollY
+        srcLines = src.split('\n')
+        reanchor()
+        contentEl.innerHTML = md.render(src)
+        rebaseAssets()
+        const diagrams = contentEl.querySelectorAll('pre.mermaid')
+        if (diagrams.length) {
+          try {
+            await mermaid.run({ nodes: diagrams, suppressErrors: true })
+          } catch {}
+        }
+        paint()
+        window.scrollTo({ top: y, behavior: 'instant' })
+      }
+
+
+      // ─── anchoring ────────────────────────────────────────
+
+      function findLine(text, near) {
+        if (!text) return -1
+        let best = -1
+        for (let i = 0; i < srcLines.length; i++) {
+          if (srcLines[i].trim() !== text) continue
+          if (best === -1 || Math.abs(i - near) < Math.abs(best - near)) best = i
+        }
+        return best
+      }
+
+      function reanchor() {
+        for (const n of notes) {
+          const cur = (srcLines[n.l0 - 1] || '').trim()
+          if (cur === n.snip0) {
+            n.orphan = false
+            continue
+          }
+          const i = findLine(n.snip0, n.l0 - 1)
+          if (i !== -1) {
+            const span = n.l1 - n.l0
+            n.l0 = i + 1
+            const j = findLine(n.snip1, i + span)
+            n.l1 = j !== -1 && j + 1 >= n.l0 ? j + 1 : n.l0 + span
+            n.orphan = false
+          } else {
+            n.orphan = true
+          }
+        }
+        save()
+      }
+
+      function snippetOf(l) {
+        return (srcLines[l - 1] || '').trim()
+      }
+
+      // ─── painting ─────────────────────────────────────────
+
+      function blocks() {
+        return [...contentEl.querySelectorAll(':scope > [data-l0]')]
+      }
+
+      function covered(r) {
+        const all = [...contentEl.querySelectorAll('[data-l0]')].filter((e) => +e.dataset.l0 >= r.l0 && +e.dataset.l1 <= r.l1)
+        return all.filter((e) => !all.some((o) => o !== e && e.contains(o)))
+      }
+
+      function hostFor(l1) {
+        const bs = blocks()
+        let hit = null
+        for (const b of bs) {
+          if (+b.dataset.l0 <= l1) hit = b
+          else break
+        }
+        return hit || bs[bs.length - 1] || null
+      }
+
+      function paintSelection() {
+        contentEl.querySelectorAll('.sel').forEach((e) => e.classList.remove('sel'))
+        if (pending) covered(pending).forEach((e) => e.classList.add('sel'))
+      }
+
+      function paint() {
+        contentEl.querySelectorAll('.card, .composer').forEach((el) => el.remove())
+        contentEl.querySelectorAll('.noted').forEach((e) => e.classList.remove('noted'))
+
+        for (const n of notes) {
+          covered(n).forEach((e) => e.classList.add('noted'))
+          const host = hostFor(n.l1)
+          if (host) host.after(cardFor(n))
+        }
+
+        paintSelection()
+        if (pending) {
+          const host = hostFor(pending.l1)
+          if (host) host.after(composer())
+          const ta = document.querySelector('.composer textarea')
+          if (ta) ta.focus()
+        }
+
+        paintSide()
+        countEl.textContent = notes.length
+      }
+
+      function label(n) {
+        return n.l0 === n.l1 ? 'L' + n.l0 : 'L' + n.l0 + '-L' + n.l1
+      }
+
+      function cardFor(n) {
+        const el = document.createElement('div')
+        el.className = 'card' + (n.orphan ? ' orphan' : '')
+        const meta = document.createElement('div')
+        meta.className = 'meta'
+        const lines = document.createElement('span')
+        lines.className = 'lines'
+        lines.textContent = label(n) + (n.orphan ? ' · orphaned' : '')
+        const del = document.createElement('button')
+        del.textContent = 'delete'
+        del.onclick = () => {
+          notes = notes.filter((x) => x.id !== n.id)
+          save()
+          paint()
+        }
+        meta.append(lines, del)
+        const body = document.createElement('div')
+        body.className = 'body'
+        body.textContent = n.text
+        el.append(meta, body)
+        return el
+      }
+
+      function composer() {
+        const el = document.createElement('div')
+        el.className = 'composer'
+        const meta = document.createElement('div')
+        meta.className = 'meta'
+        meta.textContent = label(pending)
+        const ta = document.createElement('textarea')
+        ta.placeholder = 'Comment…'
+        const row = document.createElement('div')
+        row.className = 'row'
+        const ok = document.createElement('button')
+        ok.className = 'pill accent'
+        ok.textContent = 'save'
+        const no = document.createElement('button')
+        no.className = 'pill'
+        no.textContent = 'cancel'
+        const hint = document.createElement('span')
+        hint.className = 'hint'
+        hint.textContent = '⌘↵ save · esc cancel'
+        row.append(ok, no, hint)
+
+        const commit = () => {
+          const text = ta.value.trim()
+          if (text) {
+            notes.push({
+              id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+              l0: pending.l0,
+              l1: pending.l1,
+              snip0: snippetOf(pending.l0),
+              snip1: snippetOf(pending.l1),
+              text,
+              orphan: false,
+            })
+            notes.sort((a, b) => a.l0 - b.l0)
+            save()
+          }
+          pending = null
+          anchor = null
+          paint()
+        }
+        const abort = () => {
+          pending = null
+          anchor = null
+          paint()
+        }
+        ok.onclick = commit
+        no.onclick = abort
+        ta.onkeydown = (e) => {
+          if (e.key === 'Escape') abort()
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commit()
+        }
+        el.append(meta, ta, row)
+        return el
+      }
+
+      function paintSide() {
+        sideList.innerHTML = ''
+        if (!notes.length) {
+          sideList.innerHTML = '<div class="empty">Hover a line and click the <b>+</b> in the left margin. Drag down the margin to cover several lines.</div>'
+          return
+        }
+        for (const n of notes) {
+          const el = document.createElement('div')
+          el.className = 'item' + (n.orphan ? ' orphan' : '')
+          const lines = document.createElement('div')
+          lines.className = 'lines'
+          lines.textContent = label(n) + (n.orphan ? ' · orphaned' : '')
+          const body = document.createElement('div')
+          body.className = 'body'
+          body.textContent = n.text
+          el.append(lines, body)
+          el.onclick = () => {
+            const host = blocks().find((b) => +b.dataset.l0 >= n.l0)
+            if (host) host.scrollIntoView({ block: 'center' })
+          }
+          sideList.append(el)
+        }
+      }
+
+      // ─── gutter interaction ───────────────────────────────
+
+      const docEl = document.getElementById('doc')
+      let hovered = null
+
+      function rangeOf(el) {
+        return { l0: +el.dataset.l0, l1: +el.dataset.l1 }
+      }
+
+      function showGutter(el) {
+        hovered = el
+        const a = el.getBoundingClientRect()
+        const b = docEl.getBoundingClientRect()
+        gutterEl.style.top = a.top - b.top + 'px'
+        gutterEl.classList.add('shown')
+      }
+
+      contentEl.addEventListener('mousemove', (e) => {
+        if (anchor) return
+        const el = e.target.closest('[data-l0]')
+        if (el && el !== hovered) showGutter(el)
+      })
+
+      docEl.addEventListener('mouseleave', () => {
+        if (anchor) return
+        hovered = null
+        gutterEl.classList.remove('shown')
+      })
+
+      gutterEl.addEventListener('mousedown', (e) => {
+        if (!hovered) return
+        e.preventDefault()
+        anchor = rangeOf(hovered)
+        pending = { ...anchor }
+        document.body.classList.add('dragging')
+        paintSelection()
+      })
+
+      document.addEventListener('mousemove', (e) => {
+        if (!anchor) return
+        const x = contentEl.getBoundingClientRect().left + 24
+        const el = document.elementFromPoint(x, e.clientY)?.closest('[data-l0]')
+        if (!el) return
+        const r = rangeOf(el)
+        pending = { l0: Math.min(anchor.l0, r.l0), l1: Math.max(anchor.l1, r.l1) }
+        paintSelection()
+      })
+
+      document.addEventListener('mouseup', () => {
+        if (!anchor) return
+        anchor = null
+        document.body.classList.remove('dragging')
+        paint()
+      })
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && pending) {
+          pending = null
+          anchor = null
+          paint()
+        }
+      })
+
+      // ─── export ───────────────────────────────────────────
+
+      document.getElementById('copy-all').onclick = async () => {
+        if (!notes.length) return toast('nothing to copy')
+        const body = notes
+          .slice()
+          .sort((a, b) => a.l0 - b.l0)
+          .map((n) => label(n) + (n.orphan ? ' (orphaned)' : '') + ': ' + n.text.replace(/\n/g, ' '))
+          .join('\n')
+        const out = cfg.path + '\n\n' + body + '\n'
+        try {
+          await navigator.clipboard.writeText(out)
+          toast(notes.length + ' annotation' + (notes.length > 1 ? 's' : '') + ' copied')
+        } catch {
+          toast('clipboard blocked — see console')
+          console.log(out)
+        }
+      }
+
+      document.getElementById('toggle-side').onclick = () => document.body.classList.toggle('with-side')
+
+      // ─── live reload ──────────────────────────────────────
+
+      async function pull() {
+        const res = await fetch('/raw', { cache: 'no-store' })
+        if (!res.ok) throw new Error('gone')
+        await render(await res.text())
+      }
+
+      function setStatus(cls, text) {
+        statusEl.className = 'pill ' + cls
+        statusEl.textContent = text
+      }
+
+      let es = null
+
+      function connect() {
+        if (es) es.close()
+        es = new EventSource('/events')
+        es.onopen = () => {
+          setStatus('live', 'live')
+          pull().catch(() => setStatus('dead', 'file gone'))
+        }
+        es.addEventListener('change', (ev) => {
+          const d = JSON.parse(ev.data)
+          if (d.gone) return setStatus('dead', 'file gone')
+          setStatus('live', 'live')
+          pull().catch(() => setStatus('dead', 'file gone'))
+        })
+        es.onerror = () => setStatus('stale', 'reconnecting…')
+      }
+
+      // Arc and Chrome suspend background tabs, dropping the SSE stream with no
+      // error the page ever sees.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return
+        if (!es || es.readyState === EventSource.CLOSED) connect()
+        else pull().catch(() => setStatus('dead', 'file gone'))
+      })
+
+      pull()
+        .then(connect)
+        .catch(() => setStatus('dead', 'file gone'))
+    </script>
+  </body>
+</html>

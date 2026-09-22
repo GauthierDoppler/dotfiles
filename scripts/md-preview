@@ -1,0 +1,178 @@
+#!/usr/bin/env bun
+// Serves one markdown file to the browser, with hot reload.
+//
+//   md-preview <file.md>
+//
+// Rendering happens entirely in md-preview.html; this only serves the shell,
+// streams the file and watches it.
+
+import { realpathSync, statSync, readFileSync, existsSync } from 'node:fs'
+import { dirname, join, resolve, relative, basename } from 'node:path'
+
+const POLL_MS = 250
+const IDLE_EXIT_MS = 10 * 60 * 1000
+const PORT_BASE = 34000
+const PORT_SPAN = 2000
+
+const arg = process.argv[2]
+if (!arg || arg === '-h' || arg === '--help') {
+  console.error('usage: md-preview <file.md>')
+  process.exit(arg ? 0 : 1)
+}
+
+const file = resolve(arg)
+if (!existsSync(file)) {
+  console.error(`md-preview: no such file: ${file}`)
+  process.exit(1)
+}
+const baseDir = dirname(file)
+// realpath: the script is symlinked into ~/.local/bin, the HTML is not.
+const shell = join(dirname(realpathSync(Bun.main)), 'md-preview.html')
+
+function fnv1a(s) {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+function read() {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function mtime() {
+  try {
+    return statSync(file).mtimeMs
+  } catch {
+    return 0
+  }
+}
+
+const clients = new Set()
+let idleTimer = null
+
+function armIdleExit() {
+  clearTimeout(idleTimer)
+  idleTimer = setTimeout(() => {
+    if (clients.size === 0) process.exit(0)
+  }, IDLE_EXIT_MS)
+}
+
+function broadcast(event, data) {
+  const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+  for (const c of clients) {
+    try {
+      c.enqueue(frame)
+    } catch {
+      clients.delete(c)
+    }
+  }
+}
+
+function html(port) {
+  const config = { path: file, name: basename(file), port }
+  return readFileSync(shell, 'utf8').replace('"__MD_PREVIEW_CONFIG__"', JSON.stringify(config))
+}
+
+function asset(pathname) {
+  const rel = decodeURIComponent(pathname.slice('/_/'.length))
+  const target = resolve(baseDir, rel)
+  if (target !== baseDir && !target.startsWith(baseDir + '/')) return new Response('forbidden', { status: 403 })
+  if (!existsSync(target) || statSync(target).isDirectory()) return new Response('not found', { status: 404 })
+  return new Response(Bun.file(target))
+}
+
+function handler(req, port) {
+  const url = new URL(req.url)
+
+  if (url.pathname === '/__meta') return Response.json({ app: 'md-preview', path: file })
+
+  if (url.pathname === '/') {
+    return new Response(html(port), { headers: { 'content-type': 'text/html; charset=utf-8' } })
+  }
+
+  if (url.pathname === '/raw') {
+    const body = read()
+    if (body === null) return new Response('gone', { status: 404 })
+    return new Response(body, {
+      headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+    })
+  }
+
+  if (url.pathname === '/events') {
+    let self
+    const stream = new ReadableStream({
+      start(controller) {
+        self = {
+          enqueue: (s) => controller.enqueue(new TextEncoder().encode(s)),
+        }
+        clients.add(self)
+        clearTimeout(idleTimer)
+        self.enqueue(': connected\n\n')
+      },
+      cancel() {
+        clients.delete(self)
+        if (clients.size === 0) armIdleExit()
+      },
+    })
+    return new Response(stream, {
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      },
+    })
+  }
+
+  if (url.pathname.startsWith('/_/')) return asset(url.pathname)
+
+  return new Response('not found', { status: 404 })
+}
+
+let port = PORT_BASE + (fnv1a(file) % PORT_SPAN)
+let server = null
+
+for (let attempt = 0; attempt < 20 && !server; attempt++) {
+  try {
+    const p = port
+    server = Bun.serve({ port: p, hostname: '127.0.0.1', fetch: (req) => handler(req, p) })
+  } catch (err) {
+    if (err?.code !== 'EADDRINUSE') throw err
+    const meta = await fetch(`http://127.0.0.1:${port}/__meta`)
+      .then((r) => r.json())
+      .catch(() => null)
+    if (meta?.app === 'md-preview' && meta.path === file) {
+      Bun.spawn(['open', `http://127.0.0.1:${port}/`])
+      process.exit(0)
+    }
+    port++
+  }
+}
+
+if (!server) {
+  console.error('md-preview: no free port')
+  process.exit(1)
+}
+
+// mtime polling, not fs.watch: an editor that writes atomically leaves an
+// fs.watch handle bound to the replaced inode, silently, after the first save.
+let last = mtime()
+setInterval(() => {
+  const now = mtime()
+  if (now !== last) {
+    last = now
+    broadcast('change', { mtime: now, gone: now === 0 })
+  }
+}, POLL_MS)
+
+armIdleExit()
+
+const url = `http://127.0.0.1:${port}/`
+console.log(`md-preview: ${relative(process.cwd(), file) || file} -> ${url}`)
+Bun.spawn(['open', url])

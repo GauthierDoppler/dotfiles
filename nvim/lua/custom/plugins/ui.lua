@@ -42,12 +42,4 @@ return {
       },
     },
   },
-  {
-    'OXY2DEV/markview.nvim',
-    lazy = false,
-    ft = 'markdown',
-    keys = {
-      { '<leader>mr', '<cmd>Markview toggle<cr>', desc = '[M]arkdown [R]ender toggle' },
-    },
-  },
 }

@@ -230,6 +230,7 @@ link "scripts/tmux-task-run"         "$HOME/.local/bin/tmux-task-run"
 link "scripts/tmux-status-left"      "$HOME/.local/bin/tmux-status-left"
 link "scripts/tmux-status-right"     "$HOME/.local/bin/tmux-status-right"
 link "scripts/tmux-pick"             "$HOME/.local/bin/tmux-pick"
+link "scripts/md-preview"            "$HOME/.local/bin/md-preview"
 
 # ─── Phase 6b: Claude Code settings ────────────────────────
 # Merge the tracked base with this machine's local overrides. Runs after the
