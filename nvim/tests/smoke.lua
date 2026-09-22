@@ -51,9 +51,7 @@ end
 
 -- Every <leader> mapping must carry a desc, or it shows up bare in which-key.
 for _, m in ipairs(vim.api.nvim_get_keymap 'n') do
-  if m.lhs:match '^ ' or m.lhs:match '^<Space>' then
-    assertf(m.desc and m.desc ~= '', 'leader mapping without desc: ' .. m.lhs)
-  end
+  if m.lhs:match '^ ' or m.lhs:match '^<Space>' then assertf(m.desc and m.desc ~= '', 'leader mapping without desc: ' .. m.lhs) end
 end
 
 -- ktlint 1.8 writes its INFO banner to stderr ahead of the JSON report, which
