@@ -18,6 +18,7 @@ Personal development environment for macOS — managed with symlinks.
 | **Delta** | `delta/themes.gitconfig` | Custom themes for lazygit (side-by-side + inline) |
 | **Git ignore** | `git/ignore` | Global gitignore (`.claude/settings.local.json`) |
 | **Keyboard** | `keyboard/` | AZERTY layout with an unshifted number row — the tmux `Prefix → 1-9` bindings depend on it |
+| **cc-tap** | `launchd/`, `scripts/cc-tap-service` | Always-on Claude Code dashboard ([cc-tap.localhost:3000](http://cc-tap.localhost:3000)) and inspector proxy; `cl` uses the proxy when it is up, `cl --no-proxy` skips it |
 
 ## Install
 

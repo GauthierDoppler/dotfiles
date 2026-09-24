@@ -1,0 +1,80 @@
+#!/bin/bash
+# Runs cc-tap (https://github.com/theodo-group/cc-tap) under launchd.
+#
+# Usage: cc-tap-service dashboard|proxy|update
+#
+#   dashboard  Next.js dashboard on 127.0.0.1:3000
+#   proxy      inspector proxy on 127.0.0.1:8089, always on
+#   update     install cc-tap@latest once per weekday from 08:00, and restart
+#              both services if the version changed
+
+set -uo pipefail
+
+ROOT="$HOME/.local/share/cc-tap"
+PKG="$ROOT/node_modules/cc-tap"
+STANDALONE="$PKG/.next/standalone"
+LOGS="$HOME/Library/Logs/cc-tap"
+STAMP="$ROOT/last-update"
+DASHBOARD_PORT=3000
+PROXY_PORT=8089
+
+export PATH="${FNM_DIR:-$HOME/.local/share/fnm}/aliases/default/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+mkdir -p "$ROOT" "$LOGS"
+exec >>"$LOGS/${1:-cc-tap}.log" 2>&1
+
+installed_version() {
+  node -p "require('$PKG/package.json').version" 2>/dev/null
+}
+
+install_latest() {
+  npm install --prefix "$ROOT" --no-fund --no-audit --loglevel=error cc-tap@latest
+}
+
+case "${1:-}" in
+  dashboard)
+    [[ -f "$STANDALONE/server.js" ]] || install_latest || exit 1
+    cd "$STANDALONE" || exit 1
+    PORT=$DASHBOARD_PORT HOSTNAME=127.0.0.1 NODE_ENV=production \
+      exec node --disable-warning=ExperimentalWarning server.js
+    ;;
+
+  proxy)
+    until [[ -f "$STANDALONE/proxy/server.js" ]]; do sleep 2; done
+    # The dashboard only reports a proxy it finds in proxy.json; without this
+    # entry its Start button spawns a second proxy on the next free port.
+    mkdir -p "$HOME/.cc-lens"
+    printf '{"pid":%d,"port":%d,"startedAt":%d}\n' $$ "$PROXY_PORT" $(( $(date +%s) * 1000 )) \
+      > "$HOME/.cc-lens/proxy.json"
+    cd "$STANDALONE" || exit 1
+    CC_LENS_PROXY_PORT=$PROXY_PORT exec node --disable-warning=ExperimentalWarning proxy/server.js
+    ;;
+
+  update)
+    today=$(date +%F)
+    (( $(date +%u) <= 5 )) || exit 0
+    (( 10#$(date +%H) >= 8 )) || exit 0
+    [[ "$(cat "$STAMP" 2>/dev/null)" == "$today" ]] && exit 0
+
+    before=$(installed_version)
+    if ! install_latest; then
+      echo "$(date '+%F %T') update failed, retrying on the next run"
+      exit 1
+    fi
+    echo "$today" > "$STAMP"
+    after=$(installed_version)
+
+    if [[ "$before" == "$after" ]]; then
+      echo "$(date '+%F %T') cc-tap $after is already the latest"
+      exit 0
+    fi
+    echo "$(date '+%F %T') cc-tap ${before:-none} -> $after, restarting"
+    launchctl kickstart -k "gui/$(id -u)/com.theodo.cc-tap.dashboard"
+    launchctl kickstart -k "gui/$(id -u)/com.theodo.cc-tap.proxy"
+    ;;
+
+  *)
+    echo "usage: cc-tap-service dashboard|proxy|update" >&2
+    exit 2
+    ;;
+esac
