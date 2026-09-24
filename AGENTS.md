@@ -20,7 +20,7 @@ add a comment explaining the change.
 
 ## What This Is
 
-A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta. All configs are symlinked from this repo to their expected locations via `install.sh`.
+A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the launchd agents that keep cc-tap running. All configs are symlinked from this repo to their expected locations via `install.sh`.
 
 ## Installation & Symlinks
 
@@ -368,6 +368,64 @@ would follow the *attached session*: as it stands, jumping to `biogroup` and the
 switching to another session with `Prefix + Space` leaves the tab reading
 "Biogroup". That is already true of a hand-renamed tab, and the status bar's left
 block is the thing that stays truthful.
+
+## cc-tap (Claude Code dashboard + inspector proxy)
+
+[cc-tap](https://github.com/theodo-group/cc-tap) runs permanently as three
+launchd agents in `launchd/`, all driven by `scripts/cc-tap-service`:
+
+| agent | runs | when |
+| ----- | ---- | ---- |
+| `com.theodo.cc-tap.dashboard` | dashboard on `127.0.0.1:3000` | login, kept alive |
+| `com.theodo.cc-tap.proxy`     | inspector proxy on `127.0.0.1:8089` | login, kept alive |
+| `com.theodo.cc-tap.update`    | `npm install cc-tap@latest` | see below |
+
+`cl` in `dot_zshrc` routes through the proxy when `:8089` accepts a connection
+and falls back to plain `claude` otherwise; `--no-proxy` anywhere in the
+arguments forces plain and is stripped before `claude` sees it. There is no
+separate proxy alias any more — one command, and the proxy being down never
+blocks a session.
+
+**launchd, not Docker.** `proxy/server.js` hardcodes `listen(PORT, '127.0.0.1')`,
+so inside a container it is unreachable through a published port without
+patching the package. It also reads `~/.claude` and writes `~/.cc-lens`, so a
+container would buy no isolation.
+
+**The services bypass the `cc-tap` CLI** and run the standalone `server.js` and
+`proxy/server.js` directly: the CLI opens a browser tab on every start, and in
+the dashboard the proxy is a detached child spawned from the Live Capture
+button, which dies with every restart. The proxy agent writes
+`~/.cc-lens/proxy.json` itself because that file is the only way the dashboard
+knows a proxy exists; without it, Start spawns a second one on `:8090`. The
+flip side is that the dashboard's Stop button kills the proxy and launchd
+brings it back ten seconds later — to really stop capture, `launchctl bootout
+gui/$(id -u)/com.theodo.cc-tap.proxy`.
+
+**Node is fnm's `default` alias**, not Homebrew's `node`: Homebrew's is only on
+a machine as a dependency of something else (it is not in the `Brewfile`),
+whereas fnm's default is provisioned by `install.sh` and lives at a stable path.
+cc-tap needs Node ≥ 24.
+
+**Updates: once per weekday, from 08:00, restarting only on a new version.** The
+update agent fires at load, every 30 minutes, and at 08:00 Mon–Fri; the script
+decides. It no-ops on weekends, before 08:00, and once today's stamp
+(`~/.local/share/cc-tap/last-update`) is written — the stamp is only written on
+a successful install, so being offline just means the next tick retries. That
+covers the three ways 08:00 gets missed: asleep (launchd runs a missed calendar
+event on wake), powered off (`RunAtLoad`), and no network. Restarting is skipped
+when the version did not change because restarting the proxy drops every
+in-flight request of every Claude session routed through it.
+
+**The plists are copied into `~/Library/LaunchAgents`, not linked**, the same
+treatment as the keyboard bundle. They are portable because launchd does not
+expand `~` or `$HOME`: each one runs `/bin/sh -c 'exec "$HOME/…"'`, and the
+script sets its own `PATH` and log redirection (`~/Library/Logs/cc-tap/`).
+`launch_agent()` only reloads an agent whose plist changed or which is not
+loaded, so re-running `install.sh` does not bounce the services.
+
+`~/Library/LaunchAgents` can end up owned by root — the Pulse Secure installer
+did it on this machine — which makes every write fail with `EACCES`.
+`launch_agent()` warns with the `chown` to run rather than failing the install.
 
 ## Skills
 

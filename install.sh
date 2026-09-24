@@ -231,6 +231,7 @@ link "scripts/tmux-status-left"      "$HOME/.local/bin/tmux-status-left"
 link "scripts/tmux-status-right"     "$HOME/.local/bin/tmux-status-right"
 link "scripts/tmux-pick"             "$HOME/.local/bin/tmux-pick"
 link "scripts/md-preview"            "$HOME/.local/bin/md-preview"
+link "scripts/cc-tap-service"        "$HOME/.local/bin/cc-tap-service"
 
 # ─── Phase 6b: Claude Code settings ────────────────────────
 # Merge the tracked base with this machine's local overrides. Runs after the
@@ -270,6 +271,43 @@ if ! command -v nvr &>/dev/null; then
   echo "Installing neovim-remote..."
   pipx install neovim-remote
 fi
+
+# ─── Phase 10b: launchd agents ─────────────────────────────
+launch_agent() {
+  local label="$1"
+  local src="$DOTFILES/launchd/$label.plist"
+  local dir="$HOME/Library/LaunchAgents"
+  local dest="$dir/$label.plist"
+  local domain
+  domain="gui/$(id -u)"
+  mkdir -p "$dir" 2>/dev/null || true
+  if [ ! -w "$dir" ]; then
+    warn "$dir is not writable (sudo chown $USER:staff $dir) — $label not installed"
+    return 0
+  fi
+  if cmp -s "$src" "$dest" && launchctl print "$domain/$label" &>/dev/null; then
+    echo "agent ok: $label"
+    return 0
+  fi
+  # bootout returns before the service is gone, and a bootstrap issued in that
+  # window fails with "5: Input/output error".
+  if launchctl bootout "$domain/$label" 2>/dev/null; then
+    for _ in $(seq 50); do
+      launchctl print "$domain/$label" &>/dev/null || break
+      sleep 0.1
+    done
+  fi
+  cp "$src" "$dest"
+  if launchctl bootstrap "$domain" "$dest"; then
+    echo "loaded: $label"
+  else
+    warn "launchctl bootstrap failed for $label"
+  fi
+}
+
+launch_agent "com.theodo.cc-tap.dashboard"
+launch_agent "com.theodo.cc-tap.proxy"
+launch_agent "com.theodo.cc-tap.update"
 
 # ─── Phase 11: App registration ────────────────────────────
 if [[ -d "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app" ]]; then
