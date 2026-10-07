@@ -8,6 +8,7 @@ description: >-
   tmux tasks", "wire up gradle/xcodebuild/adb/simctl/docker/dev-server", or when a project has
   commands you keep re-typing by hand. Also use when a task misbehaves: wrong window, wrong
   directory, duplicate windows, or a task not appearing in the picker.
+disable-model-invocation: true
 ---
 
 # tmux-tasks
@@ -56,12 +57,13 @@ set -euo pipefail
 ./gradlew :app:installDebug
 ```
 
-Two optional header keys, read from the **first 20 lines only**:
+Three optional header keys, read from the **first 20 lines only**:
 
 | key | meaning |
 | --- | --- |
 | `# task:` | one-line description shown in the picker |
 | `# tmux:` | placement — `window` (default) \| `split-down` \| `split-right` \| `popup` \| `detach` |
+| `# close:` | `ok` — on exit 0, close the window/pane/popup immediately: no keypress, no bell, no notification. A failure still waits, so its error stays readable |
 
 Both splits take an optional size after the placement, defaulting to 30%:
 
@@ -90,6 +92,10 @@ This is the decision that makes a task pleasant or annoying. Pick by lifetime, n
 
 When unsure, use `window`. It is the default for a reason.
 
+Add `# close: ok` to a fire-and-forget task whose success output is worth nothing — a launcher
+like `zed "$TMUX_TASK_ROOT"` with `detach`. Without it, the task leaves a ✓ window behind that you
+have to close by hand. Do not use it on anything whose output you read on success.
+
 ## Execution contract
 
 Guaranteed for every task, whatever the placement:
@@ -100,6 +106,8 @@ Guaranteed for every task, whatever the placement:
 - `TMUX_TASK_NAME` — e.g. `android/build`.
 - On exit the wrapper prints `✓ <name>` or `✗ <name> — exit <n>` and **waits for a keypress**.
   A fast failure never scrolls away. Do not add your own "press enter to continue".
+  The one exception is a success under `# close: ok`, which exits straight away. Never
+  `tmux kill-window` from inside a task to get the same effect.
 - For `window` and `detach`, the wrapper also sets `@task_status` on the window — `running`,
   `ok` or `fail` — which the status bar renders as `●` / `✓` / `✗`. It persists until the task
   is re-run, so a failure is still visible when you come back to it. **The exit code is the

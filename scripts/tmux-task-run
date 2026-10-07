@@ -2,9 +2,11 @@
 # Runs one task script inside the window or pane tmux has just created for it,
 # and publishes its state so the status bar can render it.
 #
-# Usage: tmux-task-run <root> <name> <script> <mark>
-#   mark = 1  ->  publish @task_status (running | ok | fail) on this window,
-#                 and notify on completion
+# Usage: tmux-task-run <root> <name> <script> <mark> [close]
+#   mark  = 1   ->  publish @task_status (running | ok | fail) on this window,
+#                   and notify on completion
+#   close = ok  ->  on exit 0, exit straight away so tmux closes the pane (and
+#                   the window or popup with it); a failure still waits
 #
 # Invoked with an explicit bash shebang on purpose: tmux runs commands through
 # `default-shell` (zsh here), where `read -rsn1` does not parse.
@@ -15,6 +17,7 @@ root="$1"
 name="$2"
 script="$3"
 mark="${4:-0}"
+close="${5:-}"
 
 # @task_status is read by window-status-format in dot_tmux.conf. It is set on the
 # window, so it survives `respawn-window` on a re-run — hence the reset to
@@ -69,6 +72,10 @@ cd "$root" || { printf '\033[31mcannot cd to %s\033[0m\n' "$root"; mark_state fa
 
 TMUX_TASK_ROOT="$root" TMUX_TASK_NAME="$name" "$script"
 status=$?
+
+# No bell or notification either: the window vanishing is the signal, and a
+# banner about a task that already got out of the way is noise.
+[ "$status" -eq 0 ] && [ "$close" = ok ] && exit 0
 
 if [ "$status" -eq 0 ]; then
   mark_state ok

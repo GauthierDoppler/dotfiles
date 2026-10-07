@@ -34,12 +34,17 @@
 #
 #   # task: assemble the debug APK and install it
 #   # tmux: window
+#   # close: ok
 #
 # Placements: window (default) | split-down | split-right | popup | detach
 #   `split` is an alias for split-down. Both splits take an optional size after
 #   the placement — `split-right 40%`, `split-down 15` — defaulting to 30%.
 #
-# Both are optional. The reuse target for `window`/`detach` is derived from the
+# `# close: ok` closes the task's window/pane/popup as soon as it exits 0,
+# skipping the keypress, the bell and the notification. A failure still stops
+# and waits, so its error stays readable — there is no "close on any exit".
+#
+# All three are optional. The reuse target for `window`/`detach` is derived from the
 # task name ("android/build" -> window "android-build") rather than configured,
 # so there is nothing to keep in sync.
 #
@@ -198,7 +203,7 @@ cycle_group() {
 # for a second one. `split` and `new-window` have no such restriction and work
 # untargeted from inside a popup.
 run_task() {
-  local name="$1" inline="${2:-0}" script placement size slug mark cmd
+  local name="$1" inline="${2:-0}" script placement size slug mark close cmd
   script="$tasks_dir/$name"
   [ -x "$script" ] || { tmux display-message "  no such task: $name"; return 1; }
 
@@ -211,6 +216,7 @@ run_task() {
   [ "$size" = "$placement" ] && size=30%      # no second field -> default
   [ -n "$placement" ] || placement=window
   slug="$(printf '%s' "$name" | tr '/' '-')"
+  close="$(meta "$name" close)"
 
   mru_touch "$name"
 
@@ -221,14 +227,14 @@ run_task() {
     window|detach) mark=1 ;;
     *)             mark=0 ;;
   esac
-  cmd="exec $(printf '%q %q %q %q %q' "$runner" "$root" "$name" "$script" "$mark")"
+  cmd="exec $(printf '%q %q %q %q %q %q' "$runner" "$root" "$name" "$script" "$mark" "$close")"
 
   case "$placement" in
     popup)
       # Replacing this process runs the task in the popup that is already open,
       # which is the same result the user asked for — a floating window that
       # closes on a keypress — without a second popup tmux would refuse.
-      if [ "$inline" = 1 ]; then exec "$runner" "$root" "$name" "$script" 0; fi
+      if [ "$inline" = 1 ]; then exec "$runner" "$root" "$name" "$script" 0 "$close"; fi
       tmux display-popup -E -w 80% -h 60% "$cmd"
       ;;
     split|split-down)
