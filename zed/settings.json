@@ -7,8 +7,23 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  "vim_mode": true,
+  "auto_install_extensions": {
+    "biome": true,
+    "tsgo": true
+  },
+  "cli_default_open_behavior": "existing_window",
+  "outline_panel": {
+    "dock": "left"
+  },
+  "collaboration_panel": {
+    "dock": "left"
+  },
+  "git_panel": {
+    "dock": "left"
+  },
+  "vim_mode": false,
   "agent": {
+    "dock": "right",
     "default_model": {
       "provider": "anthropic",
       "model": "claude-sonnet-4-5-latest"
@@ -34,22 +49,5 @@
     "mode": "dark",
     "light": "One Light",
     "dark": "One Dark"
-  },
-
-  "languages": {
-    "TypeScript": {
-      "code_actions_on_format": {
-        "source.organizeImports": true,
-        "source.removeUnusedImports": true
-      },
-      "format_on_save": "prettier"
-    },
-    "TSX": {
-      "code_actions_on_format": {
-        "source.organizeImports": true,
-        "source.removeUnusedImports": true
-      },
-      "format_on_save": "on"
-    }
   }
 }
