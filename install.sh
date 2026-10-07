@@ -286,7 +286,10 @@ launch_agent() {
     warn "$dir is not writable (sudo chown $USER:staff $dir) — $label not installed"
     return 0
   fi
+  # A bootstrapped agent can sit at "pended nondemand spawn = speculative" for
+  # minutes; kickstart without -k starts it now and leaves a running one alone.
   if cmp -s "$src" "$dest" && launchctl print "$domain/$label" &>/dev/null; then
+    launchctl kickstart "$domain/$label" &>/dev/null || true
     echo "agent ok: $label"
     return 0
   fi
@@ -300,6 +303,7 @@ launch_agent() {
   fi
   cp "$src" "$dest"
   if launchctl bootstrap "$domain" "$dest"; then
+    launchctl kickstart "$domain/$label" &>/dev/null || true
     echo "loaded: $label"
   else
     warn "launchctl bootstrap failed for $label"
