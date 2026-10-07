@@ -421,7 +421,9 @@ treatment as the keyboard bundle. They are portable because launchd does not
 expand `~` or `$HOME`: each one runs `/bin/sh -c 'exec "$HOME/…"'`, and the
 script sets its own `PATH` and log redirection (`~/Library/Logs/cc-tap/`).
 `launch_agent()` only reloads an agent whose plist changed or which is not
-loaded, so re-running `install.sh` does not bounce the services.
+loaded, so re-running `install.sh` does not bounce the services. It does kickstart
+each one, which starts a stopped agent and is a no-op on a running one; for
+`update` that means one extra run of the script, which gates itself.
 
 `~/Library/LaunchAgents` can end up owned by root — the Pulse Secure installer
 did it on this machine — which makes every write fail with `EACCES`.
@@ -709,8 +711,11 @@ loses its notes; that is accepted.
 `launchctl kickstart -k`. Exiting and relying on `KeepAlive` does not work: launchd
 marks the respawn `pended nondemand spawn = inefficient` and defers it for
 minutes, whatever the exit code. `index.html` and `app.js` are read per request,
-so they need no restart at all. The same deferral hits a fresh `bootstrap`, so
-`md-preview` kickstarts the agent itself when `/__meta` does not answer.
+so they need no restart at all. The same deferral hits a fresh `bootstrap`
+(`pended nondemand spawn = speculative`), so `launch_agent()` in `install.sh`
+kickstarts every agent it manages — without `-k`, which leaves a running one
+alone — and `md-preview` kickstarts its agent itself when `/__meta` does not
+answer.
 
 **The page renders untrusted markdown on an origin that can read local files**,
 so it is fenced on four sides:
