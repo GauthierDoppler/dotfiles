@@ -8,6 +8,7 @@ description: >-
   where worktrees are created", or when a worktree comes up broken — missing env files, wrong
   windows, a session that won't attach, or orphaned sessions. Also use when writing or editing
   `.grove/config.yaml` or `.grove/setup.sh`.
+disable-model-invocation: true
 ---
 
 # grove
