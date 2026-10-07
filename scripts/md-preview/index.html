@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>md-preview</title>
+
+    <meta name="referrer" content="same-origin" />
+
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #303446;
+        --bg-inset: #292c3c;
+        --surface: #292c3c;
+        --surface-hi: #414559;
+        --border: #51576d;
+        --fg: #c6d0f5;
+        --fg-strong: #e6ecff;
+        --fg-muted: #949cbb;
+        --accent: #8caaee;
+        --accent-hi: #babbf1;
+        --on-accent: #232634;
+        --accent-wash: rgba(140, 170, 238, 0.14);
+        --danger: #e78284;
+        --success: #a6d189;
+        --attention: #e5c890;
+        --orange: #ef9f76;
+        --purple: #ca9ee6;
+        --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 16px/1.7 var(--sans);
+      }
+
+      /* ─── chrome ─────────────────────────────────────────── */
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+
+      header .name {
+        font: 13px var(--mono);
+        color: var(--purple);
+        font-weight: 600;
+      }
+
+      header .path {
+        font: 11px var(--mono);
+        color: var(--fg-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+      }
+
+      .pill {
+        font: 11px var(--mono);
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: var(--border);
+        color: var(--fg-muted);
+        border: 0;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .pill:hover {
+        background: var(--surface-hi);
+        color: var(--fg);
+      }
+
+      .pill.accent {
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+      }
+
+      .pill.accent:hover {
+        background: var(--accent-hi);
+        color: var(--on-accent);
+      }
+
+      #status.live {
+        color: var(--success);
+      }
+      #status.stale {
+        color: var(--attention);
+      }
+      #status.dead {
+        color: var(--danger);
+      }
+
+      /* ─── layout ─────────────────────────────────────────── */
+
+      main {
+        display: flex;
+        align-items: flex-start;
+      }
+
+      #doc {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        padding: 40px 48px 55vh 68px;
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+
+      body.with-side #doc {
+        margin: 0;
+      }
+
+      #gutter {
+        position: absolute;
+        left: 22px;
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        border: 1px solid var(--surface-hi);
+        background: var(--surface);
+        color: var(--accent);
+        font: 16px/1 var(--sans);
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        z-index: 5;
+      }
+
+      #gutter:hover {
+        background: var(--accent);
+        color: var(--on-accent);
+        border-color: var(--accent);
+      }
+
+      #gutter.shown {
+        display: flex;
+      }
+
+      /* ─── selection + annotation ─────────────────────────── */
+
+      #content [data-l0] {
+        scroll-margin-top: 70px;
+      }
+
+      #content [data-l0].sel {
+        background: var(--accent-wash);
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+
+      #content [data-l0].noted {
+        box-shadow: inset 3px 0 0 var(--attention);
+      }
+
+      #content [data-l0].noted.sel {
+        box-shadow: inset 3px 0 0 var(--accent);
+      }
+
+      body.dragging {
+        user-select: none;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--attention);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 14px 0;
+      }
+
+      .card.orphan {
+        border-left-color: var(--danger);
+      }
+
+      .card .meta {
+        font: 11px var(--mono);
+        color: var(--fg-muted);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .card .meta .lines {
+        color: var(--attention);
+      }
+
+      .card.orphan .meta .lines {
+        color: var(--danger);
+      }
+
+      .card .meta button {
+        background: none;
+        border: 0;
+        color: var(--fg-muted);
+        cursor: pointer;
+        font: 11px var(--mono);
+        padding: 0 2px;
+      }
+
+      .card .meta button:hover {
+        color: var(--danger);
+      }
+
+      .card .body {
+        white-space: pre-wrap;
+        font-size: 14px;
+        color: var(--fg);
+      }
+
+      .composer {
+        background: var(--surface);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin: 14px 0;
+      }
+
+      .composer .meta {
+        font: 11px var(--mono);
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+
+      .composer textarea {
+        width: 100%;
+        min-height: 72px;
+        resize: vertical;
+        background: var(--bg-inset);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font: 14px/1.5 var(--sans);
+      }
+
+      .composer textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      .composer .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+      }
+
+      .composer .hint {
+        font: 11px var(--mono);
+        color: var(--fg-muted);
+        margin-left: auto;
+      }
+
+      /* ─── sidebar ────────────────────────────────────────── */
+
+      #side {
+        display: none;
+        position: sticky;
+        top: 45px;
+        width: 340px;
+        flex: none;
+        height: calc(100vh - 45px);
+        overflow-y: auto;
+        padding: 18px 16px;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+      }
+
+      body.with-side #side {
+        display: block;
+      }
+
+      #side h2 {
+        font: 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fg-muted);
+        margin: 0 0 12px;
+      }
+
+      #side .empty {
+        font-size: 13px;
+        color: var(--fg-muted);
+      }
+
+      #side .item {
+        background: var(--bg);
+        border: 1px solid var(--surface);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+
+      #side .item:hover {
+        border-color: var(--accent);
+      }
+
+      #side .item .lines {
+        font: 11px var(--mono);
+        color: var(--attention);
+      }
+
+      #side .item.orphan .lines {
+        color: var(--danger);
+      }
+
+      #side .item .body {
+        font-size: 13px;
+        color: var(--fg-muted);
+        white-space: pre-wrap;
+        margin-top: 2px;
+      }
+
+      /* ─── markdown ───────────────────────────────────────── */
+
+      #content h1,
+      #content h2,
+      #content h3,
+      #content h4 {
+        line-height: 1.3;
+        margin: 1.6em 0 0.6em;
+        color: var(--fg-strong);
+      }
+
+      #content h1 {
+        font-size: 2em;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.25em;
+      }
+
+      #content h2 {
+        font-size: 1.5em;
+        border-bottom: 1px solid var(--surface);
+        padding-bottom: 0.2em;
+      }
+
+      #content h3 {
+        font-size: 1.22em;
+      }
+
+      #content > :first-child {
+        margin-top: 0;
+      }
+
+      #content p,
+      #content ul,
+      #content ol {
+        margin: 0.9em 0;
+      }
+
+      #content a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      #content a:hover {
+        text-decoration: underline;
+      }
+
+      #content img {
+        max-width: 100%;
+        border-radius: 6px;
+      }
+
+      #content blockquote {
+        margin: 1em 0;
+        padding: 0.1em 1em;
+        border-left: 3px solid var(--surface-hi);
+        color: var(--fg-muted);
+      }
+
+      #content hr {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: 2em 0;
+      }
+
+      #content code {
+        font: 0.87em var(--mono);
+        background: var(--bg-inset);
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        color: var(--orange);
+      }
+
+      #content pre {
+        background: var(--bg-inset);
+        border: 1px solid var(--surface);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 1em 0;
+      }
+
+      #content pre code {
+        background: none;
+        padding: 0;
+        color: var(--fg);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      #content pre.mermaid {
+        background: var(--surface);
+        text-align: center;
+        line-height: 1;
+      }
+
+      #content table {
+        border-collapse: collapse;
+        margin: 1.2em 0;
+        width: 100%;
+        table-layout: auto;
+      }
+
+      #content th,
+      #content td {
+        border: 1px solid var(--border);
+        padding: 7px 13px;
+        text-align: left;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+
+      #content td code,
+      #content th code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+
+      #content th {
+        background: var(--surface);
+        color: var(--fg-strong);
+        font-weight: 600;
+      }
+
+      #content tbody tr:nth-child(even) {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      #content input[type='checkbox'] {
+        margin-right: 6px;
+        accent-color: var(--success);
+      }
+
+      #content li > p {
+        margin: 0.25em 0;
+      }
+
+      #content .contains-task-list {
+        list-style: none;
+        padding-left: 1em;
+      }
+
+      #content .task-list-item label {
+        cursor: default;
+      }
+
+      #content .footnotes {
+        border-top: 1px solid var(--border);
+        margin-top: 2.5em;
+        font-size: 0.9em;
+        color: var(--fg-muted);
+      }
+
+      #content .footnote-backref {
+        text-decoration: none;
+      }
+
+      #content details.frontmatter {
+        margin: 0 0 24px;
+        padding: 8px 14px;
+        background: var(--surface);
+        border: 1px solid var(--surface-hi);
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      #content details.frontmatter summary {
+        cursor: pointer;
+        font: 12px var(--mono);
+        color: var(--fg-muted);
+      }
+
+      #content details.frontmatter table {
+        margin: 10px 0 4px;
+      }
+
+      #content details.frontmatter th {
+        font: 12px var(--mono);
+        color: var(--purple);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      #content details.frontmatter pre {
+        margin: 0;
+        padding: 0;
+        background: none;
+        white-space: pre-wrap;
+      }
+
+      /* highlight.js */
+      .hljs-comment,
+      .hljs-quote {
+        color: var(--fg-muted);
+        font-style: italic;
+      }
+      .hljs-keyword,
+      .hljs-selector-tag,
+      .hljs-literal {
+        color: var(--purple);
+      }
+      .hljs-string,
+      .hljs-regexp,
+      .hljs-addition {
+        color: var(--success);
+      }
+      .hljs-number,
+      .hljs-built_in {
+        color: var(--orange);
+      }
+      .hljs-title,
+      .hljs-section,
+      .hljs-title.function_ {
+        color: var(--accent);
+      }
+      .hljs-attr,
+      .hljs-attribute,
+      .hljs-variable,
+      .hljs-template-variable {
+        color: var(--attention);
+      }
+      .hljs-type,
+      .hljs-class .hljs-title,
+      .hljs-title.class_ {
+        color: var(--attention);
+      }
+      .hljs-symbol,
+      .hljs-bullet,
+      .hljs-link {
+        color: var(--success);
+      }
+      .hljs-meta {
+        color: var(--accent);
+      }
+      .hljs-deletion {
+        color: var(--danger);
+      }
+      .hljs-emphasis {
+        font-style: italic;
+      }
+      .hljs-strong {
+        font-weight: 700;
+      }
+
+      #toast {
+        position: fixed;
+        bottom: 22px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--border);
+        color: var(--fg);
+        font: 12px var(--mono);
+        padding: 8px 16px;
+        border-radius: 999px;
+        opacity: 0;
+        transition: all 0.16s;
+        pointer-events: none;
+        z-index: 40;
+      }
+
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <span class="name" id="name"></span>
+      <span class="path" id="path"></span>
+      <span class="pill" id="status">connecting</span>
+      <button class="pill" id="toggle-side">notes <span id="count">0</span></button>
+      <button class="pill accent" id="copy-all">copy all</button>
+    </header>
+
+    <main>
+      <div id="doc">
+        <button id="gutter" title="Comment on this line — drag down the margin for a range">+</button>
+        <article id="content"></article>
+      </div>
+      <aside id="side">
+        <h2>Annotations</h2>
+        <div id="side-list"></div>
+      </aside>
+    </main>
+
+    <div id="toast"></div>
+
+    <script src="/__lib/markdown-it.js"></script>
+    <script src="/__lib/markdown-it-anchor.js"></script>
+    <script src="/__lib/markdown-it-footnote.js"></script>
+    <script src="/__lib/markdown-it-task-lists.js"></script>
+    <script src="/__lib/highlight.js"></script>
+    <script src="/__lib/mermaid.js"></script>
+    <script src="/__lib/purify.js"></script>
+    <script src="/__lib/js-yaml.js"></script>
+    <script src="/__app.js"></script>
+  </body>
+</html>

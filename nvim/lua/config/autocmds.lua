@@ -61,3 +61,42 @@ vim.api.nvim_create_autocmd({ 'FocusLost', 'BufLeave', 'InsertLeave' }, {
     if not ok then vim.notify('auto-save failed: ' .. tostring(err), vim.log.levels.WARN) end
   end,
 })
+
+-- Markdown preview: dotfiles/scripts/md-preview
+local function md_preview_cursor(buf)
+  local url = vim.b[buf].md_preview_cursor
+  if not url then return end
+  local line = vim.api.nvim_win_get_cursor(0)[1]
+  if line == vim.b[buf].md_preview_line then return end
+  vim.b[buf].md_preview_line = line
+  vim.system { 'curl', '-s', '-m', '1', '-X', 'POST', '-H', 'content-type: application/json', '-d', vim.json.encode { line = line }, url }
+end
+
+vim.api.nvim_create_autocmd('FileType', {
+  desc = 'Markdown preview in the browser',
+  group = vim.api.nvim_create_augroup('md-preview', { clear = true }),
+  pattern = 'markdown',
+  callback = function(args)
+    local buf = args.buf
+    vim.keymap.set('n', '<leader>mr', function()
+      local file = vim.api.nvim_buf_get_name(buf)
+      if file == '' then return vim.notify('md-preview: buffer has no file', vim.log.levels.WARN) end
+      if vim.fn.executable 'md-preview' == 0 then return vim.notify('md-preview: not on PATH -- run ./install.sh', vim.log.levels.ERROR) end
+      vim.system({ 'md-preview', file }, { text = true }, function(res)
+        vim.schedule(function()
+          if res.code ~= 0 then return vim.notify(vim.trim(res.stderr or '') ~= '' and vim.trim(res.stderr) or 'md-preview failed', vim.log.levels.ERROR) end
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.b[buf].md_preview_cursor = vim.trim(res.stdout):gsub('^(https?://[^/]+)', '%1/__cursor')
+          vim.b[buf].md_preview_line = nil
+          if vim.api.nvim_get_current_buf() == buf then md_preview_cursor(buf) end
+        end)
+      end)
+    end, { buffer = buf, desc = '[M]arkdown [R]ender in browser' })
+
+    vim.api.nvim_create_autocmd('CursorHold', {
+      buffer = buf,
+      group = vim.api.nvim_create_augroup('md-preview-' .. buf, { clear = true }),
+      callback = function() md_preview_cursor(buf) end,
+    })
+  end,
+})

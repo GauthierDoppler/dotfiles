@@ -230,7 +230,7 @@ link "scripts/tmux-task-run"         "$HOME/.local/bin/tmux-task-run"
 link "scripts/tmux-status-left"      "$HOME/.local/bin/tmux-status-left"
 link "scripts/tmux-status-right"     "$HOME/.local/bin/tmux-status-right"
 link "scripts/tmux-pick"             "$HOME/.local/bin/tmux-pick"
-link "scripts/md-preview"            "$HOME/.local/bin/md-preview"
+link "scripts/md-preview/md-preview" "$HOME/.local/bin/md-preview"
 link "scripts/cc-tap-service"        "$HOME/.local/bin/cc-tap-service"
 
 # ─── Phase 6b: Claude Code settings ────────────────────────
@@ -252,6 +252,7 @@ if ! command -v bun &>/dev/null; then
   echo "Installing bun..."
   curl -fsSL https://bun.sh/install | bash
 fi
+"$HOME/.bun/bin/bun" install --cwd "$DOTFILES/scripts/md-preview" --frozen-lockfile
 
 # ─── Phase 9: Node LTS via fnm ─────────────────────────────
 eval "$(fnm env)"
@@ -308,6 +309,7 @@ launch_agent() {
 launch_agent "com.theodo.cc-tap.dashboard"
 launch_agent "com.theodo.cc-tap.proxy"
 launch_agent "com.theodo.cc-tap.update"
+launch_agent "com.github.gauthierdoppler.md-preview"
 
 # ─── Phase 11: App registration ────────────────────────────
 if [[ -d "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app" ]]; then

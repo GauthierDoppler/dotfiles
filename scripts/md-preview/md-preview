@@ -1,0 +1,80 @@
+#!/usr/bin/env bun
+// md-preview <file.md>   focus the file's Chrome tab, or open one; prints its URL
+// md-preview serve       run the server (what the launchd agent does)
+
+import { existsSync, realpathSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { LABEL, MARKDOWN, ORIGIN, viewUrl } from './config.js'
+
+const arg = process.argv[2]
+
+if (!arg || arg === '-h' || arg === '--help') {
+  console.error('usage: md-preview <file.md> | md-preview serve')
+  process.exit(arg ? 0 : 1)
+}
+
+function die(msg) {
+  console.error(`md-preview: ${msg}`)
+  process.exit(1)
+}
+
+async function alive() {
+  try {
+    const meta = await fetch(`${ORIGIN}/__meta`, { signal: AbortSignal.timeout(500) }).then((r) => r.json())
+    return meta?.app === 'md-preview'
+  } catch {
+    return false
+  }
+}
+
+async function ensureServer() {
+  if (await alive()) return
+  const kick = Bun.spawnSync(['/bin/launchctl', 'kickstart', `gui/${process.getuid()}/${LABEL}`])
+  if (!kick.success) die(`server down and launchd agent ${LABEL} not loaded -- run ./install.sh`)
+  for (let i = 0; i < 30; i++) {
+    await Bun.sleep(100)
+    if (await alive()) return
+  }
+  die('server did not come up -- see ~/Library/Logs/md-preview.log')
+}
+
+const FOCUS = `
+function run([url]) {
+  const chrome = Application('Google Chrome')
+  if (!chrome.running()) return 'none'
+  const windows = chrome.windows()
+  for (const w of windows) {
+    const urls = w.tabs.url()
+    const i = urls.findIndex((u) => u.split('#')[0] === url)
+    if (i === -1) continue
+    w.activeTabIndex = i + 1
+    w.index = 1
+    chrome.activate()
+    return 'found'
+  }
+  return 'none'
+}`
+
+function focusTab(url) {
+  const r = Bun.spawnSync(['/usr/bin/osascript', '-l', 'JavaScript', '-e', FOCUS, url])
+  return r.success && r.stdout.toString().trim() === 'found'
+}
+
+async function open(arg) {
+  const file = resolve(arg)
+  if (!existsSync(file)) die(`no such file: ${file}`)
+  if (!MARKDOWN.test(file)) die(`not a markdown file: ${file}`)
+  await ensureServer()
+  const url = viewUrl(file)
+  if (!focusTab(url)) {
+    const chrome = Bun.spawnSync(['/usr/bin/open', '-a', 'Google Chrome', url])
+    if (!chrome.success) Bun.spawnSync(['/usr/bin/open', url])
+  }
+  console.log(url)
+}
+
+if (arg === 'serve') {
+  await import(join(dirname(realpathSync(import.meta.path)), 'server.js'))
+} else {
+  await open(arg)
+}
