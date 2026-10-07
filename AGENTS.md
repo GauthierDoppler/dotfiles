@@ -683,6 +683,63 @@ runs **once over the whole capture** — an earlier version grepped per line and
 spawned ~6000 processes, which hung the popup long enough that it echoed
 keystrokes as raw escape sequences.
 
+## Markdown preview
+
+`<leader>mr` in a markdown buffer runs `md-preview <file>`, which focuses that
+file's Chrome tab or opens one. Rendering is client-side (markdown-it,
+highlight.js, mermaid) in `scripts/md-preview/`; the page re-renders on every
+save and follows the nvim cursor. Its real purpose is **annotation**: comment on
+line ranges in the margin, then "copy all" yields `path` + `L12-L14: comment`
+lines to paste into an agent.
+
+**One permanent server, run by launchd** (`com.github.gauthierdoppler.md-preview`,
+`127.0.0.1:33440`), not one per file. The URL path *is* the file's absolute path,
+so the origin never changes, relative images resolve natively, and a link to
+another `.md` renders instead of downloading. It used to be a server per file on
+a port hashed from the path, bumped on collision and killed after 10 minutes
+without a client: Chrome suspends background tabs, which drops SSE, so the
+server died under any tab left in the background, and a bumped port changed the
+origin — which is what notes were keyed on.
+
+**Notes live in `~/.local/share/md-preview/notes/<sha1 of path>.json`**, through
+`GET`/`PUT /__notes/<path>`, never in `localStorage`. Moving or renaming a file
+loses its notes; that is accepted.
+
+**The server restarts itself when `server.js` or `config.js` changes**, via
+`launchctl kickstart -k`. Exiting and relying on `KeepAlive` does not work: launchd
+marks the respawn `pended nondemand spawn = inefficient` and defers it for
+minutes, whatever the exit code. `index.html` and `app.js` are read per request,
+so they need no restart at all. The same deferral hits a fresh `bootstrap`, so
+`md-preview` kickstarts the agent itself when `/__meta` does not answer.
+
+**The page renders untrusted markdown on an origin that can read local files**,
+so it is fenced on four sides:
+
+- `DOMPurify` over markdown-it's output (`html: true` stays, so `<details>` and
+  sized `<img>` from GitHub READMEs still work) and mermaid in `strict`;
+- a CSP with `script-src 'self'` — every script is a file, nothing is inline;
+- the `Host` header must be `127.0.0.1` or `localhost`, against DNS rebinding;
+- a non-markdown file is only served to a page whose `Referer` is a markdown
+  file in the same git repo (or the same directory outside git). Markdown files
+  themselves are served from anywhere: they are what you ask to open.
+
+Writes require `content-type: application/json`, which a cross-origin page
+cannot send without a preflight this server never answers.
+
+**Dependencies are vendored through `bun install`** (`package.json` +
+`bun.lock`, `node_modules` ignored) and served from `/__lib/`, so the preview
+works offline. `install.sh` runs it after the bun phase.
+
+Tab reuse is JXA against Google Chrome (`w.tabs.url()` per window, matched
+without the fragment); the first run triggers macOS's automation prompt. If
+Chrome is not running or the script fails, it falls back to `open -a`.
+
+The cursor sync is a `CursorHold` autocmd, registered once `<leader>mr` has run
+in that buffer, that `POST`s the line to `/__cursor/<path>`; the URL comes from
+the CLI's stdout, so the port is defined in `config.js` alone. The page only
+scrolls when the line's block is outside the middle of the viewport, so it does
+not twitch on every cursor move.
+
 ## Theming
 
 Catppuccin across the stack: **Frappe** for ghostty, tmux and neovim; Mocha for
