@@ -7,3 +7,5 @@ dot_claude/settings.local.json
 dot_claude/settings.generated.json
 
 scripts/md-preview/node_modules/
+
+atelier/target/
