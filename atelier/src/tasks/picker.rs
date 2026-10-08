@@ -21,14 +21,12 @@ pub fn header(catalog: &Catalog) -> &'static str {
 
 pub fn pick(tmux: &Tmux, catalog: &Catalog) -> Result<()> {
     catalog.set_group("all")?;
-    let exe = std::env::current_exe()?;
-    let callback = |command: &str| {
-        format!(
-            "{} tasks {command} -t {}",
-            quote(&exe.to_string_lossy()),
-            quote(&catalog.session)
-        )
-    };
+    let mut atelier = quote(&std::env::current_exe()?.to_string_lossy());
+    if let Some(socket) = tmux.socket() {
+        atelier.push_str(&format!(" --socket {}", quote(&socket.to_string_lossy())));
+    }
+    let callback =
+        |command: &str| format!("{atelier} tasks {command} -t {}", quote(&catalog.session));
     let dir = quote(&catalog.dir().to_string_lossy());
     let preview = format!(
         "f={{1}}; d={dir}; [ -f \"$d/$f\" ] || exit 0; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 \"$d/$f\"; else cat \"$d/$f\"; fi"

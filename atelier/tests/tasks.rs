@@ -432,24 +432,6 @@ fn attach(tmux: &TmuxServer, session: &str) -> Client {
     client
 }
 
-fn attach_control_mode(tmux: &TmuxServer, session: &str) -> Client {
-    let client = Command::new("tmux")
-        .arg("-S")
-        .arg(tmux.socket())
-        .args(["-C", "attach-session", "-t", session])
-        .env_remove("TMUX")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("tmux -C runs");
-    let client = Client(client);
-    wait_until("the control client to attach", || {
-        !tmux.tmux(&["list-clients"]).is_empty()
-    });
-    client
-}
-
 fn count_bells(tmux: &TmuxServer) {
     tmux.tmux(&["set-hook", "-g", "alert-bell", "set -g @rang yes"]);
 }
@@ -478,7 +460,7 @@ fn a_control_mode_client_does_not_count_as_watching() {
     let tmux = TmuxServer::start();
     let session = tmux.new_session("app", &project.root);
     count_bells(&tmux);
-    let _control = attach_control_mode(&tmux, &session);
+    let _control = tmux.attach_control_client(&session);
 
     run(&tmux, &project, &session, &project.root, "build");
 
