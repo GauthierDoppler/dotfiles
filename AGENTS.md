@@ -139,7 +139,8 @@ and focus events), so the `set -gu` + `set -as` pair is idempotent.
 tmux: `xterm-ghostty`, `xterm-kitty` and `wezterm` get `RGB:usstyle:sync` —
 `usstyle` is what makes nvim's LSP undercurl render as a curl rather than a plain
 underline — and plain `xterm-256color` gets `RGB` alone, since that TERM is also
-what Terminal.app and a bare xterm report, and neither draws a styled underline.
+what Terminal.app and a bare xterm report, and the entry can only promise what the
+least capable of them supports.
 iTerm2 has no entry because it cannot have one: it reports `xterm-256color`, and
 tmux recognises it from its XTVERSION reply and applies `RGB`, `usstyle` and
 `sync` itself. WezTerm reports `wezterm` only when its `term` option is set to it
