@@ -1,5 +1,6 @@
 #!/bin/bash
-# Runs cc-tap (https://github.com/theodo-group/cc-tap) under launchd.
+# Runs cc-tap (https://github.com/theodo-group/cc-tap) under launchd or systemd,
+# as declared in services.toml and installed by `atelier service install`.
 #
 # Usage: cc-tap-service dashboard|proxy|update
 #
@@ -13,7 +14,11 @@ set -uo pipefail
 ROOT="$HOME/.local/share/cc-tap"
 PKG="$ROOT/node_modules/cc-tap"
 STANDALONE="$PKG/.next/standalone"
-LOGS="$HOME/Library/Logs/cc-tap"
+if [[ "$(uname -s)" == Darwin ]]; then
+  LOGS="$HOME/Library/Logs/cc-tap"
+else
+  LOGS="${XDG_STATE_HOME:-$HOME/.local/state}/cc-tap"
+fi
 STAMP="$ROOT/last-update"
 DASHBOARD_PORT=3000
 PROXY_PORT=8089
@@ -69,8 +74,12 @@ case "${1:-}" in
       exit 0
     fi
     echo "$(date '+%F %T') cc-tap ${before:-none} -> $after, restarting"
-    launchctl kickstart -k "gui/$(id -u)/com.theodo.cc-tap.dashboard"
-    launchctl kickstart -k "gui/$(id -u)/com.theodo.cc-tap.proxy"
+    if [[ "$(uname -s)" == Darwin ]]; then
+      launchctl kickstart -k "gui/$(id -u)/com.theodo.cc-tap.dashboard"
+      launchctl kickstart -k "gui/$(id -u)/com.theodo.cc-tap.proxy"
+    else
+      systemctl --user restart com.theodo.cc-tap.dashboard.service com.theodo.cc-tap.proxy.service
+    fi
     ;;
 
   *)

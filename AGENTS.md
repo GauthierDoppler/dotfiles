@@ -20,7 +20,7 @@ add a comment explaining the change.
 
 ## What This Is
 
-A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the launchd agents that keep cc-tap running. All configs are symlinked from this repo to their expected locations by `atelier setup`.
+A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the background services (cc-tap, the markdown preview) declared in `services.toml`. All configs are symlinked from this repo to their expected locations by `atelier setup`.
 
 ## Installation & Symlinks
 
@@ -30,7 +30,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → atelier → `atelier setup` → keyboard layout → Claude settings merge → bun → Node LTS → npm globals → launch agents → app registration.
+The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → atelier → `atelier setup` → keyboard layout → Claude settings merge → bun → Node LTS → npm globals → `atelier service install` → app registration.
 
 `install.sh` is only the bootstrap. Links and stubs are `atelier setup
 [--profile desktop|remote] [--dry-run] [--repo PATH]`, whose `LINKS` and `STUBS`
@@ -519,9 +519,10 @@ block is the thing that stays truthful.
 ## cc-tap (Claude Code dashboard + inspector proxy)
 
 [cc-tap](https://github.com/theodo-group/cc-tap) runs permanently as three
-launchd agents in `launchd/`, all driven by `scripts/cc-tap-service`:
+services declared in `services.toml` (see "Services" below), all driven by
+`scripts/cc-tap-service`:
 
-| agent | runs | when |
+| service | runs | when |
 | ----- | ---- | ---- |
 | `com.theodo.cc-tap.dashboard` | dashboard on `127.0.0.1:3000` | login, kept alive |
 | `com.theodo.cc-tap.proxy`     | inspector proxy on `127.0.0.1:8089` | login, kept alive |
@@ -533,7 +534,7 @@ arguments forces plain and is stripped before `claude` sees it. There is no
 separate proxy alias any more — one command, and the proxy being down never
 blocks a session.
 
-**launchd, not Docker.** `proxy/server.js` hardcodes `listen(PORT, '127.0.0.1')`,
+**A service manager, not Docker.** `proxy/server.js` hardcodes `listen(PORT, '127.0.0.1')`,
 so inside a container it is unreachable through a published port without
 patching the package. It also reads `~/.claude` and writes `~/.cc-lens`, so a
 container would buy no isolation.
@@ -544,9 +545,10 @@ the dashboard the proxy is a detached child spawned from the Live Capture
 button, which dies with every restart. The proxy agent writes
 `~/.cc-lens/proxy.json` itself because that file is the only way the dashboard
 knows a proxy exists; without it, Start spawns a second one on `:8090`. The
-flip side is that the dashboard's Stop button kills the proxy and launchd
-brings it back ten seconds later — to really stop capture, `launchctl bootout
-gui/$(id -u)/com.theodo.cc-tap.proxy`.
+flip side is that the dashboard's Stop button kills the proxy and the service
+manager brings it back ten seconds later — to really stop capture, `launchctl
+bootout gui/$(id -u)/com.theodo.cc-tap.proxy` (macOS) or `systemctl --user stop
+com.theodo.cc-tap.proxy` (Linux).
 
 **Node is fnm's `default` alias**, not Homebrew's `node`: Homebrew's is only on
 a machine as a dependency of something else (it is not in the `Brewfile`),
@@ -559,22 +561,58 @@ decides. It no-ops on weekends, before 08:00, and once today's stamp
 (`~/.local/share/cc-tap/last-update`) is written — the stamp is only written on
 a successful install, so being offline just means the next tick retries. That
 covers the three ways 08:00 gets missed: asleep (launchd runs a missed calendar
-event on wake), powered off (`RunAtLoad`), and no network. Restarting is skipped
-when the version did not change because restarting the proxy drops every
-in-flight request of every Claude session routed through it.
+event on wake; systemd's `Persistent=true` does the same), powered off
+(`RunAtLoad`; `OnActiveSec=0`), and no network. Restarting is skipped when the
+version did not change because restarting the proxy drops every in-flight
+request of every Claude session routed through it. The script restarts through
+`launchctl kickstart -k` on macOS and `systemctl --user restart` elsewhere, and
+logs to `~/Library/Logs/cc-tap/` or `${XDG_STATE_HOME:-~/.local/state}/cc-tap/`.
 
-**The plists are copied into `~/Library/LaunchAgents`, not linked**, the same
-treatment as the keyboard bundle. They are portable because launchd does not
-expand `~` or `$HOME`: each one runs `/bin/sh -c 'exec "$HOME/…"'`, and the
-script sets its own `PATH` and log redirection (`~/Library/Logs/cc-tap/`).
-`launch_agent()` only reloads an agent whose plist changed or which is not
-loaded, so re-running `install.sh` does not bounce the services. It does kickstart
-each one, which starts a stopped agent and is a no-op on a running one; for
-`update` that means one extra run of the script, which gates itself.
+## Services
+
+`services.toml` at the repo root declares every background service once — a
+label, a description, the program relative to `$HOME` with its arguments, an
+optional log file name, and an optional `schedule` (`days`, `at`, `every`
+seconds). No `schedule` means keep-alive. `atelier service install|list|uninstall`
+turns it into launchd agents on macOS and systemd user units on Linux
+(`--system` overrides the guess); `install.sh` runs `install`.
+
+- **launchd**: one plist per service in `~/Library/LaunchAgents`, **copied, not
+  linked**, the same treatment as the keyboard bundle. launchd expands neither
+  `~` nor `$HOME`, so each runs `/bin/sh -c 'exec "$HOME/…"'`, with the log
+  redirected to `~/Library/Logs/<log>` when the description names one.
+  Keep-alive is `RunAtLoad` + `KeepAlive` + `ThrottleInterval 10`; a schedule is
+  `RunAtLoad` + `StartCalendarInterval` (+ `StartInterval` for `every`).
+- **systemd**: `<label>.service` in `${XDG_CONFIG_HOME:-~/.config}/systemd/user`,
+  `ExecStart=%h/…` (systemd's own home specifier, so no shell), `Restart=always`
+  and `RestartSec=10` for keep-alive. A schedule adds `<label>.timer` with
+  `OnCalendar=Mon..Fri 08:00`, `Persistent=true`, `OnActiveSec=0` for
+  `RunAtLoad` and `OnUnitActiveSec` for `every`; the timer is what gets enabled.
+  Output goes to the journal (`journalctl --user -u <label>`).
+
+**A file is written only when its content changed, and a service is reloaded
+only then** — so re-running `install.sh` does not bounce cc-tap's proxy. On
+launchd, an unchanged and loaded agent is only `kickstart`ed (without `-k`),
+which starts a stopped one and is a no-op on a running one; a changed or
+unloaded one is `bootout`ed — waiting up to 5 s for it to go, since a
+`bootstrap` issued while it lingers fails with `5: Input/output error` — then
+written, `bootstrap`ped and kickstarted, because a fresh bootstrap can sit at
+`pended nondemand spawn = speculative` for minutes. On systemd, any change
+triggers one `daemon-reload`, then `enable` + `restart` of what changed and
+`enable --now` of the rest. For `update` either path means one extra run of the
+script, which gates itself.
 
 `~/Library/LaunchAgents` can end up owned by root — the Pulse Secure installer
-did it on this machine — which makes every write fail with `EACCES`.
-`launch_agent()` warns with the `chown` to run rather than failing the install.
+did it on this machine — which makes every write fail with `EACCES`. `install`
+probes the folder first and fails with the `sudo chown` that fixes it;
+`install.sh` turns that into a warning. On Linux, `install` runs `loginctl
+enable-linger` unless `Linger=yes` already, so services survive SSH logout.
+
+`tests/service.rs` snapshots every generated file for both systems (the launchd
+snapshots started as the hand-written plists they replaced, byte for byte) and
+drives `install`/`list`/`uninstall` against a temporary `$HOME` with fake
+`launchctl`, `systemctl` and `loginctl` on `PATH` that log their arguments. The
+unwritable-folder test skips itself as root, where permissions are not enforced.
 
 ## Skills
 
@@ -868,7 +906,7 @@ save and follows the nvim cursor. Its real purpose is **annotation**: comment on
 line ranges in the margin, then "copy all" yields `path` + `L12-L14: comment`
 lines to paste into an agent.
 
-**One permanent server, `atelier preview serve`, run by launchd**
+**One permanent server, `atelier preview serve`, run as a service** (see "Services")
 (`com.github.gauthierdoppler.md-preview`, `127.0.0.1:33440`; `MD_PREVIEW_PORT`
 overrides the port for both commands), not one per file. The URL path *is* the
 file's absolute path, so the origin never changes, relative images resolve
@@ -902,12 +940,12 @@ from changes mtime or size, which `cargo install` does — and so does any edit 
 the embedded page), via `launchctl
 kickstart -k` under launchd and by exiting anywhere else. Exiting and relying on
 `KeepAlive` does not work: launchd marks the respawn `pended nondemand spawn =
-inefficient` and defers it for minutes, whatever the exit code. The same
-deferral hits a fresh `bootstrap` (`pended nondemand spawn = speculative`), so
-`launch_agent()` in `install.sh` kickstarts every agent it manages — without
-`-k`, which leaves a running one alone — and `atelier preview` kickstarts the
-agent itself when `/__meta` does not answer. On Linux, until services land, it
-starts a detached `atelier preview serve` instead.
+inefficient` and defers it for minutes, whatever the exit code. systemd's
+`Restart=always` has no such deferral, only its 10 s `RestartSec`. `atelier
+preview` starts the service itself when `/__meta` does not answer — `launchctl
+kickstart` on macOS, `systemctl --user start` elsewhere, falling back on Linux to
+a detached `atelier preview serve` when no unit answers or `MD_PREVIEW_PORT` is
+not the default the unit serves.
 
 **The page renders untrusted markdown on an origin that can read local files**,
 so it is fenced on four sides, each tested over HTTP in `atelier/tests/preview.rs`:

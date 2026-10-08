@@ -1,0 +1,10 @@
+---
+source: tests/service.rs
+expression: unit
+---
+[Unit]
+Description=Install cc-tap@latest once per weekday
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cc-tap-service update
