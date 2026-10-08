@@ -146,7 +146,11 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
 - **Tests drive the built binary against a private tmux server**
   (`tests/common/mod.rs`, `TmuxServer::start()`: `tmux -L atelier-test-<pid>-<n>
   -f /dev/null`, one per test). Assert on what tmux or the binary shows, never on
-  internals; pure render functions are the only other seam.
+  internals; pure render functions are the only other seam. A test never
+  waits on a child without a deadline (`common::BoundedOutput`, read timeouts
+  on sockets), and never reaches a real browser or service manager: the
+  opener, `osascript`, `launchctl` and `systemctl` are looked up on `PATH` so a
+  test can fake them.
 - **The daemon (`src/daemon/`) is one per tmux socket**, started by `atelier
   daemon --ensure` from `dot_tmux.conf`
   (`daemon.rs::ensuring_the_daemon_again_keeps_a_single_one`); its files live in
@@ -162,7 +166,9 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
   (`src/doctor.rs`): `ok`, `FAIL` with a one-line `fix:`, `skip`, or `look`. **The
   Nerd Font is `look`, never `ok`**: no terminal reports which font draws a glyph.
 - **CI** (`.github/workflows/atelier.yml`): fmt, clippy `-D warnings` and tests on
-  Linux and macOS, plus shellcheck. It ignores only `docs/`, top-level markdown
+  Linux and macOS, plus shellcheck. Tests run under cargo-nextest
+  (`atelier/.config/nextest.toml`, profile `ci`), which names and kills a hung
+  test; the job stops at 15 minutes. It ignores only `docs/`, top-level markdown
   and `nvim/` (`ci.rs::ci_runs_on_every_trigger_for_the_files_the_tests_read`).
   fzf-driven tests skip locally without fzf ≥ 0.45 but fail under `CI`. Run
   `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test` in
