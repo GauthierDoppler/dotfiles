@@ -33,6 +33,8 @@ macro_rules! features {
 features! {
     /// The tmux status bar
     Bar => bar,
+    /// Markdown preview: `atelier preview <file.md>` or `atelier preview serve`
+    Preview => preview,
 }
 
 #[derive(Parser)]
