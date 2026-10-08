@@ -67,6 +67,8 @@ features! {
     Bar => bar,
     /// Regenerate ~/.claude/settings.json from the shared base, local overrides and app drift
     ClaudeSettingsSync => claude_settings,
+    /// Check what this machine needs and print the fix for each failure
+    Doctor => doctor,
     /// Entry points for other tools' hooks
     Hook => hook,
     /// List what this machine's config adds beyond the shared dotfiles
