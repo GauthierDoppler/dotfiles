@@ -86,7 +86,7 @@ impl Paths {
             )),
         };
         DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
-        let key = format!("{:016x}", fnv1a(tmux_socket.as_os_str().as_encoded_bytes()));
+        let key = format!("{:016x}", crate::fnv::fnv1a(tmux_socket.as_os_str().as_encoded_bytes()));
         Ok(Paths {
             lock: dir.join(format!("{key}.lock")),
             socket: dir.join(format!("{key}.sock")),
@@ -106,12 +106,6 @@ impl Paths {
             Err(TryLockError::Error(error)) => Err(error.into()),
         }
     }
-}
-
-fn fnv1a(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
-    })
 }
 
 fn ensure(tmux: &Tmux) -> Result<()> {

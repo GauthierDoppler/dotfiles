@@ -34,3 +34,4 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [27](27-shrink-agents-md.md) | Shrink AGENTS.md | 06, 08, 10, 13, 15 | ready-for-agent |
 | [28](28-housekeeping-after-the-first-merges.md) | Housekeeping after the first merges | 04, 08, 20 | done |
 | [29](29-review-fixes.md) | Review fixes | — | done |
+| [30](30-daemon-review-fixes.md) | Daemon review fixes | — | done |

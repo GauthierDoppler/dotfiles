@@ -31,7 +31,7 @@ shared FNV helper).
 
 ### Spec
 
-- [ ] the session picker orders and labels sessions by terminal clients only, so the daemon's control client does not skew it (labels yes, ordering declined: see Comments)
+- [x] the session picker orders and labels sessions by terminal clients only, so the daemon's control client does not skew it (labels here, ordering by ticket 30 on the daemon side: see Comments)
 - [x] launchd's `running` in `atelier doctor` comes from the agent's state, so a crash-looping agent is not `ok`
 - [x] repo counts are clipped to their segment width, with a snapshot test
 - [x] ticket 04's padding claim matches the code
@@ -67,9 +67,9 @@ Each finding was re-checked against the code at the start of this ticket
   window is this one); the task runner's "active window + a client on the
   session" meant the same except for grouped sessions, where the new one is
   the correct one.
-- `src/fnv.rs` with the published FNV-1a 64 vectors; the task catalogue uses it.
-  `src/daemon/mod.rs` still has its own `fnv1a` (out of scope here) and can
-  switch to `crate::fnv::fnv1a` unchanged.
+- `src/fnv.rs` with the published FNV-1a 64 vectors; the task catalogue and,
+  after merging ticket 30, the daemon's lock/socket names use it (same
+  constants, so the names do not change).
 - The preview starts and restarts its server through `service::{installed,
   start, restart}`. `LABEL` and `DEFAULT_PORT` stay constants in the preview,
   pinned to `services.toml` by a unit test rather than read from it at runtime
@@ -120,11 +120,9 @@ Each finding was re-checked against the code at the start of this ticket
   `session_last_attached`. The skew is confined to that one session, already the
   most recently used, and lasts until a terminal client attaches elsewhere.
   Ordering by terminal-client activity would not remove it (the daemon's seat
-  usually has no terminal client to take an activity from); removing it needs
-  the daemon to remember the real last visit, which belongs with the daemon
-  follow-ups.
+  usually has no terminal client to take an activity from), so no picker-side
+  workaround was added; ticket 30 fixed the skew on the daemon side.
 
-**Not done here (daemon, owned by another ticket):** standards 1
-(`tokio::process::Command::from(tmux.command())` in `src/daemon/server.rs`),
-the daemon half of standards 9, and the daemon's uid read from the socket's
-owner.
+**Not done here (daemon, ticket 30):** standards 1
+(`tokio::process::Command::from(tmux.command())` in `src/daemon/server.rs`) and
+the daemon's uid read from the socket's owner.

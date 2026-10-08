@@ -182,3 +182,67 @@ fn a_killed_daemon_leaves_status_reading_tmux_directly() {
 
     assert_eq!(status(&tmux), "daemon: not running\nwork\n  0 sh");
 }
+
+#[test]
+fn the_daemon_runs_when_path_lacks_tmux() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    let tmux = server();
+    tmux.new_session("work", dir.path());
+    let mut daemon = tmux
+        .atelier_command(&["daemon"])
+        .env("PATH", empty.path())
+        .spawn()
+        .unwrap();
+
+    eventually(&tmux, "daemon: running\nwork\n  0 sh");
+    let _ = daemon.kill();
+    daemon.wait().unwrap();
+}
+
+fn picker_rows(tmux: &TmuxServer, from: &str) -> String {
+    tmux.atelier_stdout(&["sessions", "rows", "-t", from])
+}
+
+fn picker_order_around_the_daemon(tmux: &TmuxServer) -> (String, String) {
+    let before = picker_rows(tmux, "gamma");
+    let mut daemon = tmux.atelier_command(&["daemon"]).spawn().unwrap();
+    eventually(
+        tmux,
+        "daemon: running\nalpha\n  0 sh\nbeta\n  0 sh\ngamma\n  0 sh",
+    );
+    let after = picker_rows(tmux, "gamma");
+    let _ = daemon.kill();
+    daemon.wait().unwrap();
+    (before, after)
+}
+
+#[test]
+fn the_daemon_attaching_leaves_the_picker_order_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = server();
+    for name in ["gamma", "alpha", "beta"] {
+        tmux.new_session(name, dir.path());
+    }
+
+    let (before, after) = picker_order_around_the_daemon(&tmux);
+
+    assert_eq!(after, before);
+}
+
+#[test]
+fn the_daemon_attaching_keeps_the_last_attached_session_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = server();
+    for name in ["gamma", "alpha"] {
+        tmux.new_session(name, dir.path());
+    }
+    drop(tmux.attach_control_client("alpha"));
+    std::thread::sleep(Duration::from_millis(1100));
+    tmux.new_session("beta", dir.path());
+
+    let (before, after) = picker_order_around_the_daemon(&tmux);
+
+    assert!(before.starts_with("$1\talpha"), "{before}");
+    assert_eq!(after, before);
+}
