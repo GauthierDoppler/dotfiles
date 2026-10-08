@@ -114,8 +114,13 @@ config, or in `~/.zprofile` below the load line.
 
 `dot_tmux.conf` is still a plain symlink: nothing appends to `~/.tmux.conf`.
 
-Run `local-diff` to list what has accumulated locally. Each finding is a
-decision: promote it into the tracked config, or leave it local.
+Run `atelier local-diff` (`local-diff` is a `dot_zshrc` alias for it) to list
+what has accumulated locally. Each finding is a decision: promote it into the
+tracked config, or leave it local. It walks the same `STUBS` table `atelier
+setup` writes from, so a new stub is diffed with no second list to update: shell
+stubs as a set of non-comment lines, `~/.gitconfig` as `git config --list` keys,
+the Claude override as `key.path=value` pairs. Covered by
+`atelier/tests/local_diff.rs`.
 
 **Claude Code settings are a special case.** Claude Code has no user-scope
 `settings.local.json`, and it *rewrites* `~/.claude/settings.json` in place —
@@ -191,8 +196,10 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   absolute path, and every caller must still work when it is absent. The install
   itself is the exception: `install.sh` stops if the build fails, since
   `atelier setup` is what links everything.
-- **A feature with flags and no subcommands** (`setup`) derives `clap::Args` and
-  implements `clap::Subcommand` by hand, delegating to the args and clearing
+- **A feature with flags and no subcommands** (`setup`, `local-diff`,
+  `claude-settings-sync`) derives
+  `clap::Args` and calls `crate::flags_only!(Command)`, which implements
+  `clap::Subcommand` by delegating to the args and clearing
   `subcommand_required`, so it still registers with one `features!` line.
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus

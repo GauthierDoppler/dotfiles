@@ -18,23 +18,7 @@ pub struct Command {
     repo: Option<PathBuf>,
 }
 
-impl clap::Subcommand for Command {
-    fn augment_subcommands(command: clap::Command) -> clap::Command {
-        <Self as Args>::augment_args(command)
-            .subcommand_required(false)
-            .arg_required_else_help(false)
-    }
-
-    fn augment_subcommands_for_update(command: clap::Command) -> clap::Command {
-        <Self as Args>::augment_args_for_update(command)
-            .subcommand_required(false)
-            .arg_required_else_help(false)
-    }
-
-    fn has_subcommand(_name: &str) -> bool {
-        false
-    }
-}
+crate::flags_only!(Command);
 
 impl Command {
     pub fn run(self, _tmux: &Tmux) -> Result<()> {

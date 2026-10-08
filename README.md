@@ -88,7 +88,7 @@ win, so anything below the include overrides the shared config.
 | `dot_gitconfig`            | `~/.gitconfig`, below the include  |
 | `dot_claude/settings.json` | `dot_claude/settings.local.json`  |
 
-`local-diff` lists what has accumulated locally, so you can decide whether to
+`local-diff` (an alias for `atelier local-diff`) lists what has accumulated locally, so you can decide whether to
 promote it into the tracked config or leave it machine-specific. Some of what it
 reports is permanently local — project registrations below are the main case, and
 they stay flagged on every run rather than being filtered out, because a diff
@@ -133,7 +133,6 @@ so app-side edits are never lost and the shared base still propagates.
 Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
-- `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
 - `tmux-sessions` — previous session picker, no longer bound (`Prefix + Space` runs `atelier sessions pick`); removed once atelier's has the preview
 - `tmux-tasks` / `tmux-task-run` — fallback task picker behind `Prefix + e` when atelier is missing, and the runner for non-window placements
 - `tmux-status-left` — renders project · root/wt · branch in the status bar
