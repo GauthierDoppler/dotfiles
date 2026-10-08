@@ -33,6 +33,8 @@ macro_rules! features {
 features! {
     /// The tmux status bar
     Bar => bar,
+    /// The session picker
+    Sessions => sessions,
 }
 
 #[derive(Parser)]

@@ -136,6 +136,17 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
 - **Session identity comes from `session::resolve`, for every consumer**:
   `@grove_project`, else the basename of the main worktree (first entry of
   `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
+  Its `root` (`@grove_root`, else that main worktree, else none) is what "the
+  same project" means; a session with no root belongs to no project.
+- **The session picker is `atelier sessions pick`**, run by `Prefix + Space`
+  and `Prefix + s` inside `display-popup -E`. It execs fzf with rows of
+  `<session id><TAB><label>` (`--with-nth=2..`), and every bind calls back into
+  `atelier sessions <rows|toggle|header|escape|switch> -t <session>`, which is
+  what `tests/sessions.rs` drives. The scope lives in `@atelier_sessions_scope`
+  on the session the picker was opened from, reset to `project` on every open.
+  tmux 3.4 does not expand formats in `display-popup`'s shell command, so
+  `pick` resolves the session and client itself rather than taking
+  `#{session_id}` from the binding. Needs fzf ≥ 0.45 (`transform`).
 - **`display-message -p` returns one field per call.** It prints control
   characters as octal and newlines as `_`, so fields cannot be joined with a
   delimiter; and with an unknown `-t` it exits 0 with empty output, so emptiness
@@ -605,12 +616,8 @@ as part of the name.
 It does not parse the session name. Grove builds names as
 `{prefix}{project}_{branch}_{key}` with a sanitizer that maps `/[.\s:/@]/` to
 `_` and leaves existing `_` alone, so `grove_my_repo_main_f2d1` cannot be split
-from the left — the same ambiguity that makes `tmux-sessions` group by the
-trailing key instead. That key is only trusted when it equals the one grove
-*would* derive from the session's own repo root (FNV-1a32 of the main worktree
-path, low 16 bits), because shape alone also matches a hand-named session like
-`api_perf_beef`, which used to scope the picker to a project that does not exist:
-empty list, `Tab` apparently broken. A name also freezes the branch at session creation, so it
+from the left, and its shape also matches a hand-named session like
+`api_perf_beef`. A name also freezes the branch at session creation, so it
 starts lying after the first `git checkout`. Nothing about the bar is
 grove-specific: any session in any repo gets the same treatment, and a session
 outside a repo falls back to its own name.

@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
@@ -102,6 +103,59 @@ impl TmuxServer {
 
     pub fn atelier_stdout(&self, args: &[&str]) -> String {
         stdout_of(args, self.atelier(args))
+    }
+
+    pub fn atelier_stdout_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> String {
+        let output = Command::new(env!("CARGO_BIN_EXE_atelier"))
+            .arg("--socket")
+            .arg(&self.socket)
+            .args(args)
+            .env_remove("TMUX")
+            .envs(env.iter().copied())
+            .output()
+            .expect("atelier runs");
+        stdout_of(args, output)
+    }
+
+    pub fn attach_control_client(&self, session: &str) -> ControlClient {
+        let mut client = ControlClient {
+            name: String::new(),
+            child: Command::new("tmux")
+                .arg("-L")
+                .arg(&self.name)
+                .args(["-C", "attach-session", "-t", session])
+                .env_remove("TMUX")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .spawn()
+                .expect("tmux control client starts"),
+        };
+        let prefix = format!("{} ", client.child.id());
+        for _ in 0..200 {
+            let clients = self.tmux(&["list-clients", "-F", "#{client_pid} #{client_name}"]);
+            if let Some(name) = clients.lines().find_map(|line| line.strip_prefix(&prefix)) {
+                client.name = name.to_string();
+                return client;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("control client for {session} never attached");
+    }
+
+    pub fn client_session(&self, client: &ControlClient) -> String {
+        self.tmux(&["display", "-p", "-c", &client.name, "#{session_name}"])
+    }
+}
+
+pub struct ControlClient {
+    pub name: String,
+    child: Child,
+}
+
+impl Drop for ControlClient {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 

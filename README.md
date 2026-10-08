@@ -134,7 +134,7 @@ Symlinked into `~/.local/bin` by `install.sh`:
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
 - `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
 - `claude-settings-sync` — regenerates `~/.claude/settings.json` from base + local override
-- `tmux-sessions` — session picker behind `Prefix + Space`
+- `tmux-sessions` — previous session picker, no longer bound (`Prefix + Space` runs `atelier sessions pick`); removed once atelier's has the preview
 - `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
 - `tmux-pick` — URL/path picker behind `Prefix + u`
 - `tmux-status-left` — renders project · root/wt · branch in the status bar

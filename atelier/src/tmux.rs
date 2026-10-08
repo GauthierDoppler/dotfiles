@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::Result;
@@ -33,6 +33,10 @@ impl Tmux {
             stdout.pop();
         }
         Ok(stdout)
+    }
+
+    pub fn socket(&self) -> Option<&Path> {
+        self.socket.as_deref()
     }
 
     pub fn display(&self, target: &str, format: &str) -> Result<String> {
