@@ -78,20 +78,12 @@ fn attach_terminal_client(tmux: &TmuxServer, session: &str, width: u16) -> Viewe
         session
     );
     tmux.tmux(&["respawn-pane", "-k", "-t", &viewer.window, &attach]);
-    eventually("a terminal client attaches", || {
+    common::wait_until("a terminal client attaches", || {
         tmux.tmux(&["list-clients", "-F", "#{client_control_mode}"])
             .lines()
             .any(|mode| mode == "0")
     });
     viewer
-}
-
-fn eventually(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !done() {
-        assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 fn option(tmux: &TmuxServer, session: &str, name: &str) -> String {
@@ -168,7 +160,7 @@ fn the_attached_session_gets_both_blocks_and_switching_pushes_the_other() {
 
     pushed_left_becomes(&tmux, "api", &rendered_left(&tmux, "api", 130));
     assert_ne!(option(&tmux, "api", "@bar_right"), "");
-    eventually(
+    common::wait_until(
         "the pushed api block on screen, with no atelier for #()",
         || {
             let line = viewer.status_line(&tmux);
@@ -245,14 +237,14 @@ fn killing_the_daemon_leaves_the_bar_on_its_fallback() {
     load_the_bar_from_dot_tmux_conf(&tmux, home.path());
     let mut daemon = daemon(&tmux);
     pushed_left_becomes(&tmux, "work", &rendered_left(&tmux, "work", 130));
-    eventually("the pushed left block on screen", || {
+    common::wait_until("the pushed left block on screen", || {
         !viewer.status_line(&tmux).starts_with(" work")
     });
 
     daemon.0.kill().unwrap();
     daemon.0.wait().unwrap();
 
-    eventually("the fallback left block on screen", || {
+    common::wait_until("the fallback left block on screen", || {
         viewer.status_line(&tmux).starts_with(" work")
     });
 }
@@ -266,7 +258,7 @@ fn without_atelier_the_bar_still_shows_the_session_name_and_the_clock() {
     let viewer = attach_terminal_client(&tmux, "work", 130);
     load_the_bar_from_dot_tmux_conf(&tmux, home.path());
 
-    eventually("both fallbacks on screen", || {
+    common::wait_until("both fallbacks on screen", || {
         let line = viewer.status_line(&tmux);
         let clock = line.trim_end().rsplit(' ').next().unwrap_or_default();
         line.starts_with(" work")

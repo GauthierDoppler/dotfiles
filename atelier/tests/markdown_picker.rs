@@ -1,20 +1,14 @@
 mod common;
 
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::net::TcpStream;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
 use common::{git, git_repo, TmuxServer};
 
 const PLACEHOLDER: &str = "(no markdown file under this session)";
-
-fn real_tempdir() -> (tempfile::TempDir, PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().canonicalize().unwrap();
-    (dir, path)
-}
 
 fn write_aged(path: &Path, minutes_ago: u64) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -33,7 +27,7 @@ fn rows(tmux: &TmuxServer, session: &str) -> Vec<String> {
 
 #[test]
 fn a_repo_lists_its_markdown_files_newest_first() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     git_repo(&root);
     write_aged(&root.join("README.md"), 30);
     write_aged(&root.join("docs/plan.md"), 1);
@@ -51,7 +45,7 @@ fn a_repo_lists_its_markdown_files_newest_first() {
 
 #[test]
 fn gitignored_markdown_is_left_out() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     git_repo(&root);
     std::fs::write(root.join(".gitignore"), "scratch/\nnode_modules/\n").unwrap();
     write_aged(&root.join("scratch/draft.md"), 0);
@@ -65,7 +59,7 @@ fn gitignored_markdown_is_left_out() {
 
 #[test]
 fn a_worktree_session_lists_its_own_checkout() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let main = root.join("main");
     git_repo(&main);
     write_aged(&main.join("main.md"), 0);
@@ -92,7 +86,7 @@ fn a_worktree_session_lists_its_own_checkout() {
 
 #[test]
 fn outside_a_repo_the_directory_is_walked_without_hidden_folders() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write_aged(&root.join("notes/today.md"), 2);
     write_aged(&root.join("todo.md"), 4);
     write_aged(&root.join(".cache/log.md"), 0);
@@ -105,7 +99,7 @@ fn outside_a_repo_the_directory_is_walked_without_hidden_folders() {
 
 #[test]
 fn a_session_without_markdown_lists_a_placeholder_row() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     git_repo(&root);
     std::fs::write(root.join("main.rs"), "").unwrap();
     let tmux = TmuxServer::start();
@@ -116,7 +110,7 @@ fn a_session_without_markdown_lists_a_placeholder_row() {
 
 #[test]
 fn without_a_target_the_current_session_is_listed() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write_aged(&root.join("plan.md"), 0);
     let tmux = TmuxServer::start();
     tmux.new_session("only", &root);
@@ -124,14 +118,6 @@ fn without_a_target_the_current_session_is_listed() {
     let output = tmux.atelier_inside(&["preview", "list"]);
 
     assert_eq!(common::stdout_of(&["preview", "list"], output), "plan.md");
-}
-
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
 }
 
 fn answers(port: u16) -> bool {
@@ -147,16 +133,6 @@ fn answers(port: u16) -> bool {
     response.contains("md-preview")
 }
 
-fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
-    for _ in 0..400 {
-        if done() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(25));
-    }
-    panic!("timed out waiting for {what}");
-}
-
 struct Server {
     port: u16,
     _home: tempfile::TempDir,
@@ -165,7 +141,7 @@ struct Server {
 
 impl Server {
     fn start() -> Self {
-        let port = free_port();
+        let port = common::free_port();
         let home = tempfile::tempdir().unwrap();
         let child = Command::new(env!("CARGO_BIN_EXE_atelier"))
             .args(["preview", "serve"])
@@ -175,7 +151,7 @@ impl Server {
             .stderr(Stdio::null())
             .spawn()
             .unwrap();
-        wait_for("the preview server", || answers(port));
+        common::wait_until("the preview server", || answers(port));
         Server {
             port,
             _home: home,
@@ -193,8 +169,8 @@ impl Drop for Server {
 
 #[test]
 fn previewing_the_placeholder_row_does_nothing() {
-    let (_dir, root) = real_tempdir();
-    let port = free_port();
+    let (_dir, root) = common::real_tempdir();
+    let port = common::free_port();
 
     let output = Command::new(env!("CARGO_BIN_EXE_atelier"))
         .args(["preview", PLACEHOLDER])
@@ -215,7 +191,7 @@ fn enter_in_the_picker_previews_the_newest_file() {
     if !common::fzf_available() {
         return;
     }
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write_aged(&root.join("old.md"), 10);
     write_aged(&root.join("docs/new.md"), 0);
     let server = Server::start();
@@ -242,14 +218,14 @@ fn enter_in_the_picker_previews_the_newest_file() {
             printed.display()
         ),
     ]);
-    wait_for("the picker to list the rows", || {
+    common::wait_until("the picker to list the rows", || {
         tmux.tmux(&["capture-pane", "-p", "-t", &picker])
             .contains("old.md")
     });
 
     tmux.tmux(&["send-keys", "-t", &picker, "Enter"]);
 
-    wait_for("the preview URL", || {
+    common::wait_until("the preview URL", || {
         std::fs::read_to_string(&printed).is_ok_and(|out| out.ends_with('\n'))
     });
     assert_eq!(

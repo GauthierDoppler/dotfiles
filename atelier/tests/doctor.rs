@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
@@ -46,13 +46,6 @@ case "$1" in
     printf '%s = {\n\tstate = %s\n\tjob state = exited\n}\n' "$2" "$state" ;;
 esac
 "#;
-
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("the crate sits inside the dotfiles repo")
-        .to_path_buf()
-}
 
 fn real(program: &str) -> PathBuf {
     let output = Command::new("sh")
@@ -104,7 +97,7 @@ impl Machine {
         .unwrap();
         let setup = Command::new(env!("CARGO_BIN_EXE_atelier"))
             .args(["setup", "--repo"])
-            .arg(repo())
+            .arg(common::repo())
             .env("HOME", machine.home.path())
             .output()
             .unwrap();
@@ -151,7 +144,7 @@ impl Machine {
             .arg("doctor")
             .args(args)
             .arg("--repo")
-            .arg(repo())
+            .arg(common::repo())
             .env("HOME", self.home.path())
             .env_remove("XDG_CONFIG_HOME")
             .env("USER", "alice")

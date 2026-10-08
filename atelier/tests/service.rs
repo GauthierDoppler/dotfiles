@@ -1,6 +1,8 @@
+mod common;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output};
 
 const LABELS: &[&str] = &[
@@ -39,13 +41,6 @@ case "$1" in
   show-user) cat "$FAKE_STATE/linger" 2>/dev/null || echo no ;;
 esac
 "#;
-
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("the crate sits inside the dotfiles repo")
-        .to_path_buf()
-}
 
 struct Machine {
     home: tempfile::TempDir,
@@ -95,7 +90,7 @@ impl Machine {
             .arg("service")
             .args(args)
             .arg("--repo")
-            .arg(repo())
+            .arg(common::repo())
             .env("HOME", self.home.path())
             .env_remove("XDG_CONFIG_HOME")
             .env("USER", "alice")
