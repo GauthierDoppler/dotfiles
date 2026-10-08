@@ -56,16 +56,19 @@ pub(super) fn statuses(services: &[Service], home: &Path) -> Result<Vec<Status>>
     let domain = domain();
     let mut statuses = Vec::new();
     for service in services {
-        let state = match state(&format!("{domain}/{}", service.label)) {
-            None => "not loaded".to_owned(),
-            Some(_) if service.schedule.is_some() => "loaded".to_owned(),
-            Some(state) => state,
+        let (state, running) = match state(&format!("{domain}/{}", service.label)) {
+            None => ("not loaded".to_owned(), false),
+            Some(_) if service.schedule.is_some() => ("loaded".to_owned(), true),
+            Some(state) => {
+                let running = state == "running";
+                (state, running)
+            }
         };
         statuses.push(Status {
             label: service.label.clone(),
             file: FileState::of(&plist_path(&dir, service), &render(service)?),
-            running: matches!(state.as_str(), "loaded" | "running"),
             state,
+            running,
         });
     }
     Ok(statuses)
