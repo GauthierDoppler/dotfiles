@@ -226,7 +226,11 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
 - **Its only link to tmux is `tmux -C attach-session -f no-output,ignore-size`.**
   tmux 3.4 has no session-less control client — one started with no session
   prints `%exit` at once — so the daemon attaches to an existing session and
-  never creates one. With `detach-on-destroy on` (tmux's default, not this
+  never creates one. Attaching bumps that session's `#{session_last_attached}`,
+  which the session picker sorts by (newest first, then name), so the daemon
+  attaches to whichever session already sorts first: the bump keeps the order.
+  The binary comes from `Tmux::command()`, since the `session-created` hook
+  starts the daemon with tmux's own, possibly thin, `PATH`. With `detach-on-destroy on` (tmux's default, not this
   config's) killing that session sends `%exit` while the server lives on, so
   after `%exit` the daemon reattaches if any session is left and exits
   otherwise; the `session-created` hook brings it back. Being attached, it is a
