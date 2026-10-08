@@ -440,10 +440,12 @@ tooling, so they are versioned and portable rather than living loose in
 | `tmux-tasks` | writing `<project>/.tmux/` task scripts for the `Prefix + e` picker |
 | `grove`      | `.grove/config.yaml` and `.grove/setup.sh` for worktree setup |
 
-`to-spec`, `to-tickets`, `implement`, `code-review` and `tdd` are vendored
-unchanged from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, a
-copy of the licence sits in each folder). They expect an issue tracker to have
-been configured by that repo's setup skill; this section is that configuration:
+`.claude/skills/` holds project-scope skills, active only when working inside
+this repo and never linked into `~/.claude`. Besides `add-config`, `to-spec`,
+`to-tickets`, `implement`, `code-review` and `tdd` are vendored unchanged from
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT, a copy of the
+licence sits in each folder). They expect an issue tracker to have been
+configured by that repo's setup skill; this section is that configuration:
 
 - **Issue tracker: local markdown under `docs/<feature>/`.** The spec is
   `docs/<feature>/spec.md`; tickets are one file each at
