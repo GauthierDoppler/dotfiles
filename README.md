@@ -122,10 +122,11 @@ and nothing else does.
 
 Claude Code is the awkward one: it has no user-scope local settings file, and it
 rewrites `~/.claude/settings.json` in place (reordering keys, absolutising
-paths). So that file is generated rather than linked. `claude-settings-sync`
-merges the tracked base with the local override, and before each regeneration it
-captures whatever the app changed into the local override — so app-side edits are
-never lost and the shared base still propagates. `--dry-run` previews it.
+paths). So that file is generated rather than linked. `atelier
+claude-settings-sync` merges the tracked base with the local override, and before
+each regeneration it captures whatever the app changed into the local override —
+so app-side edits are never lost and the shared base still propagates.
+`--dry-run` previews it.
 
 ### Helpers
 
@@ -133,7 +134,6 @@ Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
 - `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
-- `claude-settings-sync` — regenerates `~/.claude/settings.json` from base + local override
 - `tmux-sessions` — previous session picker, no longer bound (`Prefix + Space` runs `atelier sessions pick`); removed once atelier's has the preview
 - `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
 - `tmux-status-left` — renders project · root/wt · branch in the status bar

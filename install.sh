@@ -118,9 +118,8 @@ fi
 
 # ─── Phase 6b: Claude Code settings ────────────────────────
 # Runs after the links so statusline-custom.sh and hooks/ already resolve.
-export DOTFILES
-"$DOTFILES/scripts/claude-settings-sync" \
-  || warn "claude-settings-sync failed (jq missing?) — ~/.claude/settings.json not regenerated"
+"$HOME/.local/bin/atelier" claude-settings-sync --repo "$DOTFILES" \
+  || warn "atelier claude-settings-sync failed — ~/.claude/settings.json not regenerated"
 
 # ─── Phase 7: Switch remote to SSH ─────────────────────────
 current_remote="$(git -C "$DOTFILES" remote get-url origin 2>/dev/null || true)"
