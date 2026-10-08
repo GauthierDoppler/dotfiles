@@ -106,10 +106,6 @@ const LINKS: &[Link] = &[
     each_markdown_in("dot_pi_agent/agents", ".pi/agent/agents"),
     link("scripts/local-diff", ".local/bin/local-diff"),
     link("scripts/ssh-setup", ".local/bin/ssh-setup"),
-    link(
-        "scripts/claude-settings-sync",
-        ".local/bin/claude-settings-sync",
-    ),
     link("scripts/tmux-sessions", ".local/bin/tmux-sessions"),
     link("scripts/tmux-tasks", ".local/bin/tmux-tasks"),
     link("scripts/tmux-task-run", ".local/bin/tmux-task-run"),
@@ -210,7 +206,7 @@ impl Command {
     }
 }
 
-fn repo_root(flag: Option<PathBuf>, home: &Path) -> Result<PathBuf> {
+pub(crate) fn repo_root(flag: Option<PathBuf>, home: &Path) -> Result<PathBuf> {
     if let Some(repo) = flag {
         let repo = std::path::absolute(repo)?;
         return if is_dotfiles(&repo) {
