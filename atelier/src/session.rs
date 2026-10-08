@@ -10,6 +10,7 @@ pub enum Checkout {
     Worktree,
 }
 
+#[derive(Clone)]
 pub struct Identity {
     pub project: String,
     pub root: Option<PathBuf>,

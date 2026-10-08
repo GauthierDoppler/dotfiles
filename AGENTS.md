@@ -259,11 +259,30 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   (`#{client_activity}`) — the option is per session, the width per client, so
   one has to win. It re-renders after any structural notification, a rename, a
   `%message atelier:client-resized` and a battery reading that changed (read
-  once a minute), and only sends `set-option` when a block changed. Repo
-  counts are recomputed on each push. Markers need nothing: they live in the
-  window formats, which tmux evaluates itself. Session fields come over the
-  control connection as `#{q:…}`-quoted words and go through
-  `session::identify`, the resolver behind `session::resolve`.
+  once a minute), and only sends `set-option` when a block changed. Markers
+  need nothing: they live in the window formats, which tmux evaluates itself.
+  Session fields come over the control connection as `#{q:…}`-quoted words and
+  go through `session::identify`, the resolver behind `session::resolve`.
+- **Repo counts follow git through a file watcher, never a timer**
+  (`src/daemon/repos.rs`, `notify`). Every repo some session's path is in —
+  attached or not — is watched; it is dropped with the last such session. The
+  repo is found on disk, not by asking git: a `.git` directory, or a `.git`
+  file whose `gitdir:` is `<common>/worktrees/<name>` plus that dir's
+  `commondir`. Watched: the worktree's own git dir (`index`, `HEAD`), the common
+  dir (`HEAD`, `packed-refs`) and `refs/` recursively, and **the directory of
+  every tracked file** — an unstaged edit touches nothing under `.git`. Worktree
+  events count only for paths in the `ls-files` set, so untracked and ignored
+  files never start git; the set is re-listed when the index changes. On
+  FSEvents the worktree root is watched recursively instead, filtered the same
+  way. `*.lock` and access events are ignored (git's own reads would otherwise
+  loop). Events settle for 200 ms, then the repo's counts are dropped and
+  recomputed lazily at the next push, only for sessions a client is on. The
+  session identity (which runs `git worktree list` without grove options) is
+  cached by session fields plus the repo found. So nothing forks git while the
+  repo is untouched: `tests/bar_daemon.rs` puts a logging `git` first on the
+  daemon's `PATH` and asserts switches, resizes, untracked and ignored writes
+  start none. This relies on `diff-index`/`ls-files` under
+  `--no-optional-locks` never writing the index.
 - **Control mode has no resize notification for other clients.**
   `%layout-change` only covers windows of the daemon's own session, and
   subscriptions are evaluated against the daemon's client. So on attach the

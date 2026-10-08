@@ -187,6 +187,10 @@ impl State {
             .collect()
     }
 
+    pub fn fields(&self) -> Vec<[String; Field::ALL.len()]> {
+        self.sessions.iter().map(|s| s.fields.clone()).collect()
+    }
+
     pub fn snapshot(&self) -> Vec<Session> {
         let mut sessions: Vec<Session> = self
             .sessions

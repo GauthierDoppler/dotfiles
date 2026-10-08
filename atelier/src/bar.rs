@@ -6,7 +6,7 @@ use std::path::Path;
 
 use clap::Subcommand;
 
-use crate::git;
+use crate::git::{self, RepoCounts};
 use crate::session::{self, Identity};
 use crate::tmux::Tmux;
 use crate::Result;
@@ -21,7 +21,7 @@ pub struct Pushed {
 
 pub fn pushed(
     identity: &Identity,
-    path: &Path,
+    repo: RepoCounts,
     client_width: u16,
     battery: Option<Battery>,
 ) -> Pushed {
@@ -31,7 +31,7 @@ pub fn pushed(
     };
     Pushed {
         left: block.render(client_width, right::width(client_width, battery.is_some())),
-        right: right::pushed(git::repo_counts(path), battery, client_width),
+        right: right::pushed(repo, battery, client_width),
     }
 }
 
