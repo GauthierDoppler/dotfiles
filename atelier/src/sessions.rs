@@ -97,8 +97,9 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
     };
     let picker = Picker::open(tmux, &target)?;
     picker.set_scope(Scope::Project)?;
+    let rows = picker.rows()?;
 
-    let mut switch = format!("{} sessions switch", picker.atelier()?);
+    let mut switch = format!("{} sessions switch", picker.atelier_command()?);
     if !client.is_empty() {
         switch.push_str(&format!(" -c {}", shell_quote(&client)));
     }
@@ -129,7 +130,7 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
         .spawn()
         .map_err(|error| format!("fzf: {error}"))?;
     if let Some(mut stdin) = fzf.stdin.take() {
-        for row in picker.rows()? {
+        for row in rows {
             writeln!(stdin, "{row}")?;
         }
     }
@@ -286,7 +287,7 @@ impl<'a> Picker<'a> {
         ))
     }
 
-    fn atelier(&self) -> Result<String> {
+    fn atelier_command(&self) -> Result<String> {
         let mut command = shell_quote(&std::env::current_exe()?.to_string_lossy());
         if let Some(socket) = self.tmux.socket() {
             command.push_str(" --socket ");
@@ -298,7 +299,7 @@ impl<'a> Picker<'a> {
     fn call(&self, subcommand: &str) -> Result<String> {
         Ok(format!(
             "{} sessions {subcommand} -t {}",
-            self.atelier()?,
+            self.atelier_command()?,
             shell_quote(&self.session)
         ))
     }

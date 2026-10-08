@@ -84,11 +84,16 @@ impl TmuxServer {
     }
 
     pub fn atelier(&self, args: &[&str]) -> Output {
+        self.atelier_with_env(args, &[])
+    }
+
+    pub fn atelier_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_atelier"))
             .arg("--socket")
             .arg(&self.socket)
             .args(args)
             .env_remove("TMUX")
+            .envs(env.iter().copied())
             .output()
             .expect("atelier runs")
     }
@@ -106,15 +111,7 @@ impl TmuxServer {
     }
 
     pub fn atelier_stdout_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> String {
-        let output = Command::new(env!("CARGO_BIN_EXE_atelier"))
-            .arg("--socket")
-            .arg(&self.socket)
-            .args(args)
-            .env_remove("TMUX")
-            .envs(env.iter().copied())
-            .output()
-            .expect("atelier runs");
-        stdout_of(args, output)
+        stdout_of(args, self.atelier_with_env(args, env))
     }
 
     pub fn attach_control_client(&self, session: &str) -> ControlClient {

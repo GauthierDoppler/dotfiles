@@ -149,7 +149,8 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `#{session_id}` from the binding. Needs fzf ≥ 0.45 (`transform`).
 - **`display-message -p` returns one field per call.** It prints control
   characters as octal and newlines as `_`, so fields cannot be joined with a
-  delimiter; and with an unknown `-t` it exits 0 with empty output, so emptiness
+  delimiter — except numeric fields ahead of a single free-text one, split with
+  `splitn`, as the session picker reads its rows; and with an unknown `-t` it exits 0 with empty output, so emptiness
   is the not-found signal. `git -C ""` runs in the cwd — never pass an empty path.
 - **Tests drive the built binary against a private tmux server.**
   `tests/common/mod.rs` has `TmuxServer::start()`: `tmux -L
