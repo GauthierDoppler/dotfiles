@@ -31,7 +31,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [24](24-remove-zed-and-unused-nvim-plugins.md) | Remove Zed and unused nvim plugins | — | needs-human |
 | [25](25-spike-clickable-notification-from-a-daemon.md) | Spike: clickable notification from a daemon | 09 | needs-human |
 | [26](26-waiting-notification-click-to-focus-the-pane.md) | Waiting notification, click to focus the pane | 25 | ready-for-agent |
-| [27](27-shrink-agents-md.md) | Shrink AGENTS.md | 06, 08, 10, 13, 15 | ready-for-agent |
+| [27](27-shrink-agents-md.md) | Shrink AGENTS.md | 06, 08, 10, 13, 15 | done |
 | [28](28-housekeeping-after-the-first-merges.md) | Housekeeping after the first merges | 04, 08, 20 | done |
 | [29](29-review-fixes.md) | Review fixes | — | done |
 | [30](30-daemon-review-fixes.md) | Daemon review fixes | — | done |
