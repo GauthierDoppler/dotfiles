@@ -33,6 +33,8 @@ macro_rules! features {
 features! {
     /// The tmux status bar
     Bar => bar,
+    /// Entry points for other tools' hooks
+    Hook => hook,
 }
 
 #[derive(Parser)]
