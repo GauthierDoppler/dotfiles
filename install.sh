@@ -1,6 +1,6 @@
 #!/bin/bash
-# Bootstrap a macOS machine from scratch.
-# Run from the dotfiles directory: ./install.sh
+# Bootstrap a machine from scratch.
+# Run from the dotfiles directory: ./install.sh [--profile desktop|remote]
 #
 # First run (no SSH key):  generates key, copies pubkey, exits.
 # Second run (key exists): installs everything.
@@ -8,6 +8,20 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
+OS="$(uname -s)"
+if [[ "$OS" == Darwin ]]; then PROFILE=desktop; else PROFILE=remote; fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile) PROFILE="${2:?--profile needs desktop or remote}"; shift 2 ;;
+    --profile=*) PROFILE="${1#--profile=}"; shift ;;
+    *) echo "usage: $0 [--profile desktop|remote]" >&2; exit 2 ;;
+  esac
+done
+case "$PROFILE" in
+  desktop|remote) ;;
+  *) echo "unknown profile: $PROFILE (desktop or remote)" >&2; exit 2 ;;
+esac
 
 warn() { echo "WARNING: $*"; }
 
@@ -17,13 +31,15 @@ if [[ ! -f "$HOME/.ssh/github" ]]; then
   echo ""
   "$DOTFILES/scripts/ssh-setup" github
   echo ""
-  open "https://github.com/settings/ssh/new"
-  echo "Add the SSH key to GitHub, then run this script again."
+  if [[ "$OS" == Darwin ]]; then
+    open "https://github.com/settings/ssh/new"
+  fi
+  echo "Add the SSH key to GitHub (https://github.com/settings/ssh/new), then run this script again."
   exit 0
 fi
 
 # ─── Phase 1: Xcode Command Line Tools ─────────────────────
-if ! xcode-select -p &>/dev/null; then
+if [[ "$OS" == Darwin ]] && ! xcode-select -p &>/dev/null; then
   echo "Installing Xcode Command Line Tools..."
   xcode-select --install
   echo "Re-run this script after the installation completes."
@@ -40,11 +56,17 @@ if [[ -f /opt/homebrew/bin/brew ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 elif [[ -f /usr/local/bin/brew ]]; then
   eval "$(/usr/local/bin/brew shellenv)"
+elif [[ -f /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
 # ─── Phase 3: Brew Bundle ──────────────────────────────────
 echo "Running brew bundle..."
-brew bundle --file="$DOTFILES/Brewfile"
+if [[ "$PROFILE" == desktop ]]; then
+  brew bundle --file="$DOTFILES/Brewfile"
+else
+  grep -v '^cask ' "$DOTFILES/Brewfile" | brew bundle --file=-
+fi
 
 # ─── Phase 4: Oh My Zsh ────────────────────────────────────
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
@@ -52,29 +74,17 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 fi
 
-# ─── Phase 5: (was git submodules) ─────────────────────────
-# nvim/ used to be a submodule pointing at a kickstart.nvim fork. It is plain
-# files in this repo now: the fork had diverged past the point where upstream
-# merges were realistic, so the submodule was costing a two-step commit dance
-# and a clone that broke whenever the submodule had not been pushed.
+# ─── Phase 5: atelier ──────────────────────────────────────
+export PATH="$HOME/.cargo/bin:$PATH"
+if ! command -v cargo &>/dev/null; then
+  echo "Installing Rust via rustup..."
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path
+fi
+cargo install --locked --path "$DOTFILES/atelier" --root "$HOME/.local" \
+  --target-dir "$DOTFILES/atelier/target"
 
-# ─── Phase 6: Symlinks ─────────────────────────────────────
-link() {
-  local src="$DOTFILES/$1"
-  local dest="$2"
-  mkdir -p "$(dirname "$dest")"
-  if [ -L "$dest" ]; then
-    rm "$dest"
-  elif [ -d "$dest" ]; then
-    echo "backup: $dest -> ${dest}.bak"
-    mv "$dest" "${dest}.bak"
-  elif [ -e "$dest" ]; then
-    echo "backup: $dest -> ${dest}.bak"
-    mv "$dest" "${dest}.bak"
-  fi
-  ln -s "$src" "$dest"
-  echo "linked: $dest -> $src"
-}
+# ─── Phase 6: Links and stubs ──────────────────────────────
+"$HOME/.local/bin/atelier" setup --repo "$DOTFILES" --profile "$PROFILE"
 
 # macOS scans ~/Library/Keyboard Layouts/ at login and its input-source daemon
 # does not reliably follow a symlink there, so the layout is copied.
@@ -97,158 +107,20 @@ copy_bundle() {
   echo "copied: $dest <- $src"
 }
 
-# Creates a small REAL file that loads the tracked config, instead of symlinking.
-#
-# Why: third-party installers (git-ai, nvm, rbenv, conda...) append to ~/.zshrc
-# and ~/.gitconfig directly. When those are symlinks into this repo, the append
-# lands in a tracked file — machine-specific absolute paths staged into a repo we
-# push. With a stub, the append goes below the load line and stays untracked.
-#
-# `git config --global` writes here too, which is now the correct outcome.
-#
-# MUST be idempotent: re-running install.sh has to leave everything accumulated
-# below the load line untouched. That is the whole point, so the "already
-# stubbed" check comes before any write.
-stub() {
-  local dest="$1" load="$2"
-  mkdir -p "$(dirname "$dest")"
-
-  # Match on the LAST line of the load block, not the first: for a gitconfig the
-  # first line is a bare `[include]`, which any unrelated include would satisfy.
-  # The last line carries the path, so it is unique to this stub.
-  if [ -e "$dest" ] && [ ! -L "$dest" ] && grep -qxF "${load##*$'\n'}" "$dest" 2>/dev/null; then
-    echo "stub ok: $dest (local content untouched)"
-    return 0
-  fi
-
-  if [ -L "$dest" ]; then
-    rm "$dest"                                   # migrating off the old symlink
-  elif [ -e "$dest" ]; then
-    echo "backup: $dest -> ${dest}.bak"
-    mv "$dest" "${dest}.bak"
-  fi
-
-  {
-    echo "# Loads the shared dotfiles config. Everything BELOW this block is"
-    echo "# machine-local and stays out of the dotfiles repo — put local overrides"
-    echo "# here, and let installers append here too."
-    echo "$load"
-    echo
-  } > "$dest"
-  echo "stubbed: $dest"
-}
-
-# One-time move of the old ~/.<name>.local files into their stub. Kept as
-# .migrated rather than deleted: losing a machine's only copy of its local
-# config to a convenience rename is not a recoverable mistake.
-migrate_local() {
-  local legacy="$1" dest="$2"
-  [ -f "$legacy" ] || return 0
-  {
-    echo
-    echo "# ─── migrated from $(basename "$legacy") ───"
-    cat "$legacy"
-  } >> "$dest"
-  mv "$legacy" "${legacy}.migrated"
-  echo "migrated: $legacy -> $dest (kept as ${legacy}.migrated)"
-}
-
-# ~/.config/* folders (whole directory symlinks)
-link "delta"               "$HOME/.config/delta"
-link "ghostty"             "$HOME/.config/ghostty"
-link "lazydocker"          "$HOME/.config/lazydocker"
-link "lazygit"             "$HOME/.config/lazygit"
-link "nvim"                "$HOME/.config/nvim"
-link "tmux/oneshot"        "$HOME/.config/tmux/oneshot"
-link "zed"                 "$HOME/.config/zed"
-
-# ~/.config/* individual files
-link "git/ignore"          "$HOME/.config/git/ignore"
-
-# ~/ dotfiles (dot_ prefix becomes .)
-link "dot_tmux.conf"       "$HOME/.tmux.conf"
-
 # Keyboard layout (AZERTY with an unshifted number row — the tmux Prefix + 1..9
 # bindings depend on it). Installing it does not SELECT it: that is a one-time
 # manual step in System Settings → Keyboard → Input Sources. Writing
 # AppleEnabledInputSources / AppleSelectedInputSources with `defaults` is cached
 # by the input-source daemon, needs a logout to take, and half-works meanwhile.
-copy_bundle "keyboard/FR-AZERTY-num.bundle" "$HOME/Library/Keyboard Layouts/FR-AZERTY-num.bundle"
-
-# ~/.zshrc and ~/.gitconfig are stubbed, not linked — third-party installers
-# append to them directly, and a symlink would put those appends in this repo.
-# Written as $HOME / ~ rather than the absolute path, so the stub itself carries
-# no machine-specific path. Built via variables: inside double quotes bash leaves
-# `\~` as a literal backslash-tilde, which git then fails to parse.
-# shellcheck disable=SC2016  # literal $HOME, expanded by zsh when it reads the stub
-dollar_home='$HOME'
-tilde='~'
-stub "$HOME/.zshrc"     "source \"${DOTFILES/#$HOME/$dollar_home}/dot_zshrc\""
-migrate_local "$HOME/.zshrc.local" "$HOME/.zshrc"
-
-stub "$HOME/.gitconfig" "[include]
-	path = ${DOTFILES/#$HOME/$tilde}/dot_gitconfig"
-migrate_local "$HOME/.gitconfig.local" "$HOME/.gitconfig"
-
-# Login-shell environment (locale, JAVA_HOME, Android SDK). Stubbed for the same
-# reason as ~/.zshrc: installers append here too, and the env that accumulates is
-# exactly the machine-specific kind.
-stub "$HOME/.zprofile"  "source \"${DOTFILES/#$HOME/$dollar_home}/dot_zprofile\""
-
-# ~/.claude/*
-# settings.json is deliberately NOT linked: Claude Code rewrites it in place, so
-# it is generated by claude-settings-sync below instead.
-link "dot_claude/CLAUDE.md"            "$HOME/.claude/CLAUDE.md"
-link "dot_claude/statusline-custom.sh" "$HOME/.claude/statusline-custom.sh"
-link "dot_claude/hooks"                "$HOME/.claude/hooks"
-
-# Skills are linked one by one, never as a whole directory: ~/.claude/skills
-# also holds skills installed by Claude Code itself, and linking the parent
-# would hide them.
-mkdir -p "$HOME/.claude/skills"
-link "dot_claude/skills/tmux-tasks"    "$HOME/.claude/skills/tmux-tasks"
-link "dot_claude/skills/grove"         "$HOME/.claude/skills/grove"
-link "dot_claude/skills/notion"        "$HOME/.claude/skills/notion"
-
-# Pi coding agent resources. Settings/auth/sessions stay machine-local; only
-# reusable resources are linked from dotfiles.
-mkdir -p "$HOME/.pi/agent/extensions" "$HOME/.pi/agent/agents"
-link "dot_pi_agent/extensions/subagents" "$HOME/.pi/agent/extensions/subagents"
-for agent_file in "$DOTFILES"/dot_pi_agent/agents/*.md; do
-  [ -e "$agent_file" ] || continue
-  link "dot_pi_agent/agents/$(basename "$agent_file")" "$HOME/.pi/agent/agents/$(basename "$agent_file")"
-done
-
-# Scripts
-mkdir -p "$HOME/.local/bin"
-link "scripts/local-diff"            "$HOME/.local/bin/local-diff"
-link "scripts/ssh-setup"             "$HOME/.local/bin/ssh-setup"
-link "scripts/claude-settings-sync"  "$HOME/.local/bin/claude-settings-sync"
-link "scripts/tmux-sessions"         "$HOME/.local/bin/tmux-sessions"
-link "scripts/tmux-tasks"            "$HOME/.local/bin/tmux-tasks"
-link "scripts/tmux-task-run"         "$HOME/.local/bin/tmux-task-run"
-link "scripts/tmux-status-left"      "$HOME/.local/bin/tmux-status-left"
-link "scripts/tmux-status-right"     "$HOME/.local/bin/tmux-status-right"
-link "scripts/tmux-pick"             "$HOME/.local/bin/tmux-pick"
-link "scripts/md-preview/md-preview" "$HOME/.local/bin/md-preview"
-link "scripts/cc-tap-service"        "$HOME/.local/bin/cc-tap-service"
+if [[ "$PROFILE" == desktop && "$OS" == Darwin ]]; then
+  copy_bundle "keyboard/FR-AZERTY-num.bundle" "$HOME/Library/Keyboard Layouts/FR-AZERTY-num.bundle"
+fi
 
 # ─── Phase 6b: Claude Code settings ────────────────────────
-# Merge the tracked base with this machine's local overrides. Runs after the
-# links above so statusline-custom.sh and hooks/ already resolve.
+# Runs after the links so statusline-custom.sh and hooks/ already resolve.
 export DOTFILES
 "$DOTFILES/scripts/claude-settings-sync" \
   || warn "claude-settings-sync failed (jq missing?) — ~/.claude/settings.json not regenerated"
-
-# ─── Phase 6c: atelier ─────────────────────────────────────
-export PATH="$HOME/.cargo/bin:$PATH"
-if ! command -v cargo &>/dev/null; then
-  echo "Installing Rust via rustup..."
-  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path
-fi
-cargo install --locked --path "$DOTFILES/atelier" --root "$HOME/.local" \
-  --target-dir "$DOTFILES/atelier/target" \
-  || warn "cargo install failed — the status bar falls back to session names"
 
 # ─── Phase 7: Switch remote to SSH ─────────────────────────
 current_remote="$(git -C "$DOTFILES" remote get-url origin 2>/dev/null || true)"
@@ -320,13 +192,15 @@ launch_agent() {
   fi
 }
 
-launch_agent "com.theodo.cc-tap.dashboard"
-launch_agent "com.theodo.cc-tap.proxy"
-launch_agent "com.theodo.cc-tap.update"
-launch_agent "com.github.gauthierdoppler.md-preview"
+if [[ "$OS" == Darwin ]]; then
+  launch_agent "com.theodo.cc-tap.dashboard"
+  launch_agent "com.theodo.cc-tap.proxy"
+  launch_agent "com.theodo.cc-tap.update"
+  launch_agent "com.github.gauthierdoppler.md-preview"
+fi
 
 # ─── Phase 11: App registration ────────────────────────────
-if [[ -d "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app" ]]; then
+if [[ "$OS" == Darwin && -d "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app" ]]; then
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app"
   echo "registered: ClaudeCodeNotifier.app"
 fi

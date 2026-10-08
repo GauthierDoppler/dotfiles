@@ -33,6 +33,8 @@ macro_rules! features {
 features! {
     /// The tmux status bar
     Bar => bar,
+    /// Link the dotfiles into $HOME and write the shell and git stubs
+    Setup => setup,
 }
 
 #[derive(Parser)]

@@ -28,7 +28,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh
 ```
 
-First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, symlinks, Node, Claude Code CLI).
+First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, atelier, symlinks, Node, Claude Code CLI). On a headless Linux machine, pass `--profile remote`: no casks, no GUI app configs, no keyboard layout. `atelier setup --dry-run` previews the links and stubs alone.
 
 All dependencies are auto-installed via `Brewfile`. Existing files are backed up as `*.bak`.
 
@@ -58,7 +58,7 @@ deliberately **not** symlinked — see below.
 ### Machine-specific config
 
 Every tracked config is portable. **`~/.zshrc`, `~/.zprofile` and `~/.gitconfig`
-are stubs, not symlinks**: `install.sh` writes a small real file that loads the
+are stubs, not symlinks**: `atelier setup` writes a small real file that loads the
 tracked config, and everything machine-local accumulates below that line.
 
 ```sh
@@ -129,7 +129,7 @@ never lost and the shared base still propagates. `--dry-run` previews it.
 
 ### Helpers
 
-Symlinked into `~/.local/bin` by `install.sh`:
+Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
 - `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles

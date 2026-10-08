@@ -20,7 +20,7 @@ add a comment explaining the change.
 
 ## What This Is
 
-A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the launchd agents that keep cc-tap running. All configs are symlinked from this repo to their expected locations via `install.sh`.
+A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the launchd agents that keep cc-tap running. All configs are symlinked from this repo to their expected locations by `atelier setup`.
 
 ## Installation & Symlinks
 
@@ -30,9 +30,24 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → symlinks → Claude settings merge → atelier → bun → Node LTS → npm globals → app registration.
+The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → atelier → `atelier setup` → keyboard layout → Claude settings merge → bun → Node LTS → npm globals → launch agents → app registration.
 
-The `link()` function creates symlinks and backs up existing files as `*.bak`. When adding a new config, use the `/add-config` skill.
+`install.sh` is only the bootstrap. Links and stubs are `atelier setup
+[--profile desktop|remote] [--dry-run] [--repo PATH]`, whose `LINKS` and `STUBS`
+tables in `atelier/src/setup.rs` are the one list of what goes where. It backs up
+an existing file or folder as `*.bak` (then `*.bak.1`, … — an earlier backup is
+never overwritten), replaces a symlink pointing elsewhere without one, and prints
+only what it changes, so a second run says `setup: up to date`. The repo is
+`--repo`, else the current git root, else `~/dotfiles`, and must look like this
+repo (`dot_zshrc` plus `atelier/Cargo.toml`) so running it from another project
+cannot link that project into `$HOME`. `tests/setup.rs` runs it against a
+temporary `$HOME`, twice. When adding a new config, use the `/add-config` skill.
+
+**Profiles.** `desktop` (the default on macOS) is everything; `remote` (the
+default elsewhere, and `./install.sh --profile remote`) skips GUI app configs
+(`desktop(...)` entries in `LINKS`: ghostty, zed), Brewfile casks and the keyboard
+layout. Launch agents and app registration are gated on macOS, not on the
+profile.
 
 **Naming convention:**
 - `~/.config/*` folders → stored as-is (e.g., `ghostty/`, `lazygit/`)
@@ -45,7 +60,7 @@ Every tracked config must be portable — no `/Users/<name>` paths, no per-machi
 sockets, no work-specific tooling.
 
 **`~/.zshrc`, `~/.zprofile` and `~/.gitconfig` are stubs, not symlinks.**
-`install.sh` writes a small real file that loads the tracked config, and
+`atelier setup` writes a small real file that loads the tracked config, and
 everything machine-local accumulates below that line:
 
 ```sh
@@ -68,10 +83,14 @@ files, which is how a `/Users/<name>` socket path once ended up staged here.
 `git config --global` writes to the stub too, which is now correct. For git,
 later values win, so anything below the include overrides the shared config.
 
-`stub()` is idempotent by design: if the load line is already present it writes
-nothing, so re-running `install.sh` never touches accumulated local content.
-There are no paired `*.local` files any more — `migrate_local()` folds legacy
-ones into the stub on the next run and keeps them as `*.local.migrated`.
+A stub is idempotent by design: if the last line of its load block (the one
+carrying the path — a bare `[include]` would match any include) is already
+present it writes nothing, so re-running setup never touches accumulated local
+content. The path is written through `$HOME` (`~` for git) when the repo is under
+it, so the stub itself carries no machine-specific path. There are no paired
+`*.local` files any more — setup folds legacy `~/.zshrc.local` and
+`~/.gitconfig.local` into the stub on the next run and keeps them as
+`*.local.migrated`.
 
 | Shared (tracked)              | Local (untracked)                     |
 | ----------------------------- | ------------------------------------- |
@@ -150,7 +169,12 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   --locked --root ~/.local`, target dir `atelier/target` so a re-run is
   incremental; rustup with `--no-modify-path` when cargo is missing, and
   `dot_zshrc` puts `~/.cargo/bin` on `PATH`). tmux and scripts call it by that
-  absolute path, and every caller must still work when it is absent.
+  absolute path, and every caller must still work when it is absent. The install
+  itself is the exception: `install.sh` stops if the build fails, since
+  `atelier setup` is what links everything.
+- **A feature with flags and no subcommands** (`setup`) derives `clap::Args` and
+  implements `clap::Subcommand` by hand, delegating to the args and clearing
+  `subcommand_required`, so it still registers with one `features!` line.
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
   shellcheck on `install.sh` and every executable shell script in `scripts/`.
@@ -191,7 +215,7 @@ another session instead of ejecting the client out of tmux.
 **`Prefix + 1..9` depends on a keyboard layout that macOS, not tmux, provides.**
 `keyboard/FR-AZERTY-num.bundle` is an AZERTY layout with an unshifted,
 QWERTY-order number row, **copied** to `~/Library/Keyboard Layouts/` by
-`install.sh` (`copy_bundle()`, not `link()` — macOS's input-source daemon does
+`install.sh` (`copy_bundle()`, not a link — macOS's input-source daemon does
 not reliably follow a symlink there). Without it the digit bindings need Shift
 and the muscle memory
 breaks silently. Installing is automated, *selecting* is not: see README. The
@@ -506,7 +530,7 @@ configured by that repo's setup skill; this section is that configuration:
 - **Blocking edges** are the `**Blocked by:**` line. The frontier is every ticket
   whose blockers are all `done`.
 
-They are symlinked **one by one** in `install.sh`, never as a directory:
+They are symlinked **one by one** by `atelier setup`, never as a directory:
 `~/.claude/skills` also holds skills installed by Claude Code itself (several of
 them symlinks into `~/.agents/skills`), and linking the parent would hide them.
 
