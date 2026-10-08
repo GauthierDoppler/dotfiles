@@ -631,18 +631,24 @@ The project pill hugs its name up to `MAX_PROJECT` characters and then truncates
 with `…`. It never changes the block width — a longer name spends padding, not
 layout — so that cap is a purely visual choice and there is room to raise it.
 
-`scripts/tmux-status-right` renders the *entire* right block — key table, repo
-state, battery, date, clock. The date and clock are not left to `dot_tmux.conf`
-even though strftime is free there: the block has to know its own total width
-(see below), and a piece it does not render is a piece it cannot measure.
+`atelier bar right "#{session_path}" "#{client_width}" "#{client_key_table}"`
+renders the *entire* right block — key table, repo state, battery, date, clock
+(`src/bar/right.rs`, a pure function of the counts, the battery and the time;
+its snapshots cover every width tier with and without counts and battery). The
+date and clock are not left to `dot_tmux.conf` even though strftime is free
+there: the block has to know its own total width (see below), and a piece it
+does not render is a piece it cannot measure.
 
 Repo state is `+412 −89 ↑2 ↓1` — **lines** changed against HEAD, then divergence
-from the upstream. Two cheap calls, `diff --shortstat HEAD` and `rev-list
+from the upstream. Two cheap calls, `diff-index --shortstat HEAD` and `rev-list
 --left-right --count @{upstream}...HEAD`, rather than one `status --porcelain=v2
 --branch`, which would cost a full worktree scan for the ahead/behind alone.
-Untracked files contribute nothing: `--shortstat` only walks tracked content.
-Both calls use `--no-optional-locks`, or git refreshes and rewrites the index on
-every tick and collides with an interactive git in the same repo.
+Untracked files contribute nothing: `--shortstat` only walks tracked content. It
+is the plumbing `diff-index`, not `diff`: porcelain `git diff` refreshes and
+rewrites a stat-dirty index even under `--no-optional-locks`, which collides
+with an interactive git in the same repo (`tests/bar_right.rs` checks the index
+is left alone). No upstream or a detached HEAD shows the line counts only; an
+empty repo shows nothing.
 
 The counts are padded on the *left*, so they grow away from the clock instead of
 shoving it. Their width accounting charges the separator space where it is
@@ -651,11 +657,13 @@ is `−` or `↑` come out one column narrow, which drifts the whole centred win
 list by one — visible only when switching to a session that has no local edits
 but is ahead or behind.
 
-Both scripts `export LANG` if it is unset. Without a UTF-8 locale bash counts
-`${#s}` in bytes and slices `${s:0:n}` the same way, so the ellipsis and every
-`± ↑ ↓` glyph would throw its padding out by two or three columns — and tmux
-runs `#()` commands with the *server's* environment, which is whatever the shell
-that started the server happened to export.
+Widths are counted in terminal cells (`unicode-width`), so nothing depends on
+`LANG` — tmux runs `#()` commands with the *server's* environment, and the bash
+this replaced over-padded every glyph by two or three columns without a UTF-8
+locale; `tmux-status-left` still exports `LANG` for its ellipsis for the same
+reason. The battery comes from the `starship-battery` crate (IOKit on macOS,
+sysfs on Linux); on a machine with none the segment and its gap are dropped and
+`--width` reports the narrower block.
 
 Truncation happens inside the script, never via `status-left-length`: tmux
 truncates the *expanded* string, which by then contains `#[fg=...]` escapes, and
@@ -676,9 +684,9 @@ None of them may be `#8caaee` or a task-state colour.
 `status-left` and `status-right`, not in the terminal: measured on a 120-column
 client, growing the right block by 36 columns moved the list 18 columns left —
 exactly half. So `tmux-status-left` pads out to match, and asks
-`tmux-status-right --width` for the number instead of hardcoding it. A copy of
-the tier table on the left would drift; `--width` returns before any `git` or
-`pmset` call, so the extra fork is cheap.
+`atelier bar right --width` for the number instead of hardcoding it. A copy of
+the tier table on the left would drift; `--width` runs no `git`, so the extra
+fork is cheap.
 
 Everything on the right is therefore fixed-width, including the key table slot,
 which stays reserved at rest — letting it collapse would change the block width
