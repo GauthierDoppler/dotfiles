@@ -47,3 +47,7 @@
   kickstart paths, and the page actually rendering in Chrome from the embedded
   files. The HTTP tests check every script the page references is served with a
   JavaScript type, but nothing executed them.
+- **Code review** (both axes run by hand, no sub-agent tool here): one
+  Standards finding fixed (file change detection and binary change detection
+  duplicated a metadata helper; both now compare mtime and size). Spec axis: no
+  missing requirement; the two deviations above are the only additions.

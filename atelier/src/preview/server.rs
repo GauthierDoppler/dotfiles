@@ -63,7 +63,7 @@ const LIBS: &[(&str, &[u8])] = &[
 
 struct Watch {
     tx: broadcast::Sender<Bytes>,
-    mtime: Option<SystemTime>,
+    stamp: Option<(SystemTime, u64)>,
     cursor: Option<u64>,
 }
 
@@ -105,10 +105,6 @@ fn stamp(path: &Path) -> Option<(SystemTime, u64)> {
     Some((meta.modified().ok()?, meta.len()))
 }
 
-fn mtime(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).ok()?.modified().ok()
-}
-
 async fn poll(server: Arc<Server>, exe: PathBuf) {
     let boot = stamp(&exe);
     let mut restarting = false;
@@ -121,9 +117,9 @@ async fn poll(server: Arc<Server>, exe: PathBuf) {
                 if watch.tx.receiver_count() == 0 {
                     continue;
                 }
-                let now = mtime(file);
-                if now != watch.mtime {
-                    watch.mtime = now;
+                let now = stamp(file);
+                if now != watch.stamp {
+                    watch.stamp = now;
                     let _ = watch
                         .tx
                         .send(frame("change", &json!({ "gone": now.is_none() })));
@@ -288,7 +284,7 @@ fn raw(file: Option<PathBuf>) -> Response {
 fn watch(watched: &mut HashMap<PathBuf, Watch>, file: PathBuf) -> &mut Watch {
     watched.entry(file).or_insert_with_key(|file| Watch {
         tx: broadcast::channel(64).0,
-        mtime: mtime(file),
+        stamp: stamp(file),
         cursor: None,
     })
 }
