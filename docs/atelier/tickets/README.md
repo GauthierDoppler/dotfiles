@@ -14,7 +14,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [07](07-task-picker-and-window-tasks.md) | Task picker and window tasks | 02 | ready-for-agent |
 | [08](08-task-placements-split-popup-and-detach.md) | Task placements: split, popup and detach | 07 | ready-for-agent |
 | [09](09-claude-code-marker-through-atelier.md) | Claude Code marker through atelier | 02 | ready-for-agent |
-| [10](10-token-picker.md) | Token picker | 02 | ready-for-agent |
+| [10](10-token-picker.md) | Token picker | 02 | done |
 | [11](11-daemon-tracer-bullet-atelier-knows-the-live.md) | Daemon tracer bullet: atelier knows the live tmux state | 02 | ready-for-agent |
 | [12](12-daemon-pushes-the-bar.md) | Daemon pushes the bar | 04, 11 | ready-for-agent |
 | [13](13-repo-counts-follow-git-without-polling.md) | Repo counts follow git without polling | 12 | ready-for-agent |

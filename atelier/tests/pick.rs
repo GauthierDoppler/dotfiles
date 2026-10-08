@@ -407,6 +407,41 @@ fn copying_puts_the_token_in_a_tmux_buffer() {
 }
 
 #[test]
+fn copying_reaches_the_terminal_of_the_attached_client_through_osc_52() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = FakeBin::new();
+    let remote = TmuxServer::start();
+    remote.tmux(&["set", "-as", "terminal-features", ",*:clipboard"]);
+    let session = idle_pane(&remote, dir.path());
+    let terminal = TmuxServer::start();
+    terminal.tmux(&["set", "-g", "set-clipboard", "on"]);
+    terminal.tmux(&[
+        "new-session",
+        "-d",
+        "--",
+        "env",
+        "-u",
+        "TMUX",
+        "tmux",
+        "-S",
+        remote.socket().to_str().unwrap(),
+        "attach",
+        "-t",
+        &session,
+    ]);
+    wait_for("the client to attach", || {
+        !remote.tmux(&["list-clients"]).is_empty()
+    });
+
+    act(&remote, &bin, &["pick", "copy", "https://acme.dev/a"]);
+
+    wait_for("the terminal to receive the clipboard", || {
+        !terminal.tmux(&["list-buffers"]).is_empty()
+    });
+    assert_eq!(terminal.tmux(&["show-buffer"]), "https://acme.dev/a");
+}
+
+#[test]
 fn every_action_on_the_placeholder_row_does_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let bin = FakeBin::new();
