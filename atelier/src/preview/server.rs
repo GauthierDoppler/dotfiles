@@ -23,8 +23,8 @@ const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self' 'unsa
                    img-src * data: blob:; font-src 'self' data:; connect-src 'self'; \
                    base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
-const PAGE: &[u8] = include_bytes!("../../../scripts/md-preview/index.html");
-const APP: &[u8] = include_bytes!("../../../scripts/md-preview/app.js");
+const PAGE: &[u8] = include_bytes!("../../assets/preview/index.html");
+const APP: &[u8] = include_bytes!("../../assets/preview/app.js");
 
 const LIBS: &[(&str, &[u8])] = &[
     (

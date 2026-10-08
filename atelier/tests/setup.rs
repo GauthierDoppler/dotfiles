@@ -46,7 +46,6 @@ const DESKTOP_LINKS: &[(&str, &str)] = &[
     (".local/bin/tmux-tasks", "scripts/tmux-tasks"),
     (".local/bin/tmux-task-run", "scripts/tmux-task-run"),
     (".local/bin/tmux-status-left", "scripts/tmux-status-left"),
-    (".local/bin/md-preview", "scripts/md-preview/md-preview"),
     (".local/bin/cc-tap-service", "scripts/cc-tap-service"),
 ];
 

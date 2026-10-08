@@ -519,48 +519,36 @@ fn sha1_hex(text: &str) -> String {
     sha1_smol::Sha1::from(text).digest().to_string()
 }
 
+fn written_by_bun(doc: &Path) -> String {
+    include_str!("fixtures/preview/notes-written-by-bun.json")
+        .replace("{{PATH}}", doc.to_str().unwrap())
+}
+
+const NOTES_AS_SENT: &str = r###"{"notes":[{"id":"1759912345678-k3x9a","l0":3,"l1":3,"snip0":"## Rollout","snip1":"## Rollout","text":"say \"when\", not \"soon\"","orphan":false},{"id":"1759912399001-p0q2z","l0":12,"l1":14,"snip0":"- migrate the é/ü table","snip1":"```","text":"two lines?\nsplit — or ✓ merge\tthem","orphan":true}]}"###;
+
 #[test]
 fn notes_written_by_the_old_server_are_read_back_unchanged() {
     let (_dir, root) = real_tempdir();
-    let doc = root.join("plan.md");
+    let doc = root.join("my plans/é plan.md");
     write(&doc, "# Plan\n");
     let server = Preview::start();
-    let stored = r#"{
-  "path": "PATH",
-  "notes": [
-    {
-      "id": "1-abcde",
-      "l0": 3,
-      "l1": 4,
-      "snip0": "x",
-      "snip1": "y",
-      "text": "tighten this",
-      "orphan": false
-    }
-  ]
-}
-"#
-    .replace("PATH", doc.to_str().unwrap());
     write(
         &server
             .notes_dir()
             .join(format!("{}.json", sha1_hex(doc.to_str().unwrap()))),
-        &stored,
+        &written_by_bun(&doc),
     );
 
     let notes = server.get(&format!("/__notes{}", encode(&doc)));
 
     assert_eq!(notes.status, 200);
-    assert_eq!(
-        notes.text(),
-        r#"{"notes":[{"id":"1-abcde","l0":3,"l1":4,"snip0":"x","snip1":"y","text":"tighten this","orphan":false}]}"#
-    );
+    assert_eq!(notes.text(), NOTES_AS_SENT);
 }
 
 #[test]
-fn notes_are_saved_where_the_old_server_kept_them() {
+fn notes_are_saved_byte_for_byte_where_the_old_server_kept_them() {
     let (_dir, root) = real_tempdir();
-    let doc = root.join("plan.md");
+    let doc = root.join("my plans/é plan.md");
     let server = Preview::start();
     let path = format!("/__notes{}", encode(&doc));
 
@@ -568,22 +556,18 @@ fn notes_are_saved_where_the_old_server_kept_them() {
         "PUT",
         &path,
         &[("Content-Type", "application/json")],
-        Some(r#"{"notes":[{"id":"n1","text":"why?"}]}"#),
+        Some(NOTES_AS_SENT),
     );
 
     assert_eq!(put.status, 204);
     let file = server
         .notes_dir()
         .join(format!("{}.json", sha1_hex(doc.to_str().unwrap())));
-    let expected = format!(
-        "{{\n  \"path\": \"{}\",\n  \"notes\": [\n    {{\n      \"id\": \"n1\",\n      \"text\": \"why?\"\n    }}\n  ]\n}}\n",
-        doc.display()
-    );
-    assert_eq!(std::fs::read_to_string(&file).unwrap(), expected);
     assert_eq!(
-        server.get(&path).text(),
-        r#"{"notes":[{"id":"n1","text":"why?"}]}"#
+        std::fs::read_to_string(&file).unwrap(),
+        written_by_bun(&doc)
     );
+    assert_eq!(server.get(&path).text(), NOTES_AS_SENT);
 
     let cleared = server.request(
         "PUT",
@@ -594,6 +578,38 @@ fn notes_are_saved_where_the_old_server_kept_them() {
     assert_eq!(cleared.status, 204);
     assert!(!file.exists());
     assert_eq!(server.get(&path).text(), r#"{"notes":[]}"#);
+}
+
+#[test]
+fn copy_all_is_the_page_path_then_one_line_per_range_in_line_order() {
+    let server = Preview::start();
+
+    let app = server.get("/__app.js").text();
+
+    for line in [
+        "const file = decodeURIComponent(location.pathname)",
+        "return n.l0 === n.l1 ? 'L' + n.l0 : 'L' + n.l0 + '-L' + n.l1",
+        ".sort((a, b) => a.l0 - b.l0)",
+        ".map((n) => label(n) + (n.orphan ? ' (orphaned)' : '') + ': ' + n.text.replace(/\\n/g, ' '))",
+        "const out = file + '\\n\\n' + body + '\\n'",
+    ] {
+        assert!(app.contains(line), "app.js lost: {line}");
+    }
+}
+
+#[test]
+fn the_page_scrolls_to_the_cursor_only_when_it_leaves_the_middle_of_the_viewport() {
+    let server = Preview::start();
+
+    let app = server.get("/__app.js").text();
+
+    for line in [
+        "es.addEventListener('cursor', (ev) => follow(JSON.parse(ev.data).line))",
+        "if (r.top >= h * 0.15 && r.top <= h * 0.75) return",
+        "el.scrollIntoView({ block: 'center', behavior: 'smooth' })",
+    ] {
+        assert!(app.contains(line), "app.js lost: {line}");
+    }
 }
 
 #[test]
