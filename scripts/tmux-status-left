@@ -3,13 +3,13 @@
 # capsules, project and checkout kind.
 #
 # Usage (from tmux.conf, inside a #() substitution):
-#   tmux-status-left "#{session_path}" "#{session_name}"
+#   tmux-status-left "#{session_path}" "#{session_name}" "#{client_width}" #{q:session_id}
 #
 #    bp-api    root       (primary checkout)
 #    bp-api    wt         (linked worktree)
 #
-# Identity comes from #{session_path} + git, so any session in any repo gets the
-# same treatment and a session outside a repo falls back to its own name.
+# The project name comes from `atelier bar left`; without atelier the bar still
+# renders, with the session name in its place.
 
 set -uo pipefail
 
@@ -22,6 +22,7 @@ export LANG="${LANG:-en_US.UTF-8}"
 path="${1:-}"
 name="${2:-}"
 client_width="${3:-200}"
+session="${4:-}"
 
 # Catppuccin Frappe. Mauve is the project anchor and peach the worktree flag;
 # neither may be #8caaee (active window) nor the task-state yellow/green/red.
@@ -94,18 +95,19 @@ flush() {
 # No path, a session whose directory has gone away, or a directory that is not a
 # git repo at all: no checkout kind to report, so the second capsule is dropped.
 bare() {
-  capsule "$CHIP" '#c6d0f5' "$(clip "$name" "$MAX_PROJECT")"
+  capsule "$CHIP" '#c6d0f5' "$(clip "$project" "$MAX_PROJECT")"
   flush
 }
 
-[ -n "$path" ] && [ -d "$path" ] || bare
+project="$("$HOME/.local/bin/atelier" bar left -t "$session" 2>/dev/null)"
+[ -n "$project" ] || project="$name"
 
-# --git-common-dir resolves to the MAIN worktree's .git even from a linked
-# worktree, so every worktree of a repo reports the same project name.
+if [ -z "$path" ] || [ ! -d "$path" ]; then
+  bare
+fi
+
 common="$(git -C "$path" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || bare
 [ -n "$common" ] || bare
-
-project="$(basename "$(dirname "$common")")"
 
 # A linked worktree has --git-dir != --git-common-dir (it points at
 # <main>/.git/worktrees/<name>); the primary checkout has them equal.
