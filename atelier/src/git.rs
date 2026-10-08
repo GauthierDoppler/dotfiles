@@ -16,6 +16,27 @@ pub fn main_worktree(dir: &Path) -> Option<PathBuf> {
     first.strip_prefix("worktree ").map(PathBuf::from)
 }
 
+pub fn is_linked_worktree(dir: &Path) -> Option<bool> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-dir",
+            "--git-common-dir",
+        ])
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let listing = String::from_utf8(output.stdout).ok()?;
+    let mut lines = listing.lines();
+    Some(lines.next()? != lines.next()?)
+}
+
 #[derive(Clone, Copy, Default)]
 pub struct RepoCounts {
     pub insertions: u64,

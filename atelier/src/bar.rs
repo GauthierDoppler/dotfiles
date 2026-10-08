@@ -1,4 +1,5 @@
 mod battery;
+mod left;
 mod right;
 
 use std::path::Path;
@@ -12,16 +13,15 @@ use crate::Result;
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Print the left block of the status bar: the session's project
+    /// Print the left block of the status bar: the project and root/wt pills
     Left {
         #[arg(short = 't', long, value_name = "SESSION")]
         target: String,
+        #[arg(default_value_t = 200)]
+        client_width: u16,
     },
-    /// Print the right block of the status bar, or with --width only its width
+    /// Print the right block of the status bar
     Right {
-        /// Print the block's width in cells for this client width, and nothing else
-        #[arg(long, value_name = "CLIENT_WIDTH", conflicts_with_all = ["path", "client_width", "key_table"])]
-        width: Option<u16>,
         /// The session's directory, for the repo counts
         #[arg(default_value = "")]
         path: String,
@@ -35,22 +35,20 @@ pub enum Command {
 impl Command {
     pub fn run(self, tmux: &Tmux) -> Result<()> {
         match self {
-            Command::Left { target } => {
-                println!("{}", session::resolve(tmux, &target)?.project);
-                Ok(())
-            }
-            Command::Right {
-                width: Some(client_width),
-                ..
+            Command::Left {
+                target,
+                client_width,
             } => {
-                println!(
-                    "{}",
-                    right::width(client_width, battery::Battery::read().is_some())
-                );
+                let identity = session::resolve(tmux, &target)?;
+                let block = left::Left {
+                    project: &identity.project,
+                    checkout: identity.checkout,
+                };
+                let right_width = right::width(client_width, battery::Battery::read().is_some());
+                println!("{}", block.render(client_width, right_width));
                 Ok(())
             }
             Command::Right {
-                width: None,
                 path,
                 client_width,
                 key_table,

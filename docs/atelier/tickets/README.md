@@ -8,7 +8,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [01](01-grove-tags-its-sessions.md) | Grove tags its sessions | — | done |
 | [02](02-atelier-tracer-bullet-the-bar-s-project.md) | Atelier tracer bullet: the bar's project name comes from atelier | — | done |
 | [03](03-right-block-of-the-bar-rendered-by.md) | Right block of the bar rendered by atelier | 02 | done |
-| [04](04-left-block-of-the-bar-rendered-by.md) | Left block of the bar rendered by atelier | 01, 03 | ready-for-agent |
+| [04](04-left-block-of-the-bar-rendered-by.md) | Left block of the bar rendered by atelier | 01, 03 | done |
 | [05](05-session-picker-list-scope-and-switch.md) | Session picker: list, scope and switch | 01, 02 | done |
 | [06](06-session-picker-preview-window-cycling-and-kill.md) | Session picker: preview, window cycling and kill | 05 | ready-for-agent |
 | [07](07-task-picker-and-window-tasks.md) | Task picker and window tasks | 02 | ready-for-agent |

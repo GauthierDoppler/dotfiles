@@ -163,7 +163,9 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `@grove_project`, else the basename of the main worktree (first entry of
   `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
   Its `root` (`@grove_root`, else that main worktree, else none) is what "the
-  same project" means; a session with no root belongs to no project.
+  same project" means; a session with no root belongs to no project. Its
+  `checkout` (root or worktree) is `@grove_worktree` being empty or not, else
+  git's, else none.
 - **The session picker is `atelier sessions pick`**, run by `Prefix + Space`
   and `Prefix + s` inside `display-popup -E`. It execs fzf with rows of
   `<session id><TAB><label>` (`--with-nth=2..`), and every bind calls back into
@@ -647,11 +649,15 @@ project's `.tmux/` tasks.
 
 ## Tmux status bar
 
-`scripts/tmux-status-left` renders the left segment as two adjacent capsules —
-**project** and **root/wt**. The project comes from `atelier bar left` (see
-Atelier) and is the session name when atelier is not installed; root/wt is
-resolved from `#{session_path}` with git. They are
-separate blocks on purpose: which repo you are in and which checkout of it you
+`atelier bar left -t #{q:session_id} "#{client_width}"` renders the left segment
+as two adjacent capsules — **project** and **root/wt** (`src/bar/left.rs`, a pure
+function of the project, the checkout kind, the client width and the right
+block's width; its snapshots cover every width tier at the root, in a worktree,
+outside a repo and with a long name). Both come from `session::resolve`: root/wt
+is `@grove_worktree` being empty or not, else whether `#{session_path}` is a
+linked worktree (`--git-dir` ≠ `--git-common-dir`); outside a repo there is a
+single grey pill. When atelier is missing or fails, the `#()` falls back to
+echoing the session name. They are separate blocks on purpose: which repo you are in and which checkout of it you
 are in are two different questions, and a flag glued onto the project name reads
 as part of the name.
 
@@ -676,9 +682,10 @@ version read as a slab of dead space. The checkout segment stays `root`/`wt`
 rather than the worktree's name because that name is nearly always a sanitized
 copy of the branch, and it changed width on every switch.
 
-The project pill hugs its name up to `MAX_PROJECT` characters and then truncates
-with `…`. It never changes the block width — a longer name spends padding, not
-layout — so that cap is a purely visual choice and there is room to raise it.
+The project pill hugs its name up to `MAX_PROJECT` cells and then truncates
+with `…`. Wherever the block pads to match the right one, a longer name spends
+padding, not layout, so that cap is a purely visual choice and there is room to
+raise it.
 
 `atelier bar right "#{session_path}" "#{client_width}" "#{client_key_table}"`
 renders the *entire* right block — key table, repo state, battery, date, clock
@@ -709,12 +716,12 @@ but is ahead or behind.
 Widths are counted in terminal cells (`unicode-width`), so nothing depends on
 `LANG` — tmux runs `#()` commands with the *server's* environment, and the bash
 this replaced over-padded every glyph by two or three columns without a UTF-8
-locale; `tmux-status-left` still exports `LANG` for its ellipsis for the same
-reason. The battery comes from the `starship-battery` crate (IOKit on macOS,
-sysfs on Linux); on a machine with none the segment and its gap are dropped and
-`--width` reports the narrower block.
+locale (`tests/bar_left.rs` and `tests/bar_right.rs` render under `C` and a
+UTF-8 locale). The battery comes from the `starship-battery` crate (IOKit on
+macOS, sysfs on Linux); on a machine with none the segment and its gap are
+dropped and the right block is narrower.
 
-Truncation happens inside the script, never via `status-left-length`: tmux
+Truncation happens inside atelier, never via `status-left-length`: tmux
 truncates the *expanded* string, which by then contains `#[fg=...]` escapes, and
 will happily cut one in half and print the remainder as literal text.
 
@@ -732,10 +739,9 @@ None of them may be `#8caaee` or a task-state colour.
 `status-justify centre` centres the list in the space *remaining* after
 `status-left` and `status-right`, not in the terminal: measured on a 120-column
 client, growing the right block by 36 columns moved the list 18 columns left —
-exactly half. So `tmux-status-left` pads out to match, and asks
-`atelier bar right --width` for the number instead of hardcoding it. A copy of
-the tier table on the left would drift; `--width` runs no `git`, so the extra
-fork is cheap.
+exactly half. So `bar left` pads out to match, taking the number from
+`right::width` in the same crate rather than a copy of the tier table, which
+would drift.
 
 Everything on the right is therefore fixed-width, including the key table slot,
 which stays reserved at rest — letting it collapse would change the block width
@@ -745,9 +751,11 @@ every time a mode is entered and slide the list. For the same reason the date is
 **Narrowing sheds whole segments** rather than crushing the list: date, then
 battery, then the repo counts, leaving the clock. Before that, an 80-column
 client rendered date and battery in full and dropped the *window list* entirely
-— the one thing on the bar worth keeping. Below the widest tier the left block
-also stops padding to match, so the list drifts off centre instead of
-overflowing. None of this engages above 120 columns.
+— the one thing on the bar worth keeping. None of that engages above 120
+columns. The left block's padding gives way earlier: it never leaves less than
+36 columns between the two blocks, so below twice the right block plus 36 (154
+columns with a battery, 134 without) the list drifts off centre instead of
+being squeezed.
 
 **A window occupies the same width whether or not it is active**: the active
 format's two `` capsules are replaced by two plain spaces in the inactive one.

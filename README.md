@@ -136,7 +136,6 @@ Symlinked into `~/.local/bin` by `atelier setup`:
 - `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
 - `tmux-sessions` — previous session picker, no longer bound (`Prefix + Space` runs `atelier sessions pick`); removed once atelier's has the preview
 - `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
-- `tmux-status-left` — renders project · root/wt · branch in the status bar
 
 ## Dependencies
 

@@ -146,7 +146,7 @@ fn reading_the_counts_never_rewrites_the_index() {
 }
 
 #[test]
-fn the_block_is_as_wide_as_width_reports_whatever_the_locale() {
+fn the_block_is_as_wide_whatever_the_locale_and_the_repo_state() {
     let dir = tempfile::tempdir().unwrap();
     let (_, clone) = repo_with_upstream(dir.path());
     write(&clone.join("f"), "1\n2\n");
@@ -154,7 +154,9 @@ fn the_block_is_as_wide_as_width_reports_whatever_the_locale() {
     let path = clone.to_str().unwrap();
 
     for client_width in ["80", "90", "100", "120", "200"] {
-        let width: usize = bar_right(&["--width", client_width], &[]).parse().unwrap();
+        let width = visible(&bar_right(&["", client_width], &[]))
+            .chars()
+            .count();
         for locale in [
             [("LANG", "C"), ("LC_ALL", "C")],
             [("LANG", "en_US.UTF-8"), ("LC_ALL", "")],
