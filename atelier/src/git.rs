@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -79,7 +81,22 @@ pub fn repo_counts(dir: &Path) -> RepoCounts {
     counts
 }
 
+pub fn tracked_files(worktree: &Path) -> Option<Vec<PathBuf>> {
+    let listing = read_only_git_bytes(worktree, &["ls-files", "-z"])?;
+    Some(
+        listing
+            .split(|byte| *byte == 0)
+            .filter(|name| !name.is_empty())
+            .map(|name| worktree.join(OsStr::from_bytes(name)))
+            .collect(),
+    )
+}
+
 fn read_only_git(dir: &Path, args: &[&str]) -> Option<String> {
+    read_only_git_bytes(dir, args).map(|stdout| String::from_utf8_lossy(&stdout).into_owned())
+}
+
+fn read_only_git_bytes(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -88,8 +105,5 @@ fn read_only_git(dir: &Path, args: &[&str]) -> Option<String> {
         .stderr(Stdio::null())
         .output()
         .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+    output.status.success().then_some(output.stdout)
 }

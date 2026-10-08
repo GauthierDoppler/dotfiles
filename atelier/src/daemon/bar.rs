@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::path::Path;
 
+use super::repos::Repos;
 use super::state::Watched;
 use crate::bar::{self, Battery, Pushed};
-use crate::session::{self, Field};
+use crate::session::Field;
 use crate::shell::quote;
 
 pub const RESIZED: &str = "atelier:client-resized";
@@ -33,17 +33,15 @@ impl Pusher {
         changed
     }
 
-    pub fn commands(&mut self, watched: Vec<Watched>) -> Vec<String> {
+    pub fn commands(&mut self, watched: Vec<Watched>, repos: &mut Repos) -> Vec<String> {
         self.battery = Battery::read();
         let mut commands = Vec::new();
         for session in watched {
-            let Ok(Some(identity)) =
-                session::identify(|field| Ok(session.fields[field as usize].clone()))
-            else {
+            let Some(identity) = repos.identity(&session.fields) else {
                 continue;
             };
-            let path = Path::new(&session.fields[Field::Path as usize]);
-            let blocks = bar::pushed(&identity, path, session.width, self.battery);
+            let counts = repos.counts(&session.fields[Field::Path as usize]);
+            let blocks = bar::pushed(&identity, counts, session.width, self.battery);
             if self.shown.get(&session.session) == Some(&blocks) {
                 continue;
             }
