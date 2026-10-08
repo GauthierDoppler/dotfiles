@@ -35,18 +35,24 @@ macro_rules! flags_only {
 pub(crate) use flags_only;
 
 macro_rules! features {
-    ($($(#[$doc:meta])* $variant:ident => $module:ident,)*) => {
+    (
+        $($(#[$doc:meta])* $variant:ident => $module:ident,)*
+        $(; top level: $($tvariant:ident => $tmodule:ident,)*)?
+    ) => {
         $(mod $module;)*
+        $($(mod $tmodule;)*)?
 
         #[derive(Subcommand)]
         enum Feature {
             $($(#[$doc])* #[command(subcommand)] $variant($module::Command),)*
+            $($(#[command(flatten)] $tvariant($tmodule::Command),)*)?
         }
 
         impl Feature {
             fn run(self, tmux: &Tmux) -> Result<()> {
                 match self {
                     $(Feature::$variant(command) => command.run(tmux),)*
+                    $($(Feature::$tvariant(command) => command.run(tmux),)*)?
                 }
             }
         }
@@ -72,6 +78,8 @@ features! {
     Sessions => sessions,
     /// The per-project task picker and runner over `.tmux/`
     Tasks => tasks,
+    ; top level:
+    Daemon => daemon,
 }
 
 #[derive(Parser)]
