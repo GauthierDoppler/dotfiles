@@ -30,7 +30,7 @@ fn hook_with_path(tmux: &TmuxServer, pane: Option<&str>, payload: &str, path: &s
         .unwrap()
         .write_all(payload.as_bytes())
         .unwrap();
-    child.wait_with_output().unwrap()
+    common::wait_bounded(child, "atelier hook claude")
 }
 
 fn event(name: &str) -> String {

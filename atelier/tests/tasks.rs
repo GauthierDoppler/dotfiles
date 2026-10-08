@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::Duration;
 
-use common::TmuxServer;
+use common::{BoundedOutput, TmuxServer};
 
 struct Project {
     _dir: tempfile::TempDir,
@@ -49,7 +49,7 @@ fn tasks(tmux: &TmuxServer, project: &Project, cwd: &Path, args: &[&str]) -> Out
         .args(args)
         .current_dir(cwd)
         .env("TMPDIR", &project.tmpdir)
-        .output()
+        .bounded_output()
         .expect("atelier runs")
 }
 
@@ -206,7 +206,7 @@ fn from_inside_a_pane_three_directories_deep_the_pane_s_session_is_used() {
         .env("TMPDIR", &project.tmpdir)
         .env("TMUX", format!("{},1,0", tmux.socket().display()))
         .env("TMUX_PANE", &pane)
-        .output()
+        .bounded_output()
         .expect("atelier runs");
 
     assert_eq!(common::stdout_of(&["tasks", "list"], output), "doctor");

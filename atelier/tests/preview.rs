@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::Duration;
 
+use common::BoundedOutput;
+
 struct Preview {
     port: u16,
     home: tempfile::TempDir,
@@ -89,6 +91,9 @@ impl Preview {
         body: Option<&str>,
     ) -> Response {
         let mut stream = TcpStream::connect(("127.0.0.1", self.port)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
         let mut head = format!("{method} {path} HTTP/1.1\r\nConnection: close\r\n");
         if !headers
             .iter()
@@ -716,11 +721,10 @@ fn open_with(opener: &common::FakeOpener, port: u16, home: &Path, file: &Path) -
         .env("HOME", home)
         .env("MD_PREVIEW_PORT", port.to_string())
         .env("PATH", opener.path())
-        .output()
+        .bounded_output()
         .expect("atelier runs")
 }
 
-#[cfg(not(target_os = "macos"))]
 #[test]
 fn opening_a_file_hands_its_url_to_the_os_opener() {
     let (_dir, root) = common::real_tempdir();
@@ -732,10 +736,12 @@ fn opening_a_file_hands_its_url_to_the_os_opener() {
     let output = open_with(&opener, server.port, server.home.path(), &doc);
 
     assert!(output.status.success());
-    assert_eq!(opener.wait_opened(), format!("{}\n", server.url(&doc)));
+    assert_eq!(
+        opener.wait_opened(),
+        common::FakeOpener::browser_call(&server.url(&doc))
+    );
 }
 
-#[cfg(not(target_os = "macos"))]
 #[test]
 fn opening_a_file_prints_its_url() {
     let (_dir, root) = common::real_tempdir();
@@ -756,7 +762,6 @@ fn opening_a_file_prints_its_url() {
     );
 }
 
-#[cfg(not(target_os = "macos"))]
 #[test]
 fn opening_a_file_starts_the_server_when_none_is_running() {
     let (_dir, root) = common::real_tempdir();
@@ -772,6 +777,9 @@ fn opening_a_file_starts_the_server_when_none_is_running() {
         String::from_utf8_lossy(&output.stderr)
     );
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("server is up");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
     write!(
         stream,
         "GET /__meta HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"

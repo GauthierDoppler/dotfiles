@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-use common::TmuxServer;
+use common::{BoundedOutput, TmuxServer};
 
 const FAKE_INFOCMP: &str = r#"#!/bin/sh
 for name; do :; done
@@ -50,7 +50,7 @@ esac
 fn real(program: &str) -> PathBuf {
     let output = Command::new("sh")
         .args(["-c", &format!("command -v {program}")])
-        .output()
+        .bounded_output()
         .unwrap();
     PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
 }
@@ -99,7 +99,7 @@ impl Machine {
             .args(["setup", "--repo"])
             .arg(common::repo())
             .env("HOME", machine.home.path())
-            .output()
+            .bounded_output()
             .unwrap();
         assert!(setup.status.success(), "setup failed: {setup:?}");
 
@@ -151,7 +151,7 @@ impl Machine {
             .env("TERM", "xterm-ghostty")
             .env("PATH", self.fakes.path().join("bin"))
             .env("FAKE_STATE", self.fakes.path().join("state"));
-        command.output().expect("atelier runs")
+        command.bounded_output().expect("atelier runs")
     }
 
     fn doctor(&self, args: &[&str]) -> Output {
@@ -235,7 +235,14 @@ fn missing_terminfo_prints_the_command_that_copies_it_over() {
     fs::remove_file(machine.fakes.path().join("state/terminfo/xterm-ghostty")).unwrap();
     let report = assert_fails(&machine, &[], "terminfo");
     assert!(check(&report, "terminfo").contains("xterm-ghostty"));
-    let host = String::from_utf8(Command::new("uname").arg("-n").output().unwrap().stdout).unwrap();
+    let host = String::from_utf8(
+        Command::new("uname")
+            .arg("-n")
+            .bounded_output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
     assert_eq!(
         fix(&report, "terminfo"),
         format!("infocmp -x xterm-ghostty | ssh {} tic -x -", host.trim())

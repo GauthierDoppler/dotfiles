@@ -3,12 +3,10 @@ mod common;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::Command;
-#[cfg(not(target_os = "macos"))]
-use std::process::{Child, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
-use common::{git, git_repo, TmuxServer};
+use common::{git, git_repo, BoundedOutput, TmuxServer};
 
 const PLACEHOLDER: &str = "(no markdown file under this session)";
 
@@ -126,6 +124,7 @@ fn answers(port: u16) -> bool {
     let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
         return false;
     };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
     let _ = write!(
         stream,
         "GET /__meta HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
@@ -135,14 +134,12 @@ fn answers(port: u16) -> bool {
     response.contains("md-preview")
 }
 
-#[cfg(not(target_os = "macos"))]
 struct Server {
     port: u16,
     _home: tempfile::TempDir,
     child: Child,
 }
 
-#[cfg(not(target_os = "macos"))]
 impl Server {
     fn start() -> Self {
         let port = common::free_port();
@@ -164,7 +161,6 @@ impl Server {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
 impl Drop for Server {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -182,7 +178,7 @@ fn previewing_the_placeholder_row_does_nothing() {
         .current_dir(&root)
         .env("HOME", &root)
         .env("MD_PREVIEW_PORT", port.to_string())
-        .output()
+        .bounded_output()
         .unwrap();
 
     assert!(output.status.success());
@@ -190,7 +186,6 @@ fn previewing_the_placeholder_row_does_nothing() {
     assert!(!answers(port));
 }
 
-#[cfg(not(target_os = "macos"))]
 #[test]
 fn enter_in_the_picker_previews_the_newest_file() {
     if !common::fzf_available() {

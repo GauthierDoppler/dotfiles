@@ -1,11 +1,89 @@
 #![allow(dead_code)]
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+pub const DEADLINE: Duration = Duration::from_secs(30);
+
+pub trait BoundedOutput {
+    fn bounded_output(&mut self) -> std::io::Result<Output>;
+}
+
+impl BoundedOutput for Command {
+    fn bounded_output(&mut self) -> std::io::Result<Output> {
+        let child = self
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        Ok(wait_bounded(child, &format!("{self:?}")))
+    }
+}
+
+pub fn wait_bounded(mut child: Child, what: &str) -> Output {
+    let (sender, received) = mpsc::channel();
+    let streams: [Option<Box<dyn Read + Send>>; 2] = [
+        child
+            .stdout
+            .take()
+            .map(|s| Box::new(s) as Box<dyn Read + Send>),
+        child
+            .stderr
+            .take()
+            .map(|s| Box::new(s) as Box<dyn Read + Send>),
+    ];
+    let mut readers = 0;
+    for (index, stream) in streams.into_iter().enumerate() {
+        if let Some(mut stream) = stream {
+            readers += 1;
+            let sender = sender.clone();
+            std::thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = stream.read_to_end(&mut bytes);
+                let _ = sender.send((index, bytes));
+            });
+        }
+    }
+    let deadline = Instant::now() + DEADLINE;
+    let mut pause = Duration::from_millis(1);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("child can be polled") {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("{what} was still running after {DEADLINE:?}, killed");
+        }
+        std::thread::sleep(pause);
+        pause = (pause * 2).min(Duration::from_millis(20));
+    };
+    let mut output = Output {
+        status,
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+    };
+    for _ in 0..readers {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let (index, bytes) = received
+            .recv_timeout(left.max(Duration::from_secs(1)))
+            .unwrap_or_else(|_| {
+                panic!("{what} exited, but a process it started still holds its output open")
+            });
+        if index == 0 {
+            output.stdout = bytes;
+        } else {
+            output.stderr = bytes;
+        }
+    }
+    output
+}
 
 pub struct TmuxServer {
     name: String,
@@ -55,7 +133,7 @@ impl TmuxServer {
             .args(args)
             .env_remove("TMUX")
             .env("XDG_RUNTIME_DIR", self.runtime.path())
-            .output()
+            .bounded_output()
             .expect("tmux runs");
         assert!(
             output.status.success(),
@@ -104,7 +182,7 @@ impl TmuxServer {
     pub fn atelier_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
         self.atelier_command(args)
             .envs(env.iter().copied())
-            .output()
+            .bounded_output()
             .expect("atelier runs")
     }
 
@@ -113,7 +191,7 @@ impl TmuxServer {
             .args(args)
             .env("TMUX", format!("{},1,0", self.socket.display()))
             .env("XDG_RUNTIME_DIR", self.runtime.path())
-            .output()
+            .bounded_output()
             .expect("atelier runs")
     }
 
@@ -242,7 +320,7 @@ pub fn git(dir: &Path, args: &[&str]) {
         ])
         .args(["-c", "init.defaultBranch=main"])
         .args(args)
-        .output()
+        .bounded_output()
         .expect("git runs");
     assert!(
         output.status.success(),
@@ -265,13 +343,14 @@ impl FakeOpener {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().expect("opener dir created");
         let log = dir.path().join("opened");
-        for opener in ["open", "xdg-open"] {
-            let script = dir.path().join(opener);
-            std::fs::write(
-                &script,
-                format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display()),
-            )
-            .expect("opener written");
+        let logs = format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display());
+        for (program, body) in [
+            ("open", logs.as_str()),
+            ("xdg-open", logs.as_str()),
+            ("osascript", "#!/bin/sh\necho none\n"),
+        ] {
+            let script = dir.path().join(program);
+            std::fs::write(&script, body).expect("opener written");
             std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
                 .expect("opener made executable");
         }
@@ -294,6 +373,14 @@ impl FakeOpener {
         std::fs::read_to_string(self.dir.path().join("opened")).unwrap_or_default()
     }
 
+    pub fn browser_call(url: &str) -> String {
+        if cfg!(target_os = "macos") {
+            format!("-a\nGoogle Chrome\n{url}\n")
+        } else {
+            format!("{url}\n")
+        }
+    }
+
     pub fn wait_opened(&self) -> String {
         for _ in 0..200 {
             let opened = self.opened();
@@ -309,7 +396,7 @@ impl FakeOpener {
 pub fn fzf_available() -> bool {
     let version = Command::new("fzf")
         .arg("--version")
-        .output()
+        .bounded_output()
         .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
         .unwrap_or_default();
     let mut numbers = version

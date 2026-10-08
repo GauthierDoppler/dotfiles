@@ -1,6 +1,10 @@
+mod common;
+
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};
+
+use common::BoundedOutput;
 
 const BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[90m";
@@ -40,7 +44,7 @@ impl Machine {
             .env("HOME", self.home())
             .env_remove("DOTFILES")
             .env_remove("TMUX")
-            .output()
+            .bounded_output()
             .expect("atelier runs")
     }
 
