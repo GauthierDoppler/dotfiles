@@ -133,10 +133,19 @@ reconstructs what the project *is*. Do not add a persistence plugin.
 every time; the live server had accumulated 52 duplicated `terminal-overrides`
 entries this way. `set -gu` first resets the option to its default array (which
 carries the stock `xterm*:clipboard:ccolour:cstyle:focus:title`, needed for OSC 52
-and focus events), so the `set -gu` + `set -as` pair is idempotent. Ghostty gets
-`RGB:usstyle:sync` — `usstyle` is what makes nvim's LSP undercurl render as a
-curl rather than a plain underline. Its TERM outside tmux is `xterm-ghostty`;
-inside, `default-terminal` stays `tmux-256color`.
+and focus events), so the `set -gu` + `set -as` pair is idempotent.
+
+**No terminal app is assumed.** Entries are keyed on the client's TERM, outside
+tmux: `xterm-ghostty`, `xterm-kitty` and `wezterm` get `RGB:usstyle:sync` —
+`usstyle` is what makes nvim's LSP undercurl render as a curl rather than a plain
+underline — and plain `xterm-256color` gets `RGB` alone, since that TERM is also
+what Terminal.app and a bare xterm report, and the entry can only promise what the
+least capable of them supports.
+iTerm2 has no entry because it cannot have one: it reports `xterm-256color`, and
+tmux recognises it from its XTVERSION reply and applies `RGB`, `usstyle` and
+`sync` itself. WezTerm reports `wezterm` only when its `term` option is set to it
+and the terminfo entry is installed; on its default `xterm-256color` it gets the
+plain entry. Inside tmux, `default-terminal` stays `tmux-256color`.
 
 **`detach-on-destroy off`**: killing the last window of a session switches to
 another session instead of ejecting the client out of tmux.
@@ -210,9 +219,11 @@ are working in, where a `✗` would be ambiguous — and the output is right in
 front of you anyway.
 
 Those same two placements also **notify** on completion: a `\a` bell (picked up by
-`monitor-bell on`, then by ghostty's `bell-features = title,attention` for the
-dock bounce and badge) plus a `terminal-notifier` banner, sent as
-`com.mitchellh.ghostty` so clicking it focuses the terminal. Both are skipped when
+`monitor-bell on`, then passed on to the terminal, which decides whether that
+means a dock bounce or a badge) plus a `terminal-notifier` banner under its own
+name. It used to borrow ghostty's bundle id with `-sender` so a click focused the
+terminal; that tied the banner to one terminal app, so it is now informational
+only and clicking it does not bring anything forward. Both are skipped when
 the task's window is the active window of an attached client — notifying about
 output the user is staring at is noise — and `terminal-notifier` is probed with
 `command -v` so a machine without it degrades to the bell alone.
@@ -540,7 +551,7 @@ project's `.tmux/` tasks.
 
 - **Tmux ↔ Neovim**: `vim-tmux-navigator` for Ctrl+h/j/k/l pane navigation. Tmux has `focus-events on` for Neovim autoread and gitsigns refresh. The same four keys are re-bound in `copy-mode-vi`, where they otherwise fall through to tmux defaults — `C-h` was a duplicate `cursor-left` and `C-j` was `copy-pipe-and-cancel`, i.e. it yanked and exited the mode.
 - **Git ↔ Delta**: `dot_gitconfig` includes `delta/themes.gitconfig` for diff rendering. Lazygit also uses delta with custom side-by-side/inline pagers.
-- **Ghostty ↔ Tmux**: Extended key sequences for Shift+Enter compatibility.
+- **Terminal ↔ Tmux**: `extended-keys on` decodes the terminal's CSI u sequence and `S-Enter` re-sends `\x1b[13;2u`, so Shift+Enter reaches Claude Code.
 - **Tmux modes**: two one-shot modal tables, `Prefix → p` (pane) and `Prefix → t` (tab).
 
 ## Tmux status bar
@@ -691,9 +702,9 @@ selection when `#{mouse_any_flag}` is unset — i.e. when the pane's application
 has not asked for mouse events. Neovim holds it permanently and Claude Code
 toggles it while rendering interactive UI, which is why dragging works
 sometimes and not others. Inside copy-mode the `copy-mode-vi` table owns the
-mouse unconditionally, and it respects pane borders (Ghostty's own
-Shift+drag does not — it selects by screen column, so a vertical split gives you
-both panes on every line).
+mouse unconditionally, and it respects pane borders (the terminal's own
+selection — Shift+drag, Option+drag in iTerm2 — does not: it selects by screen
+column, so a vertical split gives you both panes on every line).
 
 `tmux-pick` checks path candidates against the filesystem and drops the ones
 that do not exist. This is load-bearing: TUIs truncate long paths to fit their

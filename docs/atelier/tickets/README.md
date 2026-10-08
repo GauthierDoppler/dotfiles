@@ -27,7 +27,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [20](20-services-on-launchd-and-systemd.md) | Services on launchd and systemd | 15, 17 | ready-for-agent |
 | [21](21-atelier-doctor.md) | atelier doctor | 17, 20 | ready-for-agent |
 | [22](22-first-install-on-the-remote-linux-machine.md) | First install on the remote Linux machine | 18, 19, 21 | needs-human |
-| [23](23-terminal-agnostic-tmux-config.md) | Terminal-agnostic tmux config | — | ready-for-agent |
+| [23](23-terminal-agnostic-tmux-config.md) | Terminal-agnostic tmux config | — | done |
 | [24](24-remove-zed-and-unused-nvim-plugins.md) | Remove Zed and unused nvim plugins | — | needs-human |
 | [25](25-spike-clickable-notification-from-a-daemon.md) | Spike: clickable notification from a daemon | 09 | needs-human |
 | [26](26-waiting-notification-click-to-focus-the-pane.md) | Waiting notification, click to focus the pane | 25 | ready-for-agent |
