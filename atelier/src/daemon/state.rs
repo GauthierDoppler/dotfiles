@@ -1,10 +1,20 @@
 use std::fmt::Write;
+use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
 use crate::session::Field;
 use crate::tmux::Tmux;
 use crate::Result;
+
+static SESSIONS_FORMAT: LazyLock<String> = LazyLock::new(|| {
+    let mut format = "#{session_id}".to_string();
+    for field in &Field::ALL[..Field::Name as usize] {
+        let _ = write!(format, " #{{q:{}}}", field.variable());
+    }
+    let _ = write!(format, " #{{{}}}", Field::Name.variable());
+    format
+});
 
 #[derive(Clone, Copy)]
 pub enum Query {
@@ -18,11 +28,7 @@ impl Query {
 
     pub fn args(self) -> [&'static str; 3] {
         match self {
-            Query::Sessions => [
-                "list-sessions",
-                "-F",
-                "#{session_id} #{q:@grove_project} #{q:@grove_root} #{q:@grove_worktree} #{q:session_path} #{session_name}",
-            ],
+            Query::Sessions => ["list-sessions", "-F", SESSIONS_FORMAT.as_str()],
             Query::Windows => [
                 "list-windows",
                 "-aF",

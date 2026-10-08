@@ -59,7 +59,6 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
     let mut parser = Parser::default();
     let mut pending = VecDeque::from([Pending::Me]);
     let mut out = "display-message -p '#{client_name}'\n".to_string();
-    let mut me = None;
     let mut pusher = Pusher::default();
     let mut push_due = false;
     let mut stale = true;
@@ -97,14 +96,12 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
                             (Some(Pending::Query(query)), true) => {
                                 lock(state).apply(query, reply.lines.iter().map(String::as_str));
                             }
-                            (Some(Pending::Me), true) if me.is_none() => {
-                                let name = reply.lines.concat();
-                                for command in adopt(&name) {
+                            (Some(Pending::Me), true) => {
+                                for command in adopt(&reply.lines.concat()) {
                                     out.push_str(&command);
                                     out.push('\n');
                                     pending.push_back(Pending::Ignored);
                                 }
-                                me = Some(name);
                             }
                             _ => {}
                         }
