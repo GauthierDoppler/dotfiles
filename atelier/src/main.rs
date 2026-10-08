@@ -45,6 +45,8 @@ features! {
     Pick => pick,
     /// The session picker
     Sessions => sessions,
+    /// The per-project task picker and runner over `.tmux/`
+    Tasks => tasks,
 }
 
 #[derive(Parser)]
