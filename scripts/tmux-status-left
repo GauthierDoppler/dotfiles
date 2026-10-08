@@ -7,9 +7,6 @@
 #
 #    bp-api    root       (primary checkout)
 #    bp-api    wt         (linked worktree)
-#
-# The project name comes from `atelier bar left`; without atelier the bar still
-# renders, with the session name in its place.
 
 set -uo pipefail
 
@@ -99,7 +96,10 @@ bare() {
   flush
 }
 
-project="$("$HOME/.local/bin/atelier" bar left -t "$session" 2>/dev/null)"
+project=''
+if [ -n "$session" ]; then
+  project="$("$HOME/.local/bin/atelier" bar left -t "$session" 2>/dev/null)"
+fi
 [ -n "$project" ] || project="$name"
 
 if [ -z "$path" ] || [ ! -d "$path" ]; then
