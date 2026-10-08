@@ -51,6 +51,7 @@ const CHECKS: &[(&str, Check)] = &[
     ("fzf", fzf),
     ("atelier installed", installed),
     ("setup", setup),
+    ("keyboard layout", keyboard_layout),
     ("daemon", daemon),
     ("services", services),
     ("linger", linger),
@@ -103,7 +104,7 @@ fn version(text: &str) -> Option<(u32, u32)> {
     Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
 }
 
-fn shown((major, minor): (u32, u32)) -> String {
+fn dotted((major, minor): (u32, u32)) -> String {
     format!("{major}.{minor}")
 }
 
@@ -177,12 +178,12 @@ fn tmux_version(_: &Context) -> Outcome {
     match version(&reported) {
         None => Outcome::Look(format!(
             "cannot read a version from {text:?}; atelier needs {} or later",
-            shown(TMUX_MINIMUM)
+            dotted(TMUX_MINIMUM)
         )),
         Some(found) if found < TMUX_MINIMUM => fail(
             format!(
                 "{reported}, atelier needs {} or later (allow-passthrough, pane-border-indicators)",
-                shown(TMUX_MINIMUM)
+                dotted(TMUX_MINIMUM)
             ),
             install_tmux(),
         ),
@@ -196,7 +197,7 @@ fn install_tmux() -> String {
     } else {
         format!(
             "install tmux {} or later; distribution packages can be older than that",
-            shown(TMUX_MINIMUM)
+            dotted(TMUX_MINIMUM)
         )
     }
 }
@@ -256,7 +257,7 @@ fn fzf(_: &Context) -> Outcome {
     } else {
         format!(
             "install fzf {} or later from github.com/junegunn/fzf/releases",
-            shown(FZF_MINIMUM)
+            dotted(FZF_MINIMUM)
         )
     };
     let Some(output) = run("fzf", &["--version"]) else {
@@ -269,7 +270,7 @@ fn fzf(_: &Context) -> Outcome {
         _ => fail(
             format!(
                 "{reported}, the pickers need {} or later (transform)",
-                shown(FZF_MINIMUM)
+                dotted(FZF_MINIMUM)
             ),
             fix,
         ),
@@ -327,6 +328,22 @@ fn setup(context: &Context) -> Outcome {
             "atelier setup",
         ),
     }
+}
+
+fn keyboard_layout(context: &Context) -> Outcome {
+    if !cfg!(target_os = "macos") {
+        return Outcome::Skip("macOS only".into());
+    }
+    let bundle = context
+        .home
+        .join("Library/Keyboard Layouts/FR-AZERTY-num.bundle");
+    if bundle.is_dir() {
+        return Outcome::Ok("installed; selecting it is manual (Input Sources)".into());
+    }
+    fail(
+        format!("{} is missing, Prefix + 1..9 needs Shift", tilde(&bundle, &context.home)),
+        "./install.sh copies it, then select it in System Settings > Keyboard > Input Sources",
+    )
 }
 
 fn tilde(path: &Path, home: &Path) -> String {

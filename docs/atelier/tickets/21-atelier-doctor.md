@@ -25,7 +25,9 @@
 - **Checks added from AGENTS.md gotchas:** duplicated `terminal-features`
   (appending reloads), `~/.local/bin/atelier` present (tmux calls it by that
   path), pending `atelier setup` changes (stubs replaced by symlinks, missing
-  links), a root-owned `~/Library/LaunchAgents` (launchd only).
+  links), a root-owned `~/Library/LaunchAgents` (launchd only), the
+  `FR-AZERTY-num.bundle` keyboard layout being installed (macOS only; whether
+  it is *selected* is not checked, the input-source daemon caches it).
 - Terminfo is checked for `$TERM` plus the TERM of every attached non-control
   tmux client, since the tmux server needs the client's entry on this machine.
 - Checks needing a tmux server (`extended keys`, `terminal features`, `daemon`)
@@ -33,4 +35,5 @@
 - `service list` now goes through the same per-system status function the
   doctor uses; its output is unchanged.
 - **Unverified on macOS:** the launchd path (`launchctl print`, LaunchAgents
-  probe) is driven only through a fake `launchctl` on Linux.
+  probe) is driven only through a fake `launchctl` on Linux, and the keyboard
+  layout check only runs on macOS, so no test here exercises its `ok`/`FAIL`.

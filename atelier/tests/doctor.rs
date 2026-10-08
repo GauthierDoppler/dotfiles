@@ -91,6 +91,13 @@ impl Machine {
         let installed = machine.home.path().join(".local/bin/atelier");
         fs::create_dir_all(installed.parent().unwrap()).unwrap();
         fs::copy(env!("CARGO_BIN_EXE_atelier"), &installed).unwrap();
+        fs::create_dir_all(
+            machine
+                .home
+                .path()
+                .join("Library/Keyboard Layouts/FR-AZERTY-num.bundle"),
+        )
+        .unwrap();
         let setup = Command::new(env!("CARGO_BIN_EXE_atelier"))
             .args(["setup", "--repo"])
             .arg(repo())
@@ -381,4 +388,15 @@ fn without_a_tmux_server_its_checks_are_skipped_not_failed() {
             "{name}:\n{report}"
         );
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_keyboard_layout_is_only_checked_on_macos() {
+    let machine = Machine::healthy();
+    let report = report(&machine.doctor(&[]));
+    assert!(
+        check(&report, "keyboard layout").starts_with("skip"),
+        "{report}"
+    );
 }

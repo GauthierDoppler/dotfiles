@@ -254,7 +254,8 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   <term> | ssh <host> tic -x -`), tmux ≥ 3.3 (`allow-passthrough` and
   `pane-border-indicators` are the newest options `dot_tmux.conf` sets),
   `extended-keys`, duplicated `terminal-features`, fzf ≥ 0.45,
-  `~/.local/bin/atelier`, pending `atelier setup` changes, the daemon of this
+  `~/.local/bin/atelier`, pending `atelier setup` changes, the keyboard
+  layout bundle (macOS only; selecting it stays manual), the daemon of this
   tmux server, every service of `services.toml` (and on launchd a writable
   `~/Library/LaunchAgents`), and linger on systemd. Checks that need a tmux
   server are skipped outside one. **The Nerd Font is `look`, never `ok`**: no
