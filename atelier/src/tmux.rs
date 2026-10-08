@@ -3,14 +3,24 @@ use std::process::Command;
 
 use crate::Result;
 
+const FALLBACK_DIRS: &[&str] = &[
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/home/linuxbrew/.linuxbrew/bin",
+    "/usr/bin",
+    "/bin",
+];
+
 pub struct Tmux {
     socket: Option<PathBuf>,
+    program: PathBuf,
 }
 
 impl Tmux {
     pub fn new(socket: Option<PathBuf>) -> Self {
         Tmux {
             socket: socket.or_else(socket_from_env),
+            program: program(),
         }
     }
 
@@ -18,12 +28,16 @@ impl Tmux {
         self.socket.as_deref()
     }
 
-    pub fn run(&self, args: &[&str]) -> Result<String> {
-        let mut command = Command::new("tmux");
+    pub fn command(&self) -> Command {
+        let mut command = Command::new(&self.program);
         if let Some(socket) = &self.socket {
             command.arg("-S").arg(socket);
         }
-        let output = command.args(args).output()?;
+        command
+    }
+
+    pub fn run(&self, args: &[&str]) -> Result<String> {
+        let output = self.command().args(args).output()?;
         if !output.status.success() {
             return Err(format!(
                 "tmux {}: {}",
@@ -53,6 +67,18 @@ impl Tmux {
     pub fn display(&self, target: &str, format: &str) -> Result<String> {
         self.run(&["display-message", "-p", "-t", target, format])
     }
+}
+
+fn program() -> PathBuf {
+    let on_path = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .unwrap_or_default();
+    on_path
+        .into_iter()
+        .chain(FALLBACK_DIRS.iter().map(PathBuf::from))
+        .map(|dir| dir.join("tmux"))
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| PathBuf::from("tmux"))
 }
 
 fn socket_from_env() -> Option<PathBuf> {

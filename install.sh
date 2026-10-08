@@ -153,49 +153,9 @@ if ! command -v nvr &>/dev/null; then
   pipx install neovim-remote
 fi
 
-# ─── Phase 10b: launchd agents ─────────────────────────────
-launch_agent() {
-  local label="$1"
-  local src="$DOTFILES/launchd/$label.plist"
-  local dir="$HOME/Library/LaunchAgents"
-  local dest="$dir/$label.plist"
-  local domain
-  domain="gui/$(id -u)"
-  mkdir -p "$dir" 2>/dev/null || true
-  if [ ! -w "$dir" ]; then
-    warn "$dir is not writable (sudo chown $USER:staff $dir) — $label not installed"
-    return 0
-  fi
-  # A bootstrapped agent can sit at "pended nondemand spawn = speculative" for
-  # minutes; kickstart without -k starts it now and leaves a running one alone.
-  if cmp -s "$src" "$dest" && launchctl print "$domain/$label" &>/dev/null; then
-    launchctl kickstart "$domain/$label" &>/dev/null || true
-    echo "agent ok: $label"
-    return 0
-  fi
-  # bootout returns before the service is gone, and a bootstrap issued in that
-  # window fails with "5: Input/output error".
-  if launchctl bootout "$domain/$label" 2>/dev/null; then
-    for _ in $(seq 50); do
-      launchctl print "$domain/$label" &>/dev/null || break
-      sleep 0.1
-    done
-  fi
-  cp "$src" "$dest"
-  if launchctl bootstrap "$domain" "$dest"; then
-    launchctl kickstart "$domain/$label" &>/dev/null || true
-    echo "loaded: $label"
-  else
-    warn "launchctl bootstrap failed for $label"
-  fi
-}
-
-if [[ "$OS" == Darwin ]]; then
-  launch_agent "com.theodo.cc-tap.dashboard"
-  launch_agent "com.theodo.cc-tap.proxy"
-  launch_agent "com.theodo.cc-tap.update"
-  launch_agent "com.github.gauthierdoppler.md-preview"
-fi
+# ─── Phase 10b: Services ───────────────────────────────────
+"$HOME/.local/bin/atelier" service install --repo "$DOTFILES" \
+  || warn "atelier service install failed — see above"
 
 # ─── Phase 11: App registration ────────────────────────────
 if [[ "$OS" == Darwin && -d "$DOTFILES/dot_claude/hooks/ClaudeCodeNotifier.app" ]]; then

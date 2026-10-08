@@ -20,7 +20,7 @@ add a comment explaining the change.
 
 ## What This Is
 
-A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the launchd agents that keep cc-tap running. All configs are symlinked from this repo to their expected locations by `atelier setup`.
+A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the background services (cc-tap, the markdown preview) declared in `services.toml`. All configs are symlinked from this repo to their expected locations by `atelier setup`.
 
 ## Installation & Symlinks
 
@@ -30,7 +30,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → atelier → `atelier setup` → keyboard layout → Claude settings merge → bun → Node LTS → npm globals → launch agents → app registration.
+The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → atelier → `atelier setup` → keyboard layout → Claude settings merge → bun → Node LTS → npm globals → `atelier service install` → app registration.
 
 `install.sh` is only the bootstrap. Links and stubs are `atelier setup
 [--profile desktop|remote] [--dry-run] [--repo PATH]`, whose `LINKS` and `STUBS`
@@ -40,7 +40,10 @@ never overwritten), replaces a symlink pointing elsewhere without one, and print
 only what it changes, so a second run says `setup: up to date`. The repo is
 `--repo`, else the current git root, else `~/dotfiles`, and must look like this
 repo (`dot_zshrc` plus `atelier/Cargo.toml`) so running it from another project
-cannot link that project into `$HOME`. `tests/setup.rs` runs it against a
+cannot link that project into `$HOME`. It also removes ("pruned:") symlinks left
+by an older install, and only those: a link directly inside a folder it links
+into, whose target resolves inside the repo and no longer exists — what deleting
+a script leaves behind in `~/.local/bin`. `tests/setup.rs` runs it against a
 temporary `$HOME`, twice. When adding a new config, use the `/add-config` skill.
 
 **Profiles.** `desktop` (the default on macOS) is everything; `remote` (the
@@ -159,13 +162,20 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `src/<feature>/`), exposes `pub enum Command` deriving `clap::Subcommand` with
   `pub fn run(self, tmux: &Tmux) -> Result<()>`, and is registered by one line in
   the `features!` list in `main.rs`, which declares the module and the
-  subcommand. Shared modules (`tmux`, `session`, `git`) are plain `mod` lines.
+  subcommand. Shared modules (`tmux`, `session`, `git`, `shell`, `fzf`, `opener`) are plain `mod` lines.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
   A module whose commands sit at the top level (`atelier daemon`, `atelier
   status`) goes after `; top level:` in the same list and is flattened.
 - **tmux is reached only through `tmux::Tmux`**, which always targets an explicit
   socket: `--socket`/`-S`, else the one in `$TMUX`. tmux sets `$TMUX` for `#()`
   jobs and `run-shell`, so the default is right when tmux calls atelier.
+  The binary is the first `tmux` on `PATH`, else in `/opt/homebrew/bin`,
+  `/usr/local/bin`, Linuxbrew's prefix, `/usr/bin` or `/bin`: hooks such as
+  Claude Code's can run with a `PATH` that lacks the Homebrew prefix.
+- **Every picker builds fzf through `fzf::picker`**, which carries the shared
+  flags, colours and the `j`/`k`/`q` + `i` search mode, and calls back into
+  atelier through `fzf::atelier` (the binary plus `--socket`). `fzf::leave_search`
+  is the `esc` bind for pickers that restore their prompt without a callback.
 - **Session identity comes from `session::resolve`, for every consumer**:
   `@grove_project`, else the basename of the main worktree (first entry of
   `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
@@ -263,14 +273,33 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   itself is the exception: `install.sh` stops if the build fails, since
   `atelier setup` is what links everything.
 - **A feature with flags and no subcommands** (`setup`, `local-diff`,
-  `claude-settings-sync`) derives
+  `claude-settings-sync`, `doctor`) derives
   `clap::Args` and calls `crate::flags_only!(Command)`, which implements
   `clap::Subcommand` by delegating to the args and clearing
   `subcommand_required`, so it still registers with one `features!` line.
+- **`atelier doctor` turns what this file asks you to remember into checks**,
+  each a small function in a table in `src/doctor.rs` printing `ok`, `FAIL`
+  with a one-line `fix:`, `skip` or `look`; any `FAIL` exits non-zero. It
+  checks terminfo for `$TERM` and every attached terminal (fix: `infocmp -x
+  <term> | ssh <host> tic -x -`), tmux ≥ 3.3 (`allow-passthrough` and
+  `pane-border-indicators` are the newest options `dot_tmux.conf` sets),
+  `extended-keys`, duplicated `terminal-features`, fzf ≥ 0.45,
+  `~/.local/bin/atelier`, pending `atelier setup` changes, the keyboard
+  layout bundle (macOS only; selecting it stays manual), the daemon of this
+  tmux server, every service of `services.toml` (and on launchd a writable
+  `~/Library/LaunchAgents`), and linger on systemd. Checks that need a tmux
+  server are skipped outside one. **The Nerd Font is `look`, never `ok`**: no
+  terminal reports which font draws a glyph, so it prints U+E0B6/U+E0B4 for a
+  human to judge and does not affect the exit code. `tests/doctor.rs` drives it
+  against a private tmux server with fake `infocmp`, `fzf`, `systemctl`,
+  `loginctl` and `launchctl` alone on `PATH`.
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
   shellcheck on `install.sh` and every executable shell script in `scripts/`.
-  Run the same three cargo commands in `atelier/` before pushing.
+  CI installs a pinned fzf release (Homebrew's on macOS), since distro packages
+  are older than 0.45; the fzf-driven tests skip without a recent fzf locally
+  but fail under `CI`. Run the same three cargo commands in `atelier/` before
+  pushing.
 
 ## Tmux
 
@@ -287,7 +316,8 @@ reconstructs what the project *is*. Do not add a persistence plugin.
 every time; the live server had accumulated 52 duplicated `terminal-overrides`
 entries this way. `set -gu` first resets the option to its default array (which
 carries the stock `xterm*:clipboard:ccolour:cstyle:focus:title`, needed for OSC 52
-and focus events), so the `set -gu` + `set -as` pair is idempotent.
+and focus events), so the `set -gu` + `set -as` pair is idempotent. `atelier
+doctor` fails on a duplicated entry.
 
 **No terminal app is assumed.** Entries are keyed on the client's TERM, outside
 tmux: `xterm-ghostty`, `xterm-kitty` and `wezterm` get `RGB:usstyle:sync` —
@@ -320,8 +350,7 @@ resize bindings, on purpose — resizing is done by dragging the pane border.
 
 ## Per-project tmux tasks
 
-`Prefix + e` opens a task picker (`atelier tasks pick`, or `scripts/tmux-tasks`
-when atelier is not installed) over `<project>/.tmux/`.
+`Prefix + e` opens a task picker (`atelier tasks pick`) over `<project>/.tmux/`.
 Build, run and debug loops live there rather than in Neovim, so they can be
 driven from any window of the session.
 
@@ -340,14 +369,20 @@ picker with no naming convention and no ignore list. Subfolders become groups
 # tmux: window    window | split-down | split-right | popup | detach
 ```
 
-Splits take an optional size (`split-right 40%`, default 30%). They are named by
-direction, not `-v`/`-h`, because those are inverted between tmux and vim.
-`popup` reuses the picker's own popup: tmux allows one popup per client, and a
-nested `display-popup` silently does nothing while still exiting 0.
+Splits take an optional size (`split-right 40%`, `split-down 15`, default 30%;
+`split` alone means `split-down`) and split the session's active pane. They are
+named by direction, not `-v`/`-h`, because those are inverted between tmux and
+vim. `popup` reuses the picker's own popup: tmux allows one popup per client,
+and a nested `display-popup` silently does nothing while still exiting 0. Run
+outside the picker (`atelier tasks run`), a popup task opens one with
+`display-popup`, which is spawned and not waited for: from the command line,
+`display-popup` only returns once the popup closes.
 
 Read from the first 20 lines only. `window` and `detach` reuse a window named
 after the task (`android/build` → `android-build`), respawning it rather than
-piling up duplicates. `detach` runs unselected.
+piling up duplicates. `detach` runs unselected, and is re-run with
+`respawn-pane`, not `respawn-window`: `respawn-window` has no `-d` and makes the
+window current.
 
 Every task runs with cwd at the project root and `TMUX_TASK_ROOT` /
 `TMUX_TASK_NAME` set, resolved from `#{session_path}` — the session's working
@@ -355,15 +390,13 @@ directory, **not** the pane's. That is what makes the picker behave identically
 from a pane three directories deep. Ordering is most-recently-run first, cached
 per project under `$TMPDIR`.
 
-A `window` task runs under `atelier tasks exec`, which tmux starts directly as
-the window's command (argv, no shell), so it publishes the marker, rings and
-waits for a key itself. The other placements are still handed to the bash pair
-until ticket 08: `split-*` and `detach` go to `tmux-tasks --run`, and `popup`
-execs `scripts/tmux-task-run` inside the picker's popup. That wrapper exists as a
-separate file, invoked with an explicit `bash` shebang, because tmux runs
-commands through `default-shell` (zsh) where `read -rsn1` would not parse.
-The picker, the rows and its fzf callbacks (`atelier tasks list|advance|prompt|header`)
-and the window runner are covered by `atelier/tests/tasks.rs`.
+Every placement runs the task under `atelier tasks exec`, which tmux starts
+directly as the pane's command (argv, no shell), so it publishes the marker,
+rings and waits for a key itself; a popup picked in the picker runs it in the
+picker's own process. The picker, the rows and its fzf callbacks (`atelier tasks
+list|advance|prompt|header`) and every placement are covered by
+`atelier/tests/tasks.rs`; the popup test drives the picker inside a real popup
+with a stub `fzf` that picks the first row.
 
 **Task completion is signalled by `@task_status`**, a per-window user option the
 wrapper sets to `running` / `ok` / `fail`; the `window-status-*` formats render
@@ -382,10 +415,8 @@ Those same two placements also **ring** on completion: a `\a` bell, picked up by
 means a dock bounce or a badge. It is skipped when the task's window is the
 active window of a session a non-control-mode client is attached to — ringing
 about output the user is staring at is noise, and a control-mode client (the
-daemon) looks at nothing. A `window` task rings and nothing else: the spec keeps
-desktop notifications for Claude's `waiting` only. A `detach` task, still run by
-the bash wrapper until ticket 08, also posts an informational `terminal-notifier`
-banner when that is installed.
+daemon) looks at nothing. Tasks ring and nothing else: the spec keeps desktop
+notifications for Claude's `waiting` only.
 
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
@@ -393,7 +424,7 @@ information. `monitor-bell` stays on: a BEL is rare enough to mean something.
 Claude Code's own state is a window marker instead — see below.
 
 **Both pickers always open, even with nothing to list.** `Prefix + e` used to
-gate on `tmux-tasks --check` via `if-shell` and `Prefix + Space` bailed out with
+gate on a `--check` of the task list via `if-shell` and `Prefix + Space` bailed out with
 `display-message` when there was no other session; both now render a placeholder
 row instead — `(no executable task in .tmux/)`, `(no other session)`. The answer
 is the same either way, and putting it in the popup puts it where the eye
@@ -552,9 +583,10 @@ block is the thing that stays truthful.
 ## cc-tap (Claude Code dashboard + inspector proxy)
 
 [cc-tap](https://github.com/theodo-group/cc-tap) runs permanently as three
-launchd agents in `launchd/`, all driven by `scripts/cc-tap-service`:
+services declared in `services.toml` (see "Services" below), all driven by
+`scripts/cc-tap-service`:
 
-| agent | runs | when |
+| service | runs | when |
 | ----- | ---- | ---- |
 | `com.theodo.cc-tap.dashboard` | dashboard on `127.0.0.1:3000` | login, kept alive |
 | `com.theodo.cc-tap.proxy`     | inspector proxy on `127.0.0.1:8089` | login, kept alive |
@@ -566,7 +598,7 @@ arguments forces plain and is stripped before `claude` sees it. There is no
 separate proxy alias any more — one command, and the proxy being down never
 blocks a session.
 
-**launchd, not Docker.** `proxy/server.js` hardcodes `listen(PORT, '127.0.0.1')`,
+**A service manager, not Docker.** `proxy/server.js` hardcodes `listen(PORT, '127.0.0.1')`,
 so inside a container it is unreachable through a published port without
 patching the package. It also reads `~/.claude` and writes `~/.cc-lens`, so a
 container would buy no isolation.
@@ -577,9 +609,10 @@ the dashboard the proxy is a detached child spawned from the Live Capture
 button, which dies with every restart. The proxy agent writes
 `~/.cc-lens/proxy.json` itself because that file is the only way the dashboard
 knows a proxy exists; without it, Start spawns a second one on `:8090`. The
-flip side is that the dashboard's Stop button kills the proxy and launchd
-brings it back ten seconds later — to really stop capture, `launchctl bootout
-gui/$(id -u)/com.theodo.cc-tap.proxy`.
+flip side is that the dashboard's Stop button kills the proxy and the service
+manager brings it back ten seconds later — to really stop capture, `launchctl
+bootout gui/$(id -u)/com.theodo.cc-tap.proxy` (macOS) or `systemctl --user stop
+com.theodo.cc-tap.proxy` (Linux).
 
 **Node is fnm's `default` alias**, not Homebrew's `node`: Homebrew's is only on
 a machine as a dependency of something else (it is not in the `Brewfile`),
@@ -592,22 +625,58 @@ decides. It no-ops on weekends, before 08:00, and once today's stamp
 (`~/.local/share/cc-tap/last-update`) is written — the stamp is only written on
 a successful install, so being offline just means the next tick retries. That
 covers the three ways 08:00 gets missed: asleep (launchd runs a missed calendar
-event on wake), powered off (`RunAtLoad`), and no network. Restarting is skipped
-when the version did not change because restarting the proxy drops every
-in-flight request of every Claude session routed through it.
+event on wake; systemd's `Persistent=true` does the same), powered off
+(`RunAtLoad`; `OnActiveSec=0`), and no network. Restarting is skipped when the
+version did not change because restarting the proxy drops every in-flight
+request of every Claude session routed through it. The script restarts through
+`launchctl kickstart -k` on macOS and `systemctl --user restart` elsewhere, and
+logs to `~/Library/Logs/cc-tap/` or `${XDG_STATE_HOME:-~/.local/state}/cc-tap/`.
 
-**The plists are copied into `~/Library/LaunchAgents`, not linked**, the same
-treatment as the keyboard bundle. They are portable because launchd does not
-expand `~` or `$HOME`: each one runs `/bin/sh -c 'exec "$HOME/…"'`, and the
-script sets its own `PATH` and log redirection (`~/Library/Logs/cc-tap/`).
-`launch_agent()` only reloads an agent whose plist changed or which is not
-loaded, so re-running `install.sh` does not bounce the services. It does kickstart
-each one, which starts a stopped agent and is a no-op on a running one; for
-`update` that means one extra run of the script, which gates itself.
+## Services
+
+`services.toml` at the repo root declares every background service once — a
+label, a description, the program relative to `$HOME` with its arguments, an
+optional log file name, and an optional `schedule` (`days`, `at`, `every`
+seconds). No `schedule` means keep-alive. `atelier service install|list|uninstall`
+turns it into launchd agents on macOS and systemd user units on Linux
+(`--system` overrides the guess); `install.sh` runs `install`.
+
+- **launchd**: one plist per service in `~/Library/LaunchAgents`, **copied, not
+  linked**, the same treatment as the keyboard bundle. launchd expands neither
+  `~` nor `$HOME`, so each runs `/bin/sh -c 'exec "$HOME/…"'`, with the log
+  redirected to `~/Library/Logs/<log>` when the description names one.
+  Keep-alive is `RunAtLoad` + `KeepAlive` + `ThrottleInterval 10`; a schedule is
+  `RunAtLoad` + `StartCalendarInterval` (+ `StartInterval` for `every`).
+- **systemd**: `<label>.service` in `${XDG_CONFIG_HOME:-~/.config}/systemd/user`,
+  `ExecStart=%h/…` (systemd's own home specifier, so no shell), `Restart=always`
+  and `RestartSec=10` for keep-alive. A schedule adds `<label>.timer` with
+  `OnCalendar=Mon..Fri 08:00`, `Persistent=true`, `OnActiveSec=0` for
+  `RunAtLoad` and `OnUnitActiveSec` for `every`; the timer is what gets enabled.
+  Output goes to the journal (`journalctl --user -u <label>`).
+
+**A file is written only when its content changed, and a service is reloaded
+only then** — so re-running `install.sh` does not bounce cc-tap's proxy. On
+launchd, an unchanged and loaded agent is only `kickstart`ed (without `-k`),
+which starts a stopped one and is a no-op on a running one; a changed or
+unloaded one is `bootout`ed — waiting up to 5 s for it to go, since a
+`bootstrap` issued while it lingers fails with `5: Input/output error` — then
+written, `bootstrap`ped and kickstarted, because a fresh bootstrap can sit at
+`pended nondemand spawn = speculative` for minutes. On systemd, any change
+triggers one `daemon-reload`, then `enable` + `restart` of what changed and
+`enable --now` of the rest. For `update` either path means one extra run of the
+script, which gates itself.
 
 `~/Library/LaunchAgents` can end up owned by root — the Pulse Secure installer
-did it on this machine — which makes every write fail with `EACCES`.
-`launch_agent()` warns with the `chown` to run rather than failing the install.
+did it on this machine — which makes every write fail with `EACCES`. `install`
+probes the folder first and fails with the `sudo chown` that fixes it;
+`install.sh` turns that into a warning. On Linux, `install` runs `loginctl
+enable-linger` unless `Linger=yes` already, so services survive SSH logout.
+
+`tests/service.rs` snapshots every generated file for both systems (the launchd
+snapshots started as the hand-written plists they replaced, byte for byte) and
+drives `install`/`list`/`uninstall` against a temporary `$HOME` with fake
+`launchctl`, `systemctl` and `loginctl` on `PATH` that log their arguments. The
+unwritable-folder test skips itself as root, where permissions are not enforced.
 
 ## Skills
 
@@ -919,7 +988,7 @@ save and follows the nvim cursor. Its real purpose is **annotation**: comment on
 line ranges in the margin, then "copy all" yields `path` + `L12-L14: comment`
 lines to paste into an agent.
 
-**One permanent server, `atelier preview serve`, run by launchd**
+**One permanent server, `atelier preview serve`, run as a service** (see "Services")
 (`com.github.gauthierdoppler.md-preview`, `127.0.0.1:33440`; `MD_PREVIEW_PORT`
 overrides the port for both commands), not one per file. The URL path *is* the
 file's absolute path, so the origin never changes, relative images resolve
@@ -953,12 +1022,12 @@ from changes mtime or size, which `cargo install` does — and so does any edit 
 the embedded page), via `launchctl
 kickstart -k` under launchd and by exiting anywhere else. Exiting and relying on
 `KeepAlive` does not work: launchd marks the respawn `pended nondemand spawn =
-inefficient` and defers it for minutes, whatever the exit code. The same
-deferral hits a fresh `bootstrap` (`pended nondemand spawn = speculative`), so
-`launch_agent()` in `install.sh` kickstarts every agent it manages — without
-`-k`, which leaves a running one alone — and `atelier preview` kickstarts the
-agent itself when `/__meta` does not answer. On Linux, until services land, it
-starts a detached `atelier preview serve` instead.
+inefficient` and defers it for minutes, whatever the exit code. systemd's
+`Restart=always` has no such deferral, only its 10 s `RestartSec`. `atelier
+preview` starts the service itself when `/__meta` does not answer — `launchctl
+kickstart` on macOS, `systemctl --user start` elsewhere, falling back on Linux to
+a detached `atelier preview serve` when no unit answers or `MD_PREVIEW_PORT` is
+not the default the unit serves.
 
 **The page renders untrusted markdown on an origin that can read local files**,
 so it is fenced on four sides, each tested over HTTP in `atelier/tests/preview.rs`:
@@ -981,7 +1050,8 @@ cannot send without a preflight this server never answers.
 Tab reuse is macOS only: JXA against Google Chrome (`w.tabs.url()` per window,
 matched without the fragment); the first run triggers macOS's automation prompt.
 If Chrome is not running or the script fails, it falls back to `open -a`. On
-other systems the URL is only printed.
+other systems the URL goes to `xdg-open` when it is on `PATH`, and is printed
+either way.
 
 **`Prefix + m` picks a markdown file of the session** (`atelier preview pick`,
 `atelier/src/preview/picker.rs`) and previews it, so reviewing an agent's plan

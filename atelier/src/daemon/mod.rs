@@ -133,6 +133,11 @@ fn ensure(tmux: &Tmux) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn answering(tmux: &Tmux) -> Option<u32> {
+    let paths = Paths::for_socket(&tmux.socket_path().ok()?).ok()?;
+    ask_status(&paths).map(|reply| reply.pid)
+}
+
 fn ask_status(paths: &Paths) -> Option<StatusReply> {
     let mut stream = UnixStream::connect(&paths.socket).ok()?;
     stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;

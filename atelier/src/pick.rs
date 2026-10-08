@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
 
+use crate::fzf;
+use crate::opener;
+use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -66,10 +69,10 @@ impl Command {
             Command::Open { target, token } => open(tmux, &resolve_pane(tmux, &target)?, &token),
             Command::System { target, token } => {
                 if is_url(&token) {
-                    return system_open(&token);
+                    return opener::open(&token);
                 }
                 let pane = resolve_pane(tmux, &target)?;
-                system_open(&absolute(tmux, &pane, &token)?)
+                opener::open(&absolute(tmux, &pane, &token)?)
             }
             Command::Preview { target, token } => {
                 if is_url(&token) || !crate::preview::is_markdown(Path::new(&token)) {
@@ -87,44 +90,23 @@ impl Command {
 }
 
 fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
-    let input = rows(tmux, pane)?.join("\n") + "\n";
-    let mut atelier = shell_quote(&std::env::current_exe()?.to_string_lossy());
-    if let Some(socket) = tmux.socket() {
-        atelier += &format!(" -S {}", shell_quote(&socket.to_string_lossy()));
-    }
-    let pane = shell_quote(pane);
-    let mut fzf = std::process::Command::new("fzf")
-        .args([
-            "--no-multi",
-            "--disabled",
-            "--height=100%",
-            "--layout=reverse",
-            "--info=inline",
-            "--prompt=  pick  ",
-            "--header=j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   ctrl-v preview .md   esc close",
-            "--bind=j:down,k:up",
-            "--bind=q:abort",
-            "--bind=i:enable-search+unbind(j,k,q)+change-prompt(  search  )",
-            // fzf's unbind removes a key's behaviour rather than restoring its
-            // default: unbinding esc during search would leave no way out.
-            "--bind=esc:transform:[ \"$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+change-prompt(  pick  )' || echo abort",
-            &format!("--bind=enter:execute-silent({atelier} pick open -t {pane} {{}})+abort"),
-            &format!("--bind=ctrl-y:execute-silent({atelier} pick copy {{}})+abort"),
-            &format!("--bind=ctrl-o:execute-silent({atelier} pick system -t {pane} {{}})+abort"),
-            &format!("--bind=ctrl-v:execute-silent({atelier} pick preview -t {pane} {{}})+abort"),
-            "--color=fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee",
-        ])
-        .stdin(std::process::Stdio::piped())
-        .spawn()?;
-    if let Some(mut stdin) = fzf.stdin.take() {
-        std::io::Write::write_all(&mut stdin, input.as_bytes())?;
-    }
-    fzf.wait()?;
+    let rows = rows(tmux, pane)?;
+    let atelier = fzf::atelier(tmux)?;
+    let pane = shell::quote(pane);
+    let mut picker = fzf::picker(
+        "  pick  ",
+        "j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   ctrl-v preview .md   esc close",
+        fzf::MODAL_KEYS,
+    );
+    picker.args([
+        &fzf::leave_search(fzf::MODAL_KEYS, "change-prompt(  pick  )"),
+        &format!("--bind=enter:execute-silent({atelier} pick open -t {pane} {{}})+abort"),
+        &format!("--bind=ctrl-y:execute-silent({atelier} pick copy {{}})+abort"),
+        &format!("--bind=ctrl-o:execute-silent({atelier} pick system -t {pane} {{}})+abort"),
+        &format!("--bind=ctrl-v:execute-silent({atelier} pick preview -t {pane} {{}})+abort"),
+    ]);
+    fzf::spawn(&mut picker, rows)?.wait()?;
     Ok(())
-}
-
-fn shell_quote(arg: &str) -> String {
-    format!("'{}'", arg.replace('\'', r"'\''"))
 }
 
 fn is_url(token: &str) -> bool {
@@ -140,7 +122,7 @@ fn absolute(tmux: &Tmux, pane: &str, token: &str) -> Result<PathBuf> {
 
 fn open(tmux: &Tmux, pane: &str, token: &str) -> Result<()> {
     if is_url(token) {
-        return system_open(token);
+        return opener::open(token);
     }
     let path = absolute(tmux, pane, token)?;
     let session = tmux.display(pane, "#{session_id}")?;
@@ -173,7 +155,7 @@ fn open(tmux: &Tmux, pane: &str, token: &str) -> Result<()> {
         return Ok(());
     }
     if path.is_dir() {
-        return system_open(&path);
+        return opener::open(&path);
     }
     let root = tmux.display(pane, "#{session_path}")?;
     let root = if Path::new(&root).is_dir() {
@@ -206,24 +188,6 @@ fn vim_escape(path: &str) -> String {
         escaped.push(c);
     }
     escaped
-}
-
-#[cfg(target_os = "macos")]
-const OPENER: &str = "open";
-#[cfg(not(target_os = "macos"))]
-const OPENER: &str = "xdg-open";
-
-fn system_open(target: impl AsRef<std::ffi::OsStr>) -> Result<()> {
-    let status = std::process::Command::new(OPENER)
-        .arg(target)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()?;
-    if !status.success() {
-        return Err(format!("{OPENER} exited with {status}").into());
-    }
-    Ok(())
 }
 
 fn resolve_pane(tmux: &Tmux, hint: &str) -> Result<String> {

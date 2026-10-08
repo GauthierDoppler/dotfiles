@@ -18,7 +18,7 @@ Personal development environment for macOS — managed with symlinks.
 | **Delta** | `delta/themes.gitconfig` | Custom themes for lazygit (side-by-side + inline) |
 | **Git ignore** | `git/ignore` | Global gitignore (`.claude/settings.local.json`) |
 | **Keyboard** | `keyboard/` | AZERTY layout with an unshifted number row — the tmux `Prefix → 1-9` bindings depend on it |
-| **cc-tap** | `launchd/`, `scripts/cc-tap-service` | Always-on Claude Code dashboard ([cc-tap.localhost:3000](http://cc-tap.localhost:3000)) and inspector proxy; `cl` uses the proxy when it is up, `cl --no-proxy` skips it |
+| **Services** | `services.toml`, `scripts/cc-tap-service` | launchd agents on macOS, systemd user units on Linux (`atelier service install\|list\|uninstall`): the markdown preview server, and cc-tap, the always-on Claude Code dashboard ([cc-tap.localhost:3000](http://cc-tap.localhost:3000)) and inspector proxy; `cl` uses the proxy when it is up, `cl --no-proxy` skips it |
 
 ## Install
 
@@ -133,7 +133,6 @@ so app-side edits are never lost and the shared base still propagates.
 Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
-- `tmux-tasks` / `tmux-task-run` — fallback task picker behind `Prefix + e` when atelier is missing, and the runner for non-window placements
 
 ## Dependencies
 

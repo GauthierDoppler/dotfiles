@@ -1,5 +1,8 @@
+mod fzf;
 mod git;
+mod opener;
 mod session;
+mod shell;
 mod tmux;
 
 use std::path::PathBuf;
@@ -64,6 +67,8 @@ features! {
     Bar => bar,
     /// Regenerate ~/.claude/settings.json from the shared base, local overrides and app drift
     ClaudeSettingsSync => claude_settings,
+    /// Check what this machine needs and print the fix for each failure
+    Doctor => doctor,
     /// Entry points for other tools' hooks
     Hook => hook,
     /// List what this machine's config adds beyond the shared dotfiles
@@ -74,6 +79,8 @@ features! {
     Preview => preview,
     /// Pick a URL or file path off a pane
     Pick => pick,
+    /// Background services from services.toml, as launchd agents or systemd user units
+    Service => service,
     /// The session picker
     Sessions => sessions,
     /// The per-project task picker and runner over `.tmux/`

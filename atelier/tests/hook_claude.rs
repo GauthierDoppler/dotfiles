@@ -7,11 +7,16 @@ use std::time::{Duration, Instant};
 use common::TmuxServer;
 
 fn hook(tmux: &TmuxServer, pane: Option<&str>, payload: &str) -> Output {
+    hook_with_path(tmux, pane, payload, &std::env::var("PATH").unwrap())
+}
+
+fn hook_with_path(tmux: &TmuxServer, pane: Option<&str>, payload: &str, path: &str) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_atelier"));
     command
         .args(["hook", "claude"])
         .env("TMUX", format!("{},1,0", tmux.socket().display()))
         .env_remove("TMUX_PANE")
+        .env("PATH", path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -123,6 +128,24 @@ fn notification_marks_the_window_waiting() {
     assert!(output.status.success());
     assert_eq!(claude_status(&tmux, &work.claude_window), "waiting");
     assert_eq!(claude_status(&tmux, &work.other_window), "");
+}
+
+#[test]
+fn the_window_is_marked_when_path_lacks_tmux() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let work = work_session(&tmux, dir.path());
+
+    let output = hook_with_path(
+        &tmux,
+        Some(&work.claude_pane),
+        &event("Notification"),
+        empty.path().to_str().unwrap(),
+    );
+
+    assert!(output.status.success());
+    assert_eq!(claude_status(&tmux, &work.claude_window), "waiting");
 }
 
 #[test]

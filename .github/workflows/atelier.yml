@@ -30,9 +30,19 @@ jobs:
       - name: Install tmux (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y tmux
-      - name: Install tmux (macOS)
+      - name: Install fzf (Linux)
+        if: runner.os == 'Linux'
+        env:
+          FZF_VERSION: 0.65.2
+        run: |
+          curl -fsSL "https://github.com/junegunn/fzf/releases/download/v${FZF_VERSION}/fzf-${FZF_VERSION}-linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin fzf
+          fzf --version
+      - name: Install tmux and fzf (macOS)
         if: runner.os == 'macOS'
-        run: brew install tmux
+        run: |
+          brew install tmux fzf
+          fzf --version
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

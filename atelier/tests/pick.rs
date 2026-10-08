@@ -1,9 +1,8 @@
 mod common;
 
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use common::TmuxServer;
+use common::{FakeOpener, TmuxServer};
 
 fn fixture(name: &str) -> String {
     format!("{}/tests/fixtures/pick/{name}", env!("CARGO_MANIFEST_DIR"))
@@ -38,40 +37,26 @@ fn idle_pane(tmux: &TmuxServer, dir: &Path) -> String {
 }
 
 struct FakeBin {
-    dir: tempfile::TempDir,
+    opener: FakeOpener,
 }
 
 impl FakeBin {
     fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::copy(which("cat"), dir.path().join("nvim")).unwrap();
-        let log = dir.path().join("opened");
-        for opener in ["open", "xdg-open"] {
-            let script = dir.path().join(opener);
-            std::fs::write(
-                &script,
-                format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display()),
-            )
-            .unwrap();
-            std::fs::set_permissions(&script, PermissionsExt::from_mode(0o755)).unwrap();
-        }
-        FakeBin { dir }
+        let opener = FakeOpener::new();
+        std::fs::copy(which("cat"), opener.dir().join("nvim")).unwrap();
+        FakeBin { opener }
     }
 
     fn nvim(&self) -> String {
-        format!("exec '{}/nvim'", self.dir.path().display())
+        format!("exec '{}/nvim'", self.opener.dir().display())
     }
 
     fn path(&self) -> String {
-        format!(
-            "{}:{}",
-            self.dir.path().display(),
-            std::env::var("PATH").unwrap()
-        )
+        self.opener.path()
     }
 
     fn opened(&self) -> String {
-        std::fs::read_to_string(self.dir.path().join("opened")).unwrap_or_default()
+        self.opener.opened()
     }
 }
 
@@ -265,7 +250,7 @@ fn opening_a_url_hands_it_to_the_browser() {
         &["pick", "open", "-t", &pane, "https://acme.dev/a"],
     );
 
-    assert_eq!(bin.opened(), "https://acme.dev/a\n");
+    assert_eq!(bin.opener.wait_opened(), "https://acme.dev/a\n");
 }
 
 #[test]
@@ -371,7 +356,7 @@ fn opening_a_directory_hands_it_to_the_os() {
     act(&tmux, &bin, &["pick", "open", "-t", &pane, "src/handlers"]);
 
     assert_eq!(
-        bin.opened(),
+        bin.opener.wait_opened(),
         format!("{}/src/handlers\n", dir.path().display())
     );
 }
@@ -391,7 +376,7 @@ fn handing_a_relative_path_to_the_os_resolves_it_from_the_pane() {
     );
 
     assert_eq!(
-        bin.opened(),
+        bin.opener.wait_opened(),
         format!("{}/docs/plan.md\n", dir.path().display())
     );
 }
@@ -459,12 +444,7 @@ fn every_action_on_the_placeholder_row_does_nothing() {
 }
 
 fn picker_on(tmux: &TmuxServer, bin: &FakeBin, pane: &str) -> Option<String> {
-    if std::process::Command::new("fzf")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        eprintln!("fzf is not installed: skipping");
+    if !common::fzf_available() {
         return None;
     }
     let picker = tmux.tmux(&[
@@ -531,7 +511,9 @@ fn ctrl_y_in_the_picker_copies_the_selected_token() {
 
 fn preview(tmux: &TmuxServer, port: u16, home: &Path, pane: &str, token: &str) -> String {
     let args = ["pick", "preview", "-t", pane, token];
+    let opener = FakeOpener::new();
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_atelier"))
+        .env("PATH", opener.path())
         .arg("--socket")
         .arg(tmux.socket())
         .args(args)
