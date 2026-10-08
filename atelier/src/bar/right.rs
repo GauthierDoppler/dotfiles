@@ -133,27 +133,46 @@ fn body(
 }
 
 fn repo_segment(repo: RepoCounts) -> String {
-    let parts = [
+    let parts: Vec<(&str, String)> = [
         (INSERTIONS, '+', repo.insertions),
         (DELETIONS, '−', repo.deletions),
         (SYNC, '↑', repo.ahead),
         (SYNC, '↓', repo.behind),
-    ];
-    let mut body = String::new();
-    let mut cells = 0;
-    for (style, glyph, count) in parts.into_iter().filter(|part| part.2 > 0) {
-        if cells > 0 {
-            body.push(' ');
-            cells += 1;
-        }
-        let text = format!("{glyph}{count}");
-        cells += text.width();
-        body.push_str(style);
-        body.push_str(&text);
+    ]
+    .into_iter()
+    .filter(|part| part.2 > 0)
+    .map(|(style, glyph, count)| (style, format!("{glyph}{}", abbreviated(count))))
+    .collect();
+    let room = Segment::Repo.width();
+    let width = |kept: usize| {
+        let shown: usize = parts[..kept].iter().map(|(_, text)| text.width() + 1).sum();
+        let ellipsis = if kept < parts.len() { 2 } else { 0 };
+        (shown + ellipsis).saturating_sub(1)
+    };
+    let kept = (0..=parts.len())
+        .rev()
+        .find(|&kept| width(kept) <= room)
+        .unwrap_or(0);
+    let mut words: Vec<String> = parts[..kept]
+        .iter()
+        .map(|(style, text)| format!("{style}{text}"))
+        .collect();
+    if let Some((style, _)) = parts.get(kept) {
+        words.push(format!("{style}…"));
     }
-    let mut out = " ".repeat(Segment::Repo.width().saturating_sub(cells));
+    let used = width(kept);
+    let body = words.join(" ");
+    let mut out = " ".repeat(room.saturating_sub(used));
     out.push_str(&body);
     out
+}
+
+fn abbreviated(count: u64) -> String {
+    match count {
+        0..=999 => count.to_string(),
+        1_000..=999_999 => format!("{}k", count / 1_000),
+        _ => format!("{}M", count / 1_000_000),
+    }
 }
 
 fn battery_segment(battery: Battery) -> String {
@@ -199,6 +218,19 @@ mod tests {
         deletions: 113,
         ahead: 2,
         behind: 1,
+    };
+
+    const LARGE: RepoCounts = RepoCounts {
+        insertions: 1234,
+        deletions: 5678,
+        ahead: 12,
+        behind: 3,
+    };
+    const HUGE: RepoCounts = RepoCounts {
+        insertions: 2_345_678,
+        deletions: 98_765,
+        ahead: 1234,
+        behind: 999,
     };
 
     const fn discharging(percent: u8) -> Battery {
@@ -309,6 +341,30 @@ mod tests {
     }
 
     #[test]
+    fn every_tier_with_counts_too_wide_for_their_segment() {
+        snapshot_tiers("large_counts", &right("root", LARGE, Some(discharging(87))));
+        snapshot_tiers("huge_counts", &right("root", HUGE, None));
+    }
+
+    #[test]
+    fn counts_of_a_thousand_and_more_are_abbreviated() {
+        let segment = |repo| {
+            let rendered = repo_segment(repo);
+            let mut visible = String::new();
+            let mut rest = rendered.as_str();
+            while let Some(start) = rest.find("#[") {
+                visible.push_str(&rest[..start]);
+                rest = &rest[rest.find(']').unwrap() + 1..];
+            }
+            visible.push_str(rest);
+            visible.trim_start().to_string()
+        };
+        assert_eq!(segment(BOTH), "+111 −113 ↑2 ↓1");
+        assert_eq!(segment(LARGE), "+1k −5k ↑12 ↓3");
+        assert_eq!(segment(HUGE), "+2M −98k ↑1k …");
+    }
+
+    #[test]
     fn a_machine_without_a_battery_drops_the_segment_and_its_gap() {
         assert_eq!(width(200, false), 49);
         assert_eq!(width(100, false), 35);
@@ -317,7 +373,7 @@ mod tests {
 
     #[test]
     fn the_rendered_block_is_as_wide_as_it_says_in_every_combination() {
-        let repos = [CLEAN, EDITS, AHEAD, BOTH];
+        let repos = [CLEAN, EDITS, AHEAD, BOTH, LARGE, HUGE];
         let batteries = [None, Some(discharging(5)), Some(discharging(100)), Some(plugged(42))];
         for client_width in TIERS {
             for repo in repos {
