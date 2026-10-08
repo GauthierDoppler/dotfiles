@@ -147,6 +147,10 @@ enum Action {
     Unlink {
         path: PathBuf,
     },
+    Prune {
+        path: PathBuf,
+        target: PathBuf,
+    },
     Symlink {
         source: PathBuf,
         dest: PathBuf,
@@ -179,6 +183,7 @@ impl Command {
         for stub in STUBS {
             plan_stub(&mut actions, stub, &repo, &home)?;
         }
+        plan_prune(&mut actions, &repo, &home)?;
 
         for action in &actions {
             println!("{}", action.describe());
@@ -311,6 +316,58 @@ fn plan_stub(actions: &mut Vec<Action>, stub: &Stub, repo: &Path, home: &Path) -
     Ok(())
 }
 
+fn plan_prune(actions: &mut Vec<Action>, repo: &Path, home: &Path) -> Result<()> {
+    let repo_spellings = [repo.to_path_buf(), repo.canonicalize()?];
+    let inside_repo = |path: &Path| repo_spellings.iter().any(|repo| path.starts_with(repo));
+    let mut dirs: Vec<PathBuf> = LINKS
+        .iter()
+        .filter_map(|link| match link.source {
+            Source::Path(_) => Path::new(link.dest).parent().map(|dir| home.join(dir)),
+            Source::EachMarkdownIn(_) => Some(home.join(link.dest)),
+        })
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    for dir in dirs {
+        if dir.canonicalize().is_ok_and(|real| inside_repo(&real)) {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut dangling = Vec::new();
+        for entry in entries {
+            let path = entry?.path();
+            let Ok(target) = fs::read_link(&path) else {
+                continue;
+            };
+            if fs::metadata(&path).is_err()
+                && inside_repo(&lexically_normal(&dir.join(&target)))
+                && !actions.iter().any(|action| action.touches(&path))
+            {
+                dangling.push(Action::Prune { path, target });
+            }
+        }
+        dangling.sort_by(|a, b| a.describe().cmp(&b.describe()));
+        actions.extend(dangling);
+    }
+    Ok(())
+}
+
+fn lexically_normal(path: &Path) -> PathBuf {
+    let mut normal = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normal.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => normal.push(other),
+        }
+    }
+    normal
+}
+
 fn is_stubbed(path: &Path, load: &str) -> Result<bool> {
     let last = load.lines().last().unwrap_or(load);
     let content = fs::read(path)?;
@@ -343,12 +400,26 @@ fn suffixed(path: &Path, suffix: &str) -> PathBuf {
 }
 
 impl Action {
+    fn touches(&self, target: &Path) -> bool {
+        match self {
+            Action::Backup { path, .. }
+            | Action::Unlink { path }
+            | Action::Prune { path, .. }
+            | Action::WriteStub { path, .. } => path == target,
+            Action::Symlink { dest, .. } => dest == target,
+            Action::Migrate { legacy, .. } => legacy == target,
+        }
+    }
+
     fn describe(&self) -> String {
         match self {
             Action::Backup { path, to } => {
                 format!("backup: {} -> {}", path.display(), to.display())
             }
             Action::Unlink { path } => format!("unlink: {}", path.display()),
+            Action::Prune { path, target } => {
+                format!("pruned: {} -> {}", path.display(), target.display())
+            }
             Action::Symlink { source, dest } => {
                 format!("linked: {} -> {}", dest.display(), source.display())
             }
@@ -365,7 +436,7 @@ impl Action {
     fn apply(&self) -> Result<()> {
         match self {
             Action::Backup { path, to } => fs::rename(path, to)?,
-            Action::Unlink { path } => fs::remove_file(path)?,
+            Action::Unlink { path } | Action::Prune { path, .. } => fs::remove_file(path)?,
             Action::Symlink { source, dest } => {
                 if let Some(parent) = dest.parent() {
                     fs::create_dir_all(parent)?;
