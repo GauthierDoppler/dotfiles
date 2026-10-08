@@ -1,0 +1,14 @@
+---
+source: tests/service.rs
+expression: unit
+---
+[Unit]
+Description=cc-tap inspector proxy on 127.0.0.1:8089
+
+[Service]
+ExecStart=%h/.local/bin/cc-tap-service proxy
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -75,6 +75,8 @@ features! {
     Preview => preview,
     /// Pick a URL or file path off a pane
     Pick => pick,
+    /// Background services from services.toml, as launchd agents or systemd user units
+    Service => service,
     /// The session picker
     Sessions => sessions,
     /// The per-project task picker and runner over `.tmux/`

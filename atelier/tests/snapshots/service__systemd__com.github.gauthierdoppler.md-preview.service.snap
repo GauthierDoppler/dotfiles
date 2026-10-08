@@ -1,0 +1,14 @@
+---
+source: tests/service.rs
+expression: unit
+---
+[Unit]
+Description=Markdown preview server on 127.0.0.1:33440
+
+[Service]
+ExecStart=%h/.local/bin/atelier preview serve
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

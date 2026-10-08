@@ -15,7 +15,6 @@ use crate::tmux::Tmux;
 use crate::Result;
 
 const DEFAULT_PORT: u16 = 33440;
-#[cfg(target_os = "macos")]
 const LABEL: &str = "com.github.gauthierdoppler.md-preview";
 
 const URI_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
@@ -143,7 +142,7 @@ fn ensure_server(port: u16) -> Result<()> {
     if alive(port) {
         return Ok(());
     }
-    start_server()?;
+    start_server(port)?;
     for _ in 0..30 {
         std::thread::sleep(Duration::from_millis(100));
         if alive(port) {
@@ -159,7 +158,7 @@ fn launchd_domain() -> String {
 }
 
 #[cfg(target_os = "macos")]
-fn start_server() -> Result<()> {
+fn start_server(_port: u16) -> Result<()> {
     let kicked = Process::new("/bin/launchctl")
         .args(["kickstart", &launchd_domain()])
         .stdout(Stdio::null())
@@ -168,15 +167,25 @@ fn start_server() -> Result<()> {
         .success();
     if !kicked {
         return Err(
-            format!("server down and launchd agent {LABEL} not loaded -- run ./install.sh").into(),
+            format!("server down and launchd agent {LABEL} not loaded -- run atelier service install").into(),
         );
     }
     Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
-fn start_server() -> Result<()> {
+fn start_server(port: u16) -> Result<()> {
     use std::os::unix::process::CommandExt;
+    let started = port == DEFAULT_PORT
+        && Process::new("systemctl")
+            .args(["--user", "start", &format!("{LABEL}.service")])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success());
+    if started {
+        return Ok(());
+    }
     Process::new(std::env::current_exe()?)
         .args(["preview", "serve"])
         .stdin(Stdio::null())

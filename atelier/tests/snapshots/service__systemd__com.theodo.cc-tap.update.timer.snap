@@ -1,0 +1,15 @@
+---
+source: tests/service.rs
+expression: unit
+---
+[Unit]
+Description=Install cc-tap@latest once per weekday
+
+[Timer]
+OnActiveSec=0
+OnCalendar=Mon..Fri 08:00
+Persistent=true
+OnUnitActiveSec=1800s
+
+[Install]
+WantedBy=timers.target
