@@ -216,3 +216,26 @@ pub fn git_repo(dir: &Path) {
     git(dir, &["init", "-q"]);
     git(dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
 }
+
+pub fn fzf_available() -> bool {
+    let version = Command::new("fzf")
+        .arg("--version")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default();
+    let mut numbers = version
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .split('.')
+        .map(|part| part.parse::<u32>().unwrap_or(0));
+    let recent = (numbers.next().unwrap_or(0), numbers.next().unwrap_or(0)) >= (0, 45);
+    if !recent {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "CI must install fzf >= 0.45, found {version:?}"
+        );
+        eprintln!("fzf >= 0.45 is not installed: skipping");
+    }
+    recent
+}

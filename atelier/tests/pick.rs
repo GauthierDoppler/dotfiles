@@ -459,12 +459,7 @@ fn every_action_on_the_placeholder_row_does_nothing() {
 }
 
 fn picker_on(tmux: &TmuxServer, bin: &FakeBin, pane: &str) -> Option<String> {
-    if std::process::Command::new("fzf")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        eprintln!("fzf is not installed: skipping");
+    if !common::fzf_available() {
         return None;
     }
     let picker = tmux.tmux(&[
