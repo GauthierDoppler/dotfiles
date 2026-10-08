@@ -1,6 +1,7 @@
 mod common;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use common::TmuxServer;
 
@@ -149,7 +150,7 @@ fn a_hand_named_session_that_looks_like_grove_belongs_to_no_project() {
     );
     assert_eq!(
         tmux.atelier_stdout(&["sessions", "header", "-t", &current]),
-        "j/k move   i search   (no project)\nenter switch"
+        "j/k move   h/l window   i search   (no project)\nenter switch   ctrl-x kill"
     );
 }
 
@@ -226,7 +227,7 @@ fn esc_while_searching_goes_back_to_navigation_with_the_scope_prompt() {
             &["sessions", "escape", "-t", &current],
             &[("FZF_INPUT_STATE", "enabled")]
         ),
-        "disable-search+clear-query+rebind(j,k,q)+change-prompt(  project  )"
+        "disable-search+clear-query+rebind(j,k,q,h,l)+change-prompt(  project  )"
     );
 }
 
@@ -243,4 +244,142 @@ fn esc_while_navigating_closes_the_picker() {
         ),
         "abort"
     );
+}
+
+fn preview(tmux: &TmuxServer, session: &str, lines: &str) -> String {
+    tmux.atelier_stdout_with_env(
+        &["sessions", "preview", session],
+        &[("FZF_PREVIEW_LINES", lines)],
+    )
+}
+
+fn preview_once_printed(tmux: &TmuxServer, session: &str, lines: &str, last: &str) -> String {
+    for _ in 0..300 {
+        let shown = preview(tmux, session, lines);
+        if shown.lines().last() == Some(last) {
+            return shown;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("the pane of {session} never printed {last}");
+}
+
+#[test]
+fn the_preview_lists_the_windows_and_tails_the_current_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let other = tmux.new_session("other", dir.path());
+    tmux.tmux(&["rename-window", "-t", &other, "editor"]);
+    tmux.tmux(&[
+        "new-window",
+        "-t",
+        &other,
+        "-n",
+        "logs",
+        "seq 1 30; sleep 100",
+    ]);
+
+    assert_eq!(
+        preview_once_printed(&tmux, &other, "10", "30"),
+        "0: editor  (1p)\n1: logs  (1p) ←\n\n24\n25\n26\n27\n28\n29\n30"
+    );
+}
+
+#[test]
+fn the_preview_tail_skips_trailing_lines_that_are_blank_but_styled() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let other = tmux.new_session("other", dir.path());
+    tmux.tmux(&[
+        "respawn-window",
+        "-k",
+        "-t",
+        &other,
+        r"printf 'one\ntwo\n\033[1m   \033[0m\n\033[4m \033[0m\n'; sleep 100",
+    ]);
+    tmux.tmux(&["rename-window", "-t", &other, "shell"]);
+
+    assert_eq!(
+        preview_once_printed(&tmux, &other, "4", "two"),
+        "0: shell  (1p) ←\n\none\ntwo"
+    );
+}
+
+fn current_window(tmux: &TmuxServer, session: &str) -> String {
+    tmux.tmux(&["display", "-p", "-t", session, "#{window_index}"])
+}
+
+#[test]
+fn l_and_h_cycle_the_other_sessions_window_and_enter_lands_on_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    tmux.new_session("scratch", dir.path());
+    let other = tmux.new_session("other", dir.path());
+    tmux.tmux(&["new-window", "-d", "-t", &other]);
+    tmux.tmux(&["new-window", "-d", "-t", &other]);
+    let client = tmux.attach_control_client("scratch");
+
+    tmux.atelier_stdout(&["sessions", "next", &other]);
+    tmux.atelier_stdout(&["sessions", "next", &other]);
+    assert_eq!(current_window(&tmux, &other), "2");
+    tmux.atelier_stdout(&["sessions", "prev", &other]);
+    assert_eq!(current_window(&tmux, &other), "1");
+
+    tmux.atelier_stdout(&["sessions", "switch", "-c", &client.name, &other]);
+    assert_eq!(
+        tmux.tmux(&["display", "-p", "-c", &client.name, "#{window_index}"]),
+        "1"
+    );
+}
+
+#[test]
+fn cycling_a_single_window_session_or_the_placeholder_is_a_quiet_no_op() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let other = tmux.new_session("other", dir.path());
+
+    assert_eq!(tmux.atelier_stdout(&["sessions", "next", &other]), "");
+    assert_eq!(tmux.atelier_stdout(&["sessions", "prev", &other]), "");
+    assert_eq!(tmux.atelier_stdout(&["sessions", "next", ""]), "");
+    assert_eq!(current_window(&tmux, &other), "0");
+}
+
+#[test]
+fn ctrl_x_kills_the_highlighted_session_and_reloads_the_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let current = tmux.new_session("scratch", dir.path());
+    let doomed = tmux.new_session("doomed", dir.path());
+    tmux.new_session("notes", dir.path());
+
+    let actions = tmux.atelier_stdout(&["sessions", "kill", "-t", &current, &doomed]);
+
+    assert_eq!(labels(rows(&tmux, &current)), vec!["notes    1 win"]);
+    assert!(actions.starts_with("reload("), "{actions}");
+    assert!(actions.contains("sessions rows -t"), "{actions}");
+}
+
+#[test]
+fn ctrl_x_on_the_placeholder_kills_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let current = tmux.new_session("scratch", dir.path());
+
+    assert_eq!(
+        tmux.atelier_stdout(&["sessions", "kill", "-t", &current, ""]),
+        ""
+    );
+    assert_eq!(
+        tmux.tmux(&["list-sessions", "-F", "#{session_name}"]),
+        "scratch"
+    );
+}
+
+#[test]
+fn the_placeholder_previews_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    tmux.new_session("scratch", dir.path());
+
+    assert_eq!(preview(&tmux, "", "24"), "");
 }

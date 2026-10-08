@@ -161,6 +161,8 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   the `features!` list in `main.rs`, which declares the module and the
   subcommand. Shared modules (`tmux`, `session`, `git`, `shell`) are plain `mod` lines.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
+  A module whose commands sit at the top level (`atelier daemon`, `atelier
+  status`) goes after `; top level:` in the same list and is flattened.
 - **tmux is reached only through `tmux::Tmux`**, which always targets an explicit
   socket: `--socket`/`-S`, else the one in `$TMUX`. tmux sets `$TMUX` for `#()`
   jobs and `run-shell`, so the default is right when tmux calls atelier.
@@ -168,16 +170,29 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `@grove_project`, else the basename of the main worktree (first entry of
   `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
   Its `root` (`@grove_root`, else that main worktree, else none) is what "the
-  same project" means; a session with no root belongs to no project.
+  same project" means; a session with no root belongs to no project. Its
+  `checkout` (root or worktree) is `@grove_worktree` being empty or not, else
+  git's, else none.
 - **The session picker is `atelier sessions pick`**, run by `Prefix + Space`
   and `Prefix + s` inside `display-popup -E`. It execs fzf with rows of
   `<session id><TAB><label>` (`--with-nth=2..`), and every bind calls back into
-  `atelier sessions <rows|toggle|header|escape|switch> -t <session>`, which is
-  what `tests/sessions.rs` drives. The scope lives in `@atelier_sessions_scope`
-  on the session the picker was opened from, reset to `project` on every open.
-  tmux 3.4 does not expand formats in `display-popup`'s shell command, so
-  `pick` resolves the session and client itself rather than taking
-  `#{session_id}` from the binding. Needs fzf ≥ 0.45 (`transform`).
+  `atelier sessions <rows|toggle|header|escape|switch|preview|next|prev|kill>`,
+  which is what `tests/sessions.rs` drives. The scope lives in
+  `@atelier_sessions_scope` on the session the picker was opened from, reset to
+  `project` on every open. tmux 3.4 does not expand formats in
+  `display-popup`'s shell command, so `pick` resolves the session and client
+  itself rather than taking `#{session_id}` from the binding. Needs fzf ≥ 0.45
+  (`transform`).
+- **The preview is the highlighted session's window list plus the tail of its
+  current window**, because fzf previews cannot be focused; `h`/`l` run
+  `previous-window`/`next-window` on that *other* session (no client needed),
+  so Enter lands on the window being watched. The capture comes at the source
+  pane's geometry, bigger than the popup both ways: width is `nowrap` (a
+  full-screen TUI cannot reflow, and a cut right edge reads where wrapping does
+  not), height takes the tail sized from `$FZF_PREVIEW_LINES`, since fzf clips
+  the bottom, which is the prompt or the error. Trailing lines that are blank
+  once SGR is stripped are dropped first. `ctrl-x` is a `transform` that kills
+  and prints `reload(rows)`.
 - **`display-message -p` returns one field per call.** It prints control
   characters as octal and newlines as `_`, so fields cannot be joined with a
   delimiter — except numeric fields ahead of a single free-text one, split with
@@ -189,6 +204,37 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   one per test so tests run in parallel. `atelier(..)` passes `--socket`,
   `atelier_inside(..)` sets `$TMUX` instead. Assert on what tmux or the binary
   shows, never on internals; pure render functions are the only other seam.
+- **The daemon (`src/daemon/`) is one per tmux socket.** `dot_tmux.conf` runs
+  `atelier daemon --ensure` through `run-shell -b` at load and from a
+  `session-created` hook (the load-time run can race the first session).
+  `--ensure` returns at once when the lock is held, else spawns `atelier daemon`
+  detached; the daemon itself takes the lock, so racing ensures still leave one.
+  Lock, socket and log live in `$XDG_RUNTIME_DIR/atelier/` (else
+  `$TMPDIR/atelier-<uid>/`) as `<fnv1a of the socket path>.{lock,sock,log}`.
+  `atelier status` asks the daemon over that socket (JSON lines) and reads tmux
+  directly when nothing answers; its first line says which.
+- **Its only link to tmux is `tmux -C attach-session -f no-output,ignore-size`.**
+  tmux 3.4 has no session-less control client — one started with no session
+  prints `%exit` at once — so the daemon attaches to an existing session and
+  never creates one. With `detach-on-destroy on` (tmux's default, not this
+  config's) killing that session sends `%exit` while the server lives on, so
+  after `%exit` the daemon reattaches if any session is left and exits
+  otherwise; the `session-created` hook brings it back. Being attached, it is a
+  client like any other in `list-clients`, `#{session_attached}` and the
+  `client-*` hooks: every "is someone looking" check must skip
+  `#{client_control_mode}` = 1. State is rebuilt from `list-sessions`,
+  `list-windows -a`, `list-clients` on structural notifications; renames and
+  window closes are applied in place. Replies are paired with requests in
+  order, `%begin`/`%end` by command number, because a block's lines are not
+  escaped and a window named `%end 1 1 1` is legal. Control mode prints a tab in
+  format output as `_`, so fields are space-separated with the free-text one
+  last.
+- **Automatic rename is lazy.** tmux re-evaluates `automatic-rename` only when
+  its event loop wakes, so a fresh window can read `tmux` (the forked server,
+  before `exec`) until some unrelated command or output wakes it, and only then
+  does `%window-renamed` arrive. Daemon tests turn `automatic-rename` off.
+  Parser fixtures in `tests/fixtures/control/` are real tmux 3.4 transcripts;
+  `record.sh` there re-records them.
 - **Installed into `~/.local/bin/atelier`** by `install.sh` (`cargo install
   --locked --root ~/.local`, target dir `atelier/target` so a re-run is
   incremental; rustup with `--no-modify-path` when cargo is missing, and
@@ -660,11 +706,15 @@ project's `.tmux/` tasks.
 
 ## Tmux status bar
 
-`scripts/tmux-status-left` renders the left segment as two adjacent capsules —
-**project** and **root/wt**. The project comes from `atelier bar left` (see
-Atelier) and is the session name when atelier is not installed; root/wt is
-resolved from `#{session_path}` with git. They are
-separate blocks on purpose: which repo you are in and which checkout of it you
+`atelier bar left -t #{q:session_id} "#{client_width}"` renders the left segment
+as two adjacent capsules — **project** and **root/wt** (`src/bar/left.rs`, a pure
+function of the project, the checkout kind, the client width and the right
+block's width; its snapshots cover every width tier at the root, in a worktree,
+outside a repo and with a long name). Both come from `session::resolve`: root/wt
+is `@grove_worktree` being empty or not, else whether `#{session_path}` is a
+linked worktree (`--git-dir` ≠ `--git-common-dir`); outside a repo there is a
+single grey pill. When atelier is missing or fails, the `#()` falls back to
+echoing the session name. They are separate blocks on purpose: which repo you are in and which checkout of it you
 are in are two different questions, and a flag glued onto the project name reads
 as part of the name.
 
@@ -689,9 +739,10 @@ version read as a slab of dead space. The checkout segment stays `root`/`wt`
 rather than the worktree's name because that name is nearly always a sanitized
 copy of the branch, and it changed width on every switch.
 
-The project pill hugs its name up to `MAX_PROJECT` characters and then truncates
-with `…`. It never changes the block width — a longer name spends padding, not
-layout — so that cap is a purely visual choice and there is room to raise it.
+The project pill hugs its name up to `MAX_PROJECT` cells and then truncates
+with `…`. Wherever the block pads to match the right one, a longer name spends
+padding, not layout, so that cap is a purely visual choice and there is room to
+raise it.
 
 `atelier bar right "#{session_path}" "#{client_width}" "#{client_key_table}"`
 renders the *entire* right block — key table, repo state, battery, date, clock
@@ -722,12 +773,12 @@ but is ahead or behind.
 Widths are counted in terminal cells (`unicode-width`), so nothing depends on
 `LANG` — tmux runs `#()` commands with the *server's* environment, and the bash
 this replaced over-padded every glyph by two or three columns without a UTF-8
-locale; `tmux-status-left` still exports `LANG` for its ellipsis for the same
-reason. The battery comes from the `starship-battery` crate (IOKit on macOS,
-sysfs on Linux); on a machine with none the segment and its gap are dropped and
-`--width` reports the narrower block.
+locale (`tests/bar_left.rs` and `tests/bar_right.rs` render under `C` and a
+UTF-8 locale). The battery comes from the `starship-battery` crate (IOKit on
+macOS, sysfs on Linux); on a machine with none the segment and its gap are
+dropped and the right block is narrower.
 
-Truncation happens inside the script, never via `status-left-length`: tmux
+Truncation happens inside atelier, never via `status-left-length`: tmux
 truncates the *expanded* string, which by then contains `#[fg=...]` escapes, and
 will happily cut one in half and print the remainder as literal text.
 
@@ -745,10 +796,9 @@ None of them may be `#8caaee` or a task-state colour.
 `status-justify centre` centres the list in the space *remaining* after
 `status-left` and `status-right`, not in the terminal: measured on a 120-column
 client, growing the right block by 36 columns moved the list 18 columns left —
-exactly half. So `tmux-status-left` pads out to match, and asks
-`atelier bar right --width` for the number instead of hardcoding it. A copy of
-the tier table on the left would drift; `--width` runs no `git`, so the extra
-fork is cheap.
+exactly half. So `bar left` pads out to match, taking the number from
+`right::width` in the same crate rather than a copy of the tier table, which
+would drift.
 
 Everything on the right is therefore fixed-width, including the key table slot,
 which stays reserved at rest — letting it collapse would change the block width
@@ -758,9 +808,11 @@ every time a mode is entered and slide the list. For the same reason the date is
 **Narrowing sheds whole segments** rather than crushing the list: date, then
 battery, then the repo counts, leaving the clock. Before that, an 80-column
 client rendered date and battery in full and dropped the *window list* entirely
-— the one thing on the bar worth keeping. Below the widest tier the left block
-also stops padding to match, so the list drifts off centre instead of
-overflowing. None of this engages above 120 columns.
+— the one thing on the bar worth keeping. None of that engages above 120
+columns. The left block's padding gives way earlier: it never leaves less than
+36 columns between the two blocks, so below twice the right block plus 36 (154
+columns with a battery, 134 without) the list drifts off centre instead of
+being squeezed.
 
 **A window occupies the same width whether or not it is active**: the active
 format's two `` capsules are replaced by two plain spaces in the inactive one.
@@ -805,7 +857,8 @@ Two mechanisms, for two shapes of thing:
   **token**: URL or file path. `Enter` opens (URL → the browser, file → the nvim
   in this session, or a new `nvim` window at the session root if there is none),
   `Ctrl-y` copies, `Ctrl-o` hands it to the OS opener (`open` on macOS,
-  `xdg-open` elsewhere).
+  `xdg-open` elsewhere), `Ctrl-v` previews a markdown path (`atelier preview`)
+  and does nothing on anything else.
 - **`Prefix + v`** — copy-mode, then drag with the mouse. For a **region**.
 
 `Prefix + v` matters because tmux's default `MouseDrag1Pane` only starts a
@@ -847,22 +900,27 @@ drops SSE, so the server died under any tab left in the background, and a bumped
 port changed the origin — which is what notes were keyed on.
 
 **Everything the page loads is compiled into the binary**: `index.html` and
-`app.js` from `scripts/md-preview/`, and the eight library files under
+`app.js` from `atelier/assets/preview/`, and the eight library files under
 `atelier/assets/preview/lib/` (markdown-it 14.1.0, markdown-it-anchor 9.2.0,
 markdown-it-footnote 4.0.0, markdown-it-task-lists 2.1.1, highlight.js 11.11.1
 from `@highlightjs/cdn-assets`, mermaid 11.4.1, DOMPurify 3.2.6, js-yaml 4.1.0;
 licences alongside), served from `/__lib/`. A fresh clone builds without bun and
-the preview works offline; editing the page means rebuilding atelier. The Bun
-server still in `scripts/md-preview/` is no longer run by anything and goes with
-ticket 15.
+the preview works offline. **Editing the page means rebuilding atelier**: a
+change to `index.html` or `app.js` shows up only after `cargo install` (or
+`./install.sh`) replaces the binary, which the running server then picks up by
+restarting itself (below). There is no Bun server, `package.json` or
+`node_modules` any more; bun is still installed, for grove.
 
 **Notes live in `~/.local/share/md-preview/notes/<sha1 of path>.json`**, through
 `GET`/`PUT /__notes/<path>`, never in `localStorage`. Moving or renaming a file
-loses its notes; that is accepted. The file format is the Bun server's, so
-existing notes load unchanged.
+loses its notes; that is accepted. The file format is the old Bun server's,
+byte for byte (`tests/fixtures/preview/notes-written-by-bun.json` was written by
+it), so notes from before the port load unchanged. The page's "copy all" and
+cursor-follow logic live in `app.js` and are pinned by `tests/preview.rs`.
 
 **The server restarts itself when its binary changes** (the path it was started
-from changes mtime or size, which `cargo install` does), via `launchctl
+from changes mtime or size, which `cargo install` does — and so does any edit to
+the embedded page), via `launchctl
 kickstart -k` under launchd and by exiting anywhere else. Exiting and relying on
 `KeepAlive` does not work: launchd marks the respawn `pended nondemand spawn =
 inefficient` and defers it for minutes, whatever the exit code. The same
@@ -894,6 +952,18 @@ Tab reuse is macOS only: JXA against Google Chrome (`w.tabs.url()` per window,
 matched without the fragment); the first run triggers macOS's automation prompt.
 If Chrome is not running or the script fails, it falls back to `open -a`. On
 other systems the URL is only printed.
+
+**`Prefix + m` picks a markdown file of the session** (`atelier preview pick`,
+`atelier/src/preview/picker.rs`) and previews it, so reviewing an agent's plan
+needs no nvim. Rows are paths relative to `#{session_path}` — the session's own
+checkout, so a worktree session lists its worktree — newest mtime first. Inside a
+repo they come from `git ls-files -co --exclude-standard`, so gitignored files
+are left out; elsewhere from a walk that skips dot-directories and stops at six
+levels, so a session rooted at `$HOME` stays usable. `atelier preview list`
+prints the rows `tests/markdown_picker.rs` checks. Like `sessions pick`, it
+resolves the session itself, since tmux 3.4 does not expand formats in
+`display-popup`'s command. The binding replaces tmux's default `m` (mark pane),
+which nothing here used.
 
 The cursor sync is a `CursorHold` autocmd, registered once `<leader>mr` has run
 in that buffer, that `POST`s the line to `/__cursor/<path>`; the URL comes from

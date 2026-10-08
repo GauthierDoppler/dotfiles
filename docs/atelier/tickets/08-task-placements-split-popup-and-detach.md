@@ -20,5 +20,5 @@
 - **The popup test** runs `atelier tasks pick` inside a real `display-popup` on a client attached through `script`, with a stub `fzf` on `PATH` that picks the first row. Forcing the nested-popup path makes it fail, so it does catch the regression.
 - **No fallback without atelier any more.** `Prefix + e` calls `atelier tasks pick` only, like `Prefix + s`/`Space`. Without atelier, tasks are still plain scripts that run by hand.
 - **The `terminal-notifier` banner for `detach` tasks is gone** with the bash runner: tasks ring only (user story 23; the spec keeps notifications for Claude's `waiting`).
-- **`shell_quote` is one helper**, `src/shell.rs` (`shell::quote`), used by `sessions.rs`, `pick.rs` and `tasks/picker.rs`. The "atelier exe + `--socket`" prefix those three build is still duplicated (`pick` spells it `-S`); left alone to keep this branch's footprint in other features small.
+- **`shell_quote` is one helper**, `src/shell.rs` (`shell::quote`), used by `sessions.rs`, `pick.rs`, `tasks/picker.rs` and `preview/picker.rs` (which arrived with a fourth copy). The "atelier exe + `--socket`" prefix they build is still duplicated (`pick` spells it `-S`); left alone to keep this branch's footprint in other features small.
 - **Not verified on macOS:** the popup and split tests rely on `script` and tmux's default 80x24 detached size; CI covers macOS.

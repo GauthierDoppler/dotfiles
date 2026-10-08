@@ -12,7 +12,7 @@ use crate::Result;
 const NO_OTHER_SESSION: &str = "(no other session)";
 const NO_OTHER_IN_PROJECT: &str = "(no other session in this project)";
 const SCOPE_OPTION: &str = "@atelier_sessions_scope";
-const NAVIGATION_KEYS: &str = "j,k,q";
+const NAVIGATION_KEYS: &str = "j,k,q,h,l";
 
 #[derive(Subcommand)]
 pub enum Command {
@@ -51,6 +51,18 @@ pub enum Command {
         client: Option<String>,
         session: String,
     },
+    /// Print a session's window list and the tail of its current window
+    Preview { session: String },
+    /// Move a session to its next window; the picker's `l`
+    Next { session: String },
+    /// Move a session to its previous window; the picker's `h`
+    Prev { session: String },
+    /// Kill a session and reload the picker's rows; prints fzf actions
+    Kill {
+        #[arg(short = 't', long, value_name = "SESSION")]
+        target: String,
+        session: String,
+    },
 }
 
 impl Command {
@@ -77,8 +89,81 @@ impl Command {
                 Ok(())
             }
             Command::Switch { client, session } => switch(tmux, client.as_deref(), &session),
+            Command::Preview { session } => {
+                let lines = std::env::var("FZF_PREVIEW_LINES")
+                    .ok()
+                    .and_then(|lines| lines.parse().ok())
+                    .unwrap_or(24);
+                print!("{}", preview(tmux, session.trim(), lines)?);
+                Ok(())
+            }
+            Command::Next { session } => cycle(tmux, "next-window", session.trim()),
+            Command::Prev { session } => cycle(tmux, "previous-window", session.trim()),
+            Command::Kill { target, session } => {
+                print_actions(&Picker::open(tmux, &target)?.kill(session.trim())?);
+                Ok(())
+            }
         }
     }
+}
+
+fn cycle(tmux: &Tmux, direction: &str, session: &str) -> Result<()> {
+    if session.is_empty() || tmux.display(session, "#{session_windows}")? == "1" {
+        return Ok(());
+    }
+    tmux.run(&[direction, "-t", session])?;
+    Ok(())
+}
+
+fn preview(tmux: &Tmux, session: &str, lines: usize) -> Result<String> {
+    if session.is_empty() {
+        return Ok(String::new());
+    }
+    let windows = tmux.run(&[
+        "list-windows",
+        "-t",
+        session,
+        "-F",
+        "#{window_active}#{window_index}: #{window_name}  (#{window_panes}p)",
+    ])?;
+    let mut shown = String::new();
+    for window in windows.lines() {
+        let (active, label) = window.split_at(1);
+        let marker = if active == "1" { " ←" } else { "" };
+        shown.push_str(&format!("{label}{marker}\n"));
+    }
+    shown.push('\n');
+    let room = lines.saturating_sub(windows.lines().count() + 1);
+    let capture = tmux.run(&["capture-pane", "-p", "-e", "-t", session])?;
+    let captured: Vec<&str> = capture.lines().collect();
+    let end = captured
+        .iter()
+        .rposition(|line| !without_sgr(line).trim().is_empty())
+        .map_or(0, |last| last + 1);
+    for line in &captured[end.saturating_sub(room)..end] {
+        shown.push_str(line);
+        shown.push('\n');
+    }
+    Ok(shown)
+}
+
+fn without_sgr(line: &str) -> String {
+    let mut bare = String::with_capacity(line.len());
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            bare.push(c);
+            continue;
+        }
+        if chars.next() == Some('[') {
+            for c in chars.by_ref() {
+                if c.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        }
+    }
+    bare
 }
 
 fn print_actions(actions: &str) {
@@ -100,7 +185,8 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
     picker.set_scope(Scope::Project)?;
     let rows = picker.rows()?;
 
-    let mut switch = format!("{} sessions switch", picker.atelier_command()?);
+    let atelier = picker.atelier_command()?;
+    let mut switch = format!("{atelier} sessions switch");
     if !client.is_empty() {
         switch.push_str(&format!(" -c {}", shell::quote(&client)));
     }
@@ -127,6 +213,18 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
         .arg(format!("tab:transform:{}", picker.call("toggle")?))
         .arg("--bind")
         .arg(format!("enter:become:{switch} {{1}}"))
+        .arg("--bind")
+        .arg(format!(
+            "l:execute-silent({atelier} sessions next {{1}})+refresh-preview"
+        ))
+        .arg("--bind")
+        .arg(format!(
+            "h:execute-silent({atelier} sessions prev {{1}})+refresh-preview"
+        ))
+        .arg("--bind")
+        .arg(format!("ctrl-x:transform:{} {{1}}", picker.call("kill")?))
+        .arg(format!("--preview={atelier} sessions preview {{1}}"))
+        .arg("--preview-window=right,70%,border-left,nowrap")
         .stdin(Stdio::piped())
         .spawn()
         .map_err(|error| format!("fzf: {error}"))?;
@@ -254,11 +352,11 @@ impl<'a> Picker<'a> {
 
     fn header(&self) -> Result<String> {
         let navigation = match (&self.project, self.scope()?) {
-            (None, _) => "j/k move   i search   (no project)",
-            (Some(_), Scope::Project) => "j/k move   tab show all   i search",
-            (Some(_), Scope::All) => "j/k move   tab project only   i search",
+            (None, _) => "j/k move   h/l window   i search   (no project)",
+            (Some(_), Scope::Project) => "j/k move   h/l window   tab show all   i search",
+            (Some(_), Scope::All) => "j/k move   h/l window   tab project only   i search",
         };
-        Ok(format!("{navigation}\nenter switch"))
+        Ok(format!("{navigation}\nenter switch   ctrl-x kill"))
     }
 
     fn toggle(&self) -> Result<String> {
@@ -276,6 +374,14 @@ impl<'a> Picker<'a> {
             scope.prompt(),
             self.call("header")?
         ))
+    }
+
+    fn kill(&self, session: &str) -> Result<String> {
+        if session.is_empty() {
+            return Ok(String::new());
+        }
+        self.tmux.run(&["kill-session", "-t", session])?;
+        Ok(format!("reload({})", self.call("rows")?))
     }
 
     fn escape(&self, input_state: &str) -> Result<String> {
