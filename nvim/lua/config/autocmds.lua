@@ -85,7 +85,9 @@ vim.api.nvim_create_autocmd('FileType', {
       if vim.fn.executable(atelier) == 0 then return vim.notify('atelier preview: ' .. atelier .. ' missing -- run ./install.sh', vim.log.levels.ERROR) end
       vim.system({ atelier, 'preview', file }, { text = true }, function(res)
         vim.schedule(function()
-          if res.code ~= 0 then return vim.notify(vim.trim(res.stderr or '') ~= '' and vim.trim(res.stderr) or 'atelier preview failed', vim.log.levels.ERROR) end
+          if res.code ~= 0 then
+            return vim.notify(vim.trim(res.stderr or '') ~= '' and vim.trim(res.stderr) or 'atelier preview failed', vim.log.levels.ERROR)
+          end
           if not vim.api.nvim_buf_is_valid(buf) then return end
           vim.b[buf].md_preview_cursor = vim.trim(res.stdout):gsub('^(https?://[^/]+)', '%1/__cursor')
           vim.b[buf].md_preview_line = nil
