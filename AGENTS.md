@@ -440,6 +440,21 @@ tooling, so they are versioned and portable rather than living loose in
 | `tmux-tasks` | writing `<project>/.tmux/` task scripts for the `Prefix + e` picker |
 | `grove`      | `.grove/config.yaml` and `.grove/setup.sh` for worktree setup |
 
+`to-spec`, `to-tickets`, `implement`, `code-review` and `tdd` are vendored
+unchanged from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, a
+copy of the licence sits in each folder). They expect an issue tracker to have
+been configured by that repo's setup skill; this section is that configuration:
+
+- **Issue tracker: local markdown under `docs/<feature>/`.** The spec is
+  `docs/<feature>/spec.md`; tickets are one file each at
+  `docs/<feature>/tickets/NN-<slug>.md`, numbered from `01` in dependency order,
+  with `docs/<feature>/tickets/README.md` as the index. Comments append under a
+  `## Comments` heading at the bottom of the ticket.
+- **Triage labels** are a `**Status:**` line in each ticket: `ready-for-agent`,
+  `needs-human`, `in-progress`, `done`, `wontfix`.
+- **Blocking edges** are the `**Blocked by:**` line. The frontier is every ticket
+  whose blockers are all `done`.
+
 They are symlinked **one by one** in `install.sh`, never as a directory:
 `~/.claude/skills` also holds skills installed by Claude Code itself (several of
 them symlinks into `~/.agents/skills`), and linking the parent would hide them.
