@@ -240,6 +240,16 @@ export DOTFILES
 "$DOTFILES/scripts/claude-settings-sync" \
   || warn "claude-settings-sync failed (jq missing?) — ~/.claude/settings.json not regenerated"
 
+# ─── Phase 6c: atelier ─────────────────────────────────────
+export PATH="$HOME/.cargo/bin:$PATH"
+if ! command -v cargo &>/dev/null; then
+  echo "Installing Rust via rustup..."
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path
+fi
+cargo install --locked --path "$DOTFILES/atelier" --root "$HOME/.local" \
+  --target-dir "$DOTFILES/atelier/target" \
+  || warn "cargo install failed — the status bar falls back to session names"
+
 # ─── Phase 7: Switch remote to SSH ─────────────────────────
 current_remote="$(git -C "$DOTFILES" remote get-url origin 2>/dev/null || true)"
 if [[ "$current_remote" == https://* ]]; then

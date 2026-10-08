@@ -30,7 +30,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → symlinks → Claude settings merge → bun → Node LTS → npm globals → app registration.
+The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → symlinks → Claude settings merge → atelier → bun → Node LTS → npm globals → app registration.
 
 The `link()` function creates symlinks and backs up existing files as `*.bak`. When adding a new config, use the `/add-config` skill.
 
@@ -117,6 +117,44 @@ override, and the shared base can never propagate again. Both the local override
 and the snapshot are gitignored.
 
 Run `claude-settings-sync --dry-run` to preview what would be captured.
+
+## Atelier
+
+`atelier/` is a Rust binary crate (edition 2021, clap derive) that takes over
+the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
+`docs/atelier/tickets/`.
+
+- **A feature is a module plus one line.** It lives in `src/<feature>.rs` (or
+  `src/<feature>/`), exposes `pub enum Command` deriving `clap::Subcommand` with
+  `pub fn run(self, tmux: &Tmux) -> Result<()>`, and is registered by one line in
+  the `features!` list in `main.rs`, which declares the module and the
+  subcommand. Shared modules (`tmux`, `session`, `git`) are plain `mod` lines.
+  Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
+- **tmux is reached only through `tmux::Tmux`**, which always targets an explicit
+  socket: `--socket`/`-S`, else the one in `$TMUX`. tmux sets `$TMUX` for `#()`
+  jobs and `run-shell`, so the default is right when tmux calls atelier.
+- **Session identity comes from `session::resolve`, for every consumer**:
+  `@grove_project`, else the basename of the main worktree (first entry of
+  `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
+- **`display-message -p` returns one field per call.** It prints control
+  characters as octal and newlines as `_`, so fields cannot be joined with a
+  delimiter; and with an unknown `-t` it exits 0 with empty output, so emptiness
+  is the not-found signal. `git -C ""` runs in the cwd — never pass an empty path.
+- **Tests drive the built binary against a private tmux server.**
+  `tests/common/mod.rs` has `TmuxServer::start()`: `tmux -L
+  atelier-test-<pid>-<n> -f /dev/null` with `exit-empty off`, killed on drop,
+  one per test so tests run in parallel. `atelier(..)` passes `--socket`,
+  `atelier_inside(..)` sets `$TMUX` instead. Assert on what tmux or the binary
+  shows, never on internals; pure render functions are the only other seam.
+- **Installed into `~/.local/bin/atelier`** by `install.sh` (`cargo install
+  --locked --root ~/.local`, target dir `atelier/target` so a re-run is
+  incremental; rustup with `--no-modify-path` when cargo is missing, and
+  `dot_zshrc` puts `~/.cargo/bin` on `PATH`). tmux and scripts call it by that
+  absolute path, and every caller must still work when it is absent.
+- **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
+  --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
+  shellcheck on `install.sh` and every executable shell script in `scripts/`.
+  Run the same three cargo commands in `atelier/` before pushing.
 
 ## Tmux
 
@@ -557,7 +595,9 @@ project's `.tmux/` tasks.
 ## Tmux status bar
 
 `scripts/tmux-status-left` renders the left segment as two adjacent capsules —
-**project** and **root/wt** — resolved from `#{session_path}` with git. They are
+**project** and **root/wt**. The project comes from `atelier bar left` (see
+Atelier) and is the session name when atelier is not installed; root/wt is
+resolved from `#{session_path}` with git. They are
 separate blocks on purpose: which repo you are in and which checkout of it you
 are in are two different questions, and a flag glued onto the project name reads
 as part of the name.

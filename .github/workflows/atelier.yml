@@ -1,0 +1,59 @@
+name: atelier
+
+on:
+  push:
+    paths:
+      - 'atelier/**'
+      - 'install.sh'
+      - 'scripts/**'
+      - '.github/workflows/atelier.yml'
+  pull_request:
+    paths:
+      - 'atelier/**'
+      - 'install.sh'
+      - 'scripts/**'
+      - '.github/workflows/atelier.yml'
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: atelier
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tmux (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install tmux (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tmux
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: atelier
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck install.sh and shell scripts under scripts/
+        run: |
+          files=(install.sh)
+          while IFS= read -r -d '' f; do
+            if head -n1 "$f" | grep -qE '^#!.*[/ ](ba)?sh$'; then
+              files+=("$f")
+            fi
+          done < <(find scripts -type f -perm -u+x -print0)
+          shellcheck "${files[@]}"

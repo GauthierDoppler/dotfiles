@@ -133,7 +133,10 @@ keys_seg() {
 git_seg() {
   local stat ins del ab ahead behind body='' width=0
 
-  [ -n "$path" ] && [ -d "$path" ] || { pad 0 "$W_GIT"; return; }
+  if [ -z "$path" ] || [ ! -d "$path" ]; then
+    pad 0 "$W_GIT"
+    return
+  fi
 
   stat="$(git -C "$path" --no-optional-locks diff --shortstat HEAD 2>/dev/null)" \
     || { pad 0 "$W_GIT"; return; }
