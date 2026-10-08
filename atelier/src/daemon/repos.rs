@@ -126,6 +126,7 @@ pub struct Repos {
     repos: HashMap<PathBuf, Repo>,
     located: HashMap<String, Option<PathBuf>>,
     watching: HashMap<PathBuf, bool>,
+    unwatchable: HashSet<PathBuf>,
     identities: HashMap<(Fields, Option<PathBuf>), Option<Identity>>,
 }
 
@@ -142,6 +143,7 @@ impl Repos {
             repos: HashMap::new(),
             located: HashMap::new(),
             watching: HashMap::new(),
+            unwatchable: HashSet::new(),
             identities: HashMap::new(),
         };
         (repos, changes)
@@ -194,8 +196,12 @@ impl Repos {
     }
 
     pub fn note(&mut self, event: notify::Result<Event>) {
-        let Ok(event) = event else {
-            return;
+        let event = match event {
+            Ok(event) => event,
+            Err(error) => {
+                eprintln!("atelier: repo watcher: {error}");
+                return;
+            }
         };
         let due = Instant::now() + SETTLE;
         if event.need_rescan() {
@@ -268,6 +274,7 @@ impl Repos {
             }
             keep
         });
+        self.unwatchable.retain(|path| wanted.contains_key(path));
         for (path, recursive) in wanted {
             if self.watching.contains_key(&path) {
                 continue;
@@ -277,8 +284,17 @@ impl Repos {
             } else {
                 RecursiveMode::NonRecursive
             };
-            if watcher.watch(&path, mode).is_ok() {
-                self.watching.insert(path, recursive);
+            match watcher.watch(&path, mode) {
+                Ok(()) => {
+                    self.unwatchable.remove(&path);
+                    self.watching.insert(path, recursive);
+                }
+                Err(error) => {
+                    if !self.unwatchable.contains(&path) {
+                        eprintln!("atelier: cannot watch {}: {error}", path.display());
+                        self.unwatchable.insert(path);
+                    }
+                }
             }
         }
     }

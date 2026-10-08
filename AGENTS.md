@@ -271,7 +271,9 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   repo is untouched: `tests/bar_daemon.rs` puts a logging `git` first on the
   daemon's `PATH` and asserts switches, resizes, untracked and ignored writes
   start none. This relies on `diff-index`/`ls-files` under
-  `--no-optional-locks` never writing the index.
+  `--no-optional-locks` never writing the index. A path that cannot be watched
+  (inotify's `max_user_watches`, a tracked directory deleted by hand) goes to
+  the daemon's log once and is retried at every settle.
 - **Control mode has no resize notification for other clients.**
   `%layout-change` only covers windows of the daemon's own session, and
   subscriptions are evaluated against the daemon's client. So on attach the

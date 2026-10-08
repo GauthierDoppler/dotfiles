@@ -538,3 +538,41 @@ fn edits_are_still_seen_in_a_directory_a_checkout_removed_and_recreated() {
 
     counts_become(&tmux, "work", "+1", Duration::from_secs(1));
 }
+
+#[test]
+fn a_directory_that_cannot_be_watched_is_logged_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = repo_with_upstream(dir.path());
+    std::fs::create_dir(work.join("sub")).unwrap();
+    std::fs::write(work.join("sub/a.txt"), "a\n").unwrap();
+    common::git(&work, &["add", "sub"]);
+    common::git(&work, &["commit", "-qm", "a"]);
+    std::fs::remove_dir_all(work.join("sub")).unwrap();
+    let log = dir.path().join("daemon.log");
+    let tmux = server();
+    tmux.new_session("work", &work);
+    let _viewer = attach_terminal_client(&tmux, "work", 130);
+    let mut daemon = Daemon(
+        tmux.atelier_command(&["daemon"])
+            .stderr(std::fs::File::create(&log).unwrap())
+            .spawn()
+            .expect("daemon starts"),
+    );
+    counts_become(&tmux, "work", "−1 ↑1", Duration::from_secs(5));
+
+    std::fs::write(work.join("notes.txt"), "one\n2\nthree\n").unwrap();
+    counts_become(&tmux, "work", "+2 −2 ↑1", Duration::from_secs(1));
+    let _ = daemon.0.kill();
+    let _ = daemon.0.wait();
+
+    let log = std::fs::read_to_string(&log).unwrap();
+    let complaints: Vec<&str> = log
+        .lines()
+        .filter(|line| line.contains("cannot watch"))
+        .collect();
+    assert_eq!(complaints.len(), 1, "{log}");
+    assert!(
+        complaints[0].contains(&work.join("sub").display().to_string()),
+        "{log}"
+    );
+}
