@@ -12,14 +12,7 @@ pub const PLACEHOLDER: &str = "(no markdown file under this session)";
 const WALK_DEPTH: usize = 6;
 
 pub fn session_root(tmux: &Tmux, target: Option<&str>) -> Result<PathBuf> {
-    let path = match target {
-        Some(target) => tmux.display(target, "#{session_path}")?,
-        None => tmux.run(&["display-message", "-p", "#{session_path}"])?,
-    };
-    if path.is_empty() {
-        return Err(format!("no session {}", target.unwrap_or("attached")).into());
-    }
-    Ok(PathBuf::from(path))
+    Ok(PathBuf::from(tmux.resolve(target, "#{session_path}")?))
 }
 
 pub fn rows(root: &Path) -> Vec<String> {

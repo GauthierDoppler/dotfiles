@@ -3,6 +3,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::fzf;
 use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
@@ -50,7 +51,7 @@ pub fn place(tmux: &Tmux, catalog: &Catalog, name: &str, in_popup: bool) -> Resu
 fn in_window(tmux: &Tmux, catalog: &Catalog, name: &str, select: bool) -> Result<()> {
     let slug = name.replace('/', "-");
     let root = path_arg(&catalog.root)?;
-    let wrapper = wrapper(catalog, name, true)?;
+    let wrapper = wrapper(tmux, catalog, name, true)?;
     let wrapper = wrapper.iter().map(String::as_str);
     let windows = tmux.run(&[
         "list-windows",
@@ -93,7 +94,7 @@ fn in_window(tmux: &Tmux, catalog: &Catalog, name: &str, select: bool) -> Result
 }
 
 fn in_split(tmux: &Tmux, catalog: &Catalog, name: &str, flag: &str, size: &str) -> Result<()> {
-    let wrapper = wrapper(catalog, name, false)?;
+    let wrapper = wrapper(tmux, catalog, name, false)?;
     let root = path_arg(&catalog.root)?;
     let mut split = vec![
         "split-window",
@@ -112,7 +113,7 @@ fn in_split(tmux: &Tmux, catalog: &Catalog, name: &str, flag: &str, size: &str) 
 }
 
 fn in_popup_of_its_own(tmux: &Tmux, catalog: &Catalog, name: &str) -> Result<()> {
-    let command: Vec<String> = wrapper(catalog, name, false)?
+    let command: Vec<String> = wrapper(tmux, catalog, name, false)?
         .iter()
         .map(|word| shell::quote(word))
         .collect();
@@ -127,12 +128,9 @@ fn in_popup_of_its_own(tmux: &Tmux, catalog: &Catalog, name: &str) -> Result<()>
     Ok(())
 }
 
-fn wrapper(catalog: &Catalog, name: &str, mark: bool) -> Result<Vec<String>> {
-    let mut command = vec![
-        path_arg(&std::env::current_exe()?)?.to_string(),
-        "tasks".to_string(),
-        "exec".to_string(),
-    ];
+fn wrapper(tmux: &Tmux, catalog: &Catalog, name: &str, mark: bool) -> Result<Vec<String>> {
+    let mut command = fzf::atelier_argv(tmux)?;
+    command.extend(["tasks".to_string(), "exec".to_string()]);
     if mark {
         command.push("--mark".to_string());
     }
@@ -194,7 +192,7 @@ pub fn execute(tmux: &Tmux, root: &Path, name: &str, mark: bool) -> Result<()> {
         }
     }
     if let Some(window) = &window {
-        if !watched(tmux, window) {
+        if !tmux.watched(window).unwrap_or(false) {
             write!(out, "\x07")?;
         }
     }
@@ -202,23 +200,6 @@ pub fn execute(tmux: &Tmux, root: &Path, name: &str, mark: bool) -> Result<()> {
     out.flush()?;
     wait_for_key();
     Ok(())
-}
-
-fn watched(tmux: &Tmux, window: &str) -> bool {
-    let Ok(active) = tmux.display(window, "#{window_active}") else {
-        return false;
-    };
-    let Ok(session) = tmux.display(window, "#{session_id}") else {
-        return false;
-    };
-    let Ok(clients) = tmux.run(&[
-        "list-clients",
-        "-F",
-        "#{client_control_mode} #{session_id}",
-    ]) else {
-        return false;
-    };
-    active == "1" && clients.lines().any(|client| client == format!("0 {session}"))
 }
 
 fn wait_for_key() {

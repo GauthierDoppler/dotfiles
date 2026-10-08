@@ -17,13 +17,7 @@ pub struct Catalog {
 
 impl Catalog {
     pub fn of_session(tmux: &Tmux, target: Option<&str>) -> Result<Self> {
-        let session = match target {
-            Some(target) => tmux.display(target, "#{session_id}")?,
-            None => tmux.run(&["display-message", "-p", "#{session_id}"])?,
-        };
-        if session.is_empty() {
-            return Err(format!("no session {}", target.unwrap_or("attached")).into());
-        }
+        let session = tmux.resolve(target, "#{session_id}")?;
         let path = tmux.display(&session, "#{session_path}")?;
         let start = if path.is_empty() {
             std::env::current_dir()?

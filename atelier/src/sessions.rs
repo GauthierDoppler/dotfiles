@@ -172,10 +172,7 @@ fn print_actions(actions: &str) {
 }
 
 fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<()> {
-    let target = match target {
-        Some(target) => target,
-        None => tmux.run(&["display-message", "-p", "#{session_id}"])?,
-    };
+    let target = tmux.resolve(target.as_deref(), "#{session_id}")?;
     let client = match client {
         Some(client) => client,
         None => tmux.run(&["display-message", "-p", "#{client_name}"])?,
@@ -262,11 +259,11 @@ struct Picker<'a> {
 
 impl<'a> Picker<'a> {
     fn open(tmux: &'a Tmux, target: &str) -> Result<Self> {
-        let project = session::resolve(tmux, target)?.root;
+        let session = tmux.resolve(Some(target), "#{session_id}")?;
         Ok(Picker {
             tmux,
-            session: tmux.display(target, "#{session_id}")?,
-            project,
+            project: session::resolve(tmux, &session)?.root,
+            session,
         })
     }
 

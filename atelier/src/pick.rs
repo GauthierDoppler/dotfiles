@@ -18,33 +18,33 @@ const PLACEHOLDER: &str = "(no URL or existing path on this pane)";
 pub enum Command {
     /// Print the URLs and existing paths on a pane, newest first
     List {
-        #[arg(short = 't', long, value_name = "PANE", default_value = "")]
-        target: String,
+        #[arg(short = 't', long, value_name = "PANE")]
+        target: Option<String>,
     },
     /// Open a token: a URL in the browser, a file in this session's nvim
     Open {
-        #[arg(short = 't', long, value_name = "PANE", default_value = "")]
-        target: String,
+        #[arg(short = 't', long, value_name = "PANE")]
+        target: Option<String>,
         token: String,
     },
     /// Hand a token to the OS opener
     System {
-        #[arg(short = 't', long, value_name = "PANE", default_value = "")]
-        target: String,
+        #[arg(short = 't', long, value_name = "PANE")]
+        target: Option<String>,
         token: String,
     },
     /// Open a markdown path in the preview; anything else does nothing
     Preview {
-        #[arg(short = 't', long, value_name = "PANE", default_value = "")]
-        target: String,
+        #[arg(short = 't', long, value_name = "PANE")]
+        target: Option<String>,
         token: String,
     },
     /// Copy a token to the clipboard through tmux (OSC 52)
     Copy { token: String },
     /// Run the fzf picker over a pane, for `display-popup -E`
     Popup {
-        #[arg(short = 't', long, value_name = "PANE", default_value = "")]
-        target: String,
+        #[arg(short = 't', long, value_name = "PANE")]
+        target: Option<String>,
     },
 }
 
@@ -190,15 +190,8 @@ fn vim_escape(path: &str) -> String {
     escaped
 }
 
-fn resolve_pane(tmux: &Tmux, hint: &str) -> Result<String> {
-    if hint.len() > 1 && hint.starts_with('%') && hint[1..].chars().all(|c| c.is_ascii_digit()) {
-        return Ok(hint.to_string());
-    }
-    let pane = tmux.run(&["display-message", "-p", "#{pane_id}"])?;
-    if pane.is_empty() {
-        return Err("cannot resolve the current pane".into());
-    }
-    Ok(pane)
+fn resolve_pane(tmux: &Tmux, target: &Option<String>) -> Result<String> {
+    tmux.resolve(target.as_deref(), "#{pane_id}")
 }
 
 fn rows(tmux: &Tmux, pane: &str) -> Result<Vec<String>> {

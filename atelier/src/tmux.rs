@@ -71,6 +71,28 @@ impl Tmux {
     pub fn display(&self, target: &str, format: &str) -> Result<String> {
         self.run(&["display-message", "-p", "-t", target, format])
     }
+
+    pub fn watched(&self, window: &str) -> Result<bool> {
+        let clients = self.run(&["list-clients", "-F", "#{client_control_mode} #{window_id}"])?;
+        Ok(clients
+            .lines()
+            .any(|client| client.strip_prefix("0 ") == Some(window)))
+    }
+
+    pub fn resolve(&self, target: Option<&str>, format: &str) -> Result<String> {
+        let value = match target {
+            Some(target) => self.display(target, format)?,
+            None => self.run(&["display-message", "-p", format])?,
+        };
+        if value.is_empty() {
+            return Err(match target {
+                Some(target) => format!("no such target: {target}"),
+                None => format!("nothing current to read {format} from"),
+            }
+            .into());
+        }
+        Ok(value)
+    }
 }
 
 fn program() -> PathBuf {

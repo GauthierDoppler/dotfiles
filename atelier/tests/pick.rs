@@ -198,7 +198,7 @@ fn a_pane_with_nothing_to_pick_lists_a_placeholder_row() {
 }
 
 #[test]
-fn an_unexpanded_pane_format_falls_back_to_the_current_pane() {
+fn without_a_target_the_current_pane_is_listed() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("capture.txt");
     std::fs::write(&file, "https://acme.dev/a\n").unwrap();
@@ -206,9 +206,21 @@ fn an_unexpanded_pane_format_falls_back_to_the_current_pane() {
     pane_showing(&tmux, dir.path(), file.to_str().unwrap());
 
     assert_eq!(
-        list(&tmux, "#{pane_id}", dir.path()),
-        ["https://acme.dev/a"]
+        tmux.atelier_stdout(&["pick", "list"]).trim(),
+        "https://acme.dev/a"
     );
+}
+
+#[test]
+fn a_target_that_is_not_a_pane_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    idle_pane(&tmux, dir.path());
+
+    for target in ["#{pane_id}", "%999"] {
+        let output = tmux.atelier(&["pick", "list", "-t", target]);
+        assert!(!output.status.success(), "{target}: {output:?}");
+    }
 }
 
 #[test]
