@@ -37,7 +37,9 @@ async fn serve(tmux_socket: &Path, listener: std::os::unix::net::UnixListener) -
     let state = Shared::default();
     let tmux = Tmux::new(Some(tmux_socket.to_path_buf()));
     while let Some(target) = first_in_picker_order(&tmux) {
-        if !follow(&tmux, &target, &listener, &state).await? {
+        if !follow(&tmux, &target, &listener, &state).await?
+            && tmux.run(&["has-session", "-t", &target]).is_ok()
+        {
             break;
         }
     }
