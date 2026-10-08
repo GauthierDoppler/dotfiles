@@ -62,7 +62,7 @@ impl Command {
         let context = Context {
             tmux,
             server: tmux.run(&["display-message", "-p", "#{pid}"]).is_ok(),
-            home: PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?),
+            home: crate::dotfiles::home()?,
             target: &self.target,
         };
         let mut failed = 0;
@@ -264,7 +264,7 @@ fn fzf(_: &Context) -> Outcome {
 }
 
 fn repo(context: &Context) -> Result<PathBuf> {
-    crate::setup::repo_root(context.target.repo(), &context.home)
+    crate::dotfiles::repo(context.target.repo(), &context.home)
 }
 
 fn installed(context: &Context) -> Outcome {

@@ -1,13 +1,13 @@
 use std::collections::BTreeSet;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{self, Stdio};
 
 use clap::Args;
 use serde_json::Value;
 
-use crate::setup::{self, Format, STUBS};
+use crate::dotfiles;
+use crate::git;
+use crate::setup::{Format, STUBS};
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -28,11 +28,8 @@ crate::flags_only!(Command);
 
 impl Command {
     pub fn run(self, _tmux: &Tmux) -> Result<()> {
-        let home = PathBuf::from(env::var_os("HOME").ok_or("HOME is not set")?);
-        let flag = self
-            .repo
-            .or_else(|| env::var_os("DOTFILES").map(PathBuf::from));
-        let repo = setup::repo_root(flag, &home)?;
+        let home = dotfiles::home()?;
+        let repo = dotfiles::repo(self.repo, &home)?;
         let report = Report { home: &home };
         let mut found = false;
 
@@ -128,20 +125,10 @@ fn shell_lines(path: &Path) -> BTreeSet<String> {
 }
 
 fn git_keys(path: &Path) -> BTreeSet<String> {
-    let output = process::Command::new("git")
-        .arg("config")
-        .arg("--file")
-        .arg(path)
-        .arg("--list")
-        .stderr(Stdio::null())
-        .output();
-    match output {
-        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(str::to_string)
-            .collect(),
-        _ => BTreeSet::new(),
-    }
+    git::config_entries(path)
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
 }
 
 fn json_values(path: &Path) -> BTreeSet<String> {

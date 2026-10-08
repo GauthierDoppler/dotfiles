@@ -145,14 +145,7 @@ impl Catalog {
     }
 
     fn state(&self, kind: &str) -> PathBuf {
-        let hash = self
-            .root
-            .as_os_str()
-            .as_encoded_bytes()
-            .iter()
-            .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-                (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
-            });
+        let hash = crate::fnv::fnv1a(self.root.as_os_str().as_encoded_bytes());
         std::env::temp_dir().join(format!("atelier-tasks.{hash:016x}.{kind}"))
     }
 }

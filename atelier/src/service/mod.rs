@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Deserialize;
 
+use crate::dotfiles;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -27,7 +28,7 @@ pub struct Target {
     /// Service manager to write for; defaults to launchd on macOS, systemd elsewhere
     #[arg(long, value_enum)]
     system: Option<System>,
-    /// The dotfiles checkout holding services.toml; defaults to the current git root, then ~/dotfiles
+    /// The dotfiles checkout holding services.toml; defaults to $DOTFILES, the current git root, then ~/dotfiles
     #[arg(long, value_name = "PATH")]
     repo: Option<PathBuf>,
 }
@@ -157,8 +158,8 @@ impl Target {
     }
 
     fn load(&self) -> Result<(Vec<Service>, PathBuf)> {
-        let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
-        let repo = crate::setup::repo_root(self.repo.clone(), &home)?;
+        let home = dotfiles::home()?;
+        let repo = dotfiles::repo(self.repo.clone(), &home)?;
         Ok((load(&repo.join(DESCRIPTION))?, home))
     }
 }
@@ -189,8 +190,7 @@ pub(crate) fn stopped(target: &Target) -> Result<Vec<String>> {
 pub(crate) fn agents_dir_problem(target: &Target) -> Option<(String, String)> {
     match target.system() {
         System::Launchd => {
-            let home = PathBuf::from(std::env::var_os("HOME")?);
-            launchd::unwritable_agents_dir(&home)
+            launchd::unwritable_agents_dir(&dotfiles::home().ok()?)
         }
         System::Systemd => None,
     }
@@ -204,7 +204,7 @@ pub(crate) fn linger(target: &Target) -> Option<Result<(String, bool)>> {
 }
 
 pub(crate) fn installed(label: &str) -> bool {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+    let Ok(home) = dotfiles::home() else {
         return false;
     };
     match System::of_this_machine() {

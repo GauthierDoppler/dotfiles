@@ -1,3 +1,5 @@
+mod dotfiles;
+mod fnv;
 mod fzf;
 mod git;
 mod opener;

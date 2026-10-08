@@ -1,10 +1,10 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process;
 
 use clap::{Args, ValueEnum};
 
+use crate::dotfiles;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -22,7 +22,7 @@ pub struct Command {
     /// Print what would change and touch nothing
     #[arg(long)]
     dry_run: bool,
-    /// The dotfiles checkout; defaults to the current git root, then ~/dotfiles
+    /// The dotfiles checkout; defaults to $DOTFILES, the current git root, then ~/dotfiles
     #[arg(long, value_name = "PATH")]
     repo: Option<PathBuf>,
 }
@@ -168,8 +168,8 @@ enum Action {
 
 impl Command {
     pub fn run(self, _tmux: &Tmux) -> Result<()> {
-        let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
-        let repo = repo_root(self.repo, &home)?;
+        let home = dotfiles::home()?;
+        let repo = dotfiles::repo(self.repo, &home)?;
         let actions = plan(&repo, &home, self.profile.unwrap_or_else(Profile::of_this_machine))?;
         for action in &actions {
             println!("{}", action.describe());
@@ -215,40 +215,6 @@ pub(crate) fn pending(repo: &Path, home: &Path) -> Result<Vec<PathBuf>> {
         .collect();
     paths.dedup();
     Ok(paths)
-}
-
-pub(crate) fn repo_root(flag: Option<PathBuf>, home: &Path) -> Result<PathBuf> {
-    if let Some(repo) = flag {
-        let repo = std::path::absolute(repo)?;
-        return if is_dotfiles(&repo) {
-            Ok(repo)
-        } else {
-            Err(format!("{} is not a dotfiles checkout", repo.display()).into())
-        };
-    }
-    let candidates = git_toplevel().into_iter().chain([home.join("dotfiles")]);
-    for repo in candidates {
-        if is_dotfiles(&repo) {
-            return Ok(repo);
-        }
-    }
-    Err("no dotfiles checkout found: pass --repo".into())
-}
-
-fn is_dotfiles(dir: &Path) -> bool {
-    dir.join("dot_zshrc").is_file() && dir.join("atelier/Cargo.toml").is_file()
-}
-
-fn git_toplevel() -> Option<PathBuf> {
-    let output = process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let path = String::from_utf8(output.stdout).ok()?;
-    Some(PathBuf::from(path.trim_end_matches('\n')))
 }
 
 fn links(repo: &Path, home: &Path, profile: Profile) -> Result<Vec<(PathBuf, PathBuf)>> {

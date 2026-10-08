@@ -13,7 +13,7 @@ pub struct Command {
     /// Print the drift that would be captured and the resulting files, and write nothing
     #[arg(long)]
     dry_run: bool,
-    /// The dotfiles checkout; defaults to the current git root, then ~/dotfiles
+    /// The dotfiles checkout; defaults to $DOTFILES, the current git root, then ~/dotfiles
     #[arg(long, value_name = "PATH")]
     repo: Option<PathBuf>,
 }
@@ -22,8 +22,8 @@ crate::flags_only!(Command);
 
 impl Command {
     pub fn run(self, _tmux: &Tmux) -> Result<()> {
-        let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
-        let repo = crate::setup::repo_root(self.repo, &home)?;
+        let home = crate::dotfiles::home()?;
+        let repo = crate::dotfiles::repo(self.repo, &home)?;
         let base_path = repo.join("dot_claude/settings.json");
         let local_path = repo.join("dot_claude/settings.local.json");
         let snapshot_path = repo.join("dot_claude/settings.generated.json");

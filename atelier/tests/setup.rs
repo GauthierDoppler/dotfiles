@@ -83,6 +83,7 @@ impl Home {
             .current_dir(cwd)
             .env("HOME", self.path())
             .env_remove("TMUX")
+            .env_remove("DOTFILES")
             .output()
             .expect("atelier runs")
     }
@@ -349,6 +350,25 @@ fn without_repo_the_current_git_root_is_used() {
         home.link_target(".config/nvim")
             .map(|t| t.ends_with("nvim")),
         Some(true)
+    );
+}
+
+#[test]
+fn without_repo_the_dotfiles_variable_is_used() {
+    let home = Home::new();
+    let output = Command::new(env!("CARGO_BIN_EXE_atelier"))
+        .args(["setup", "--dry-run"])
+        .current_dir(home.path())
+        .env("HOME", home.path())
+        .env("DOTFILES", repo())
+        .env_remove("TMUX")
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 

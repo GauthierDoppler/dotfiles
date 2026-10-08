@@ -76,7 +76,7 @@ struct Server {
 }
 
 pub fn serve(port: u16) -> Result<()> {
-    let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
+    let home = crate::dotfiles::home()?;
     let server = Arc::new(Server {
         hosts: [format!("127.0.0.1:{port}"), format!("localhost:{port}")],
         notes: Path::new(&home).join(".local/share/md-preview/notes"),
@@ -408,17 +408,7 @@ fn root_of(server: &Server, doc: &Path) -> PathBuf {
     roots
         .entry(dir)
         .or_insert_with_key(|dir| {
-            let top = Process::new("git")
-                .arg("-C")
-                .arg(dir)
-                .args(["rev-parse", "--show-toplevel"])
-                .output()
-                .ok()
-                .filter(|out| out.status.success())
-                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-                .filter(|top| !top.is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| dir.clone());
+            let top = crate::git::toplevel(dir).unwrap_or_else(|| dir.clone());
             top.canonicalize().unwrap_or(top)
         })
         .clone()

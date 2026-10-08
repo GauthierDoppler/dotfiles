@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::{Command as Process, Stdio};
 use std::time::SystemTime;
 
 use crate::fzf;
@@ -37,32 +36,12 @@ fn candidates(root: &Path) -> Vec<String> {
     if !root.is_dir() {
         return Vec::new();
     }
-    if let Some(listed) = git_files(root) {
+    if let Some(listed) = crate::git::files(root) {
         return listed;
     }
     let mut files = Vec::new();
     walk(root, Path::new(""), 0, &mut files);
     files
-}
-
-fn git_files(root: &Path) -> Option<Vec<String>> {
-    let output = Process::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["ls-files", "-z", "-co", "--exclude-standard"])
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(
-        String::from_utf8_lossy(&output.stdout)
-            .split('\0')
-            .filter(|file| !file.is_empty())
-            .map(String::from)
-            .collect(),
-    )
 }
 
 fn walk(root: &Path, relative: &Path, depth: usize, files: &mut Vec<String>) {
