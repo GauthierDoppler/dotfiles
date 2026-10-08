@@ -274,7 +274,7 @@ fn opening_a_file_edits_it_in_the_nvim_of_this_session() {
 
     let typed = format!(":e {}/src/my\\ lib.rs", dir.as_path().display());
     common::wait_until("nvim to receive :e", || {
-        tmux.tmux(&["capture-pane", "-p", "-t", &nvim])
+        tmux.tmux(&["capture-pane", "-p", "-J", "-t", &nvim])
             .contains(&typed)
     });
     assert_eq!(display(&tmux, &pane, "#{pane_id}"), pane);
