@@ -332,8 +332,9 @@ A marker is not set when its window is the current window of an attached
 client, and `after-select-window` in `dot_tmux.conf` clears it, so going to look
 is what dismisses it. Without that skip the marker would appear on the window
 being watched with nothing left to clear it, since selecting it has already
-happened. Control-mode clients (`tmux -C`, as iTerm2 and the planned daemon attach) do not
-count as looking. All of this is covered by `atelier/tests/hook_claude.rs`.
+happened. Control-mode clients (`tmux -C`, as iTerm2 and the planned daemon
+attach) do not count as looking. All of this is covered by
+`atelier/tests/hook_claude.rs`.
 
 ## One-shot command popup
 

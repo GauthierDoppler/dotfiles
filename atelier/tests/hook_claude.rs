@@ -62,17 +62,14 @@ fn work_session(tmux: &TmuxServer, dir: &std::path::Path) -> Work {
     }
 }
 
-fn wait_for_clients(tmux: &TmuxServer, count: usize) {
+fn wait_for_a_client(tmux: &TmuxServer) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         let clients = tmux.tmux(&["list-clients", "-F", "#{client_name}"]);
-        if clients.lines().count() >= count {
+        if !clients.is_empty() {
             return;
         }
-        assert!(
-            Instant::now() < deadline,
-            "clients never attached: {clients:?}"
-        );
+        assert!(Instant::now() < deadline, "no client attached");
         std::thread::sleep(Duration::from_millis(20));
     }
 }
@@ -87,7 +84,7 @@ fn attach_terminal_client(tmux: &TmuxServer, session: &str) {
         session
     );
     tmux.tmux(&["respawn-pane", "-k", "-t", "viewer:", &attach]);
-    wait_for_clients(tmux, 1);
+    wait_for_a_client(tmux);
 }
 
 struct ControlClient(Child);
@@ -111,7 +108,7 @@ fn attach_control_client(tmux: &TmuxServer, session: &str) -> ControlClient {
         .spawn()
         .expect("control client starts");
     let client = ControlClient(child);
-    wait_for_clients(tmux, 1);
+    wait_for_a_client(tmux);
     client
 }
 
