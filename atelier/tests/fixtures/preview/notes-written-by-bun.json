@@ -1,0 +1,23 @@
+{
+  "path": "{{PATH}}",
+  "notes": [
+    {
+      "id": "1759912345678-k3x9a",
+      "l0": 3,
+      "l1": 3,
+      "snip0": "## Rollout",
+      "snip1": "## Rollout",
+      "text": "say \"when\", not \"soon\"",
+      "orphan": false
+    },
+    {
+      "id": "1759912399001-p0q2z",
+      "l0": 12,
+      "l1": 14,
+      "snip0": "- migrate the é/ü table",
+      "snip1": "```",
+      "text": "two lines?\nsplit — or ✓ merge\tthem",
+      "orphan": true
+    }
+  ]
+}

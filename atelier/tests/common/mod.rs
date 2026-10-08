@@ -10,6 +10,7 @@ static NEXT: AtomicUsize = AtomicUsize::new(0);
 pub struct TmuxServer {
     name: String,
     socket: PathBuf,
+    runtime: tempfile::TempDir,
 }
 
 impl TmuxServer {
@@ -22,6 +23,7 @@ impl TmuxServer {
         let mut server = TmuxServer {
             name,
             socket: PathBuf::new(),
+            runtime: tempfile::tempdir().expect("runtime dir created"),
         };
         server.tmux(&[
             "-f",
@@ -52,6 +54,7 @@ impl TmuxServer {
             .arg(&self.name)
             .args(args)
             .env_remove("TMUX")
+            .env("XDG_RUNTIME_DIR", self.runtime.path())
             .output()
             .expect("tmux runs");
         assert!(
@@ -83,16 +86,23 @@ impl TmuxServer {
         self.tmux(&["set-option", "-t", session, option, value]);
     }
 
+    pub fn atelier_command(&self, args: &[&str]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_atelier"));
+        command
+            .arg("--socket")
+            .arg(&self.socket)
+            .args(args)
+            .env_remove("TMUX")
+            .env("XDG_RUNTIME_DIR", self.runtime.path());
+        command
+    }
+
     pub fn atelier(&self, args: &[&str]) -> Output {
         self.atelier_with_env(args, &[])
     }
 
     pub fn atelier_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_atelier"))
-            .arg("--socket")
-            .arg(&self.socket)
-            .args(args)
-            .env_remove("TMUX")
+        self.atelier_command(args)
             .envs(env.iter().copied())
             .output()
             .expect("atelier runs")
@@ -102,6 +112,7 @@ impl TmuxServer {
         Command::new(env!("CARGO_BIN_EXE_atelier"))
             .args(args)
             .env("TMUX", format!("{},1,0", self.socket.display()))
+            .env("XDG_RUNTIME_DIR", self.runtime.path())
             .output()
             .expect("atelier runs")
     }

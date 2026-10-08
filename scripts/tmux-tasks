@@ -10,9 +10,9 @@
 #   Esc       leave search if searching, otherwise close
 #   q         close (navigation only — in search it is a plain character)
 #
-# The interaction model is deliberately identical to `tmux-sessions`; see that
-# file for why Esc branches on $FZF_INPUT_STATE instead of using fzf's
-# `unbind(esc)`.
+# Esc branches on $FZF_INPUT_STATE instead of using `unbind(esc)`: fzf's unbind
+# removes a key's behaviour rather than restoring its default, so esc would go
+# inert, and with q unbound during search nothing but ctrl-c would close the popup.
 #
 # The test is POSIX `[` on purpose: fzf runs bindings with `$SHELL -c`, falling
 # back to `sh -c`, so bash's `[[` is not guaranteed to be available.
