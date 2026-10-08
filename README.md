@@ -157,7 +157,8 @@ Prefix is `Ctrl+a`. Modes are displayed in the status bar.
 | `Prefix → t` | **Tab mode** — `n` new, `x` close, `,` rename, `hl` prev/next, `Tab` last used |
 | `Prefix → Space` | Session picker (`s` does the same) |
 | `Prefix → e` | Task picker — scripts from `<project>/.tmux/` |
-| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies |
+| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies, `Ctrl-v` previews a `.md` |
+| `Prefix → m` | Pick a markdown file of the session, newest first, and preview it in the browser |
 | `Prefix → v` | Copy mode, then select with the mouse (`[` is an alias) |
 | `Prefix → L` | Next layout — the keyboard way to rebalance a split |
 | `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware; also inside copy mode) |

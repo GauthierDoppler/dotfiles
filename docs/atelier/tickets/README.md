@@ -20,7 +20,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [13](13-repo-counts-follow-git-without-polling.md) | Repo counts follow git without polling | 12 | ready-for-agent |
 | [14](14-markdown-preview-served-by-atelier.md) | Markdown preview served by atelier | 02 | done |
 | [15](15-markdown-notes-and-cursor-sync.md) | Markdown notes and cursor sync | 14 | done |
-| [16](16-markdown-picker-on-prefix-plus-m.md) | Markdown picker on Prefix + m | 14 | ready-for-agent |
+| [16](16-markdown-picker-on-prefix-plus-m.md) | Markdown picker on Prefix + m | 14 | done |
 | [17](17-setup-links-and-stubs.md) | Setup: links and stubs | 02 | done |
 | [18](18-claude-settings-merge-in-atelier.md) | Claude settings merge in atelier | 17 | done |
 | [19](19-local-diff-in-atelier.md) | local-diff in atelier | 17 | done |
