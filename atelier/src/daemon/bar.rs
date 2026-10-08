@@ -4,6 +4,7 @@ use std::path::Path;
 use super::state::Watched;
 use crate::bar::{self, Battery, Pushed};
 use crate::session::{self, Field};
+use crate::shell::quote;
 
 pub const RESIZED: &str = "atelier:client-resized";
 
@@ -59,8 +60,4 @@ impl Pusher {
         }
         commands
     }
-}
-
-fn quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
 }

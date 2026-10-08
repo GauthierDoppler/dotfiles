@@ -48,7 +48,7 @@
 - `session::resolve` was split into `session::identify` (takes a field reader)
   so the daemon resolves from control-mode data without forking tmux.
 - `tests/hook_claude.rs` and `tests/tasks.rs` each still carry a private
-  terminal-client helper that duplicates the new one in `tests/common`; left for
-  ticket 28 to avoid touching files other tickets are changing.
+  terminal-client helper that duplicates the new one in `tests/common`; not
+  folded in, to keep this branch off files other tickets are changing.
 - Unverified on macOS: battery change detection over IOKit, `script -q` in the
   new common helper (same invocation `tests/tasks.rs` already uses there).
