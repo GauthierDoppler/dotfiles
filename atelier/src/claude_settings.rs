@@ -142,5 +142,7 @@ fn merge(left: &Map<String, Value>, right: &Map<String, Value>) -> Map<String, V
 }
 
 fn render(object: &Map<String, Value>) -> Result<String> {
-    Ok(serde_json::to_string_pretty(object)? + "\n")
+    let mut sorted = Value::Object(object.clone());
+    sorted.sort_all_objects();
+    Ok(serde_json::to_string_pretty(&sorted)? + "\n")
 }
