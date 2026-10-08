@@ -168,7 +168,7 @@ fn shell_quote(arg: &str) -> String {
     if !arg.is_empty() && arg.chars().all(super::is_shell_safe) {
         arg.to_owned()
     } else {
-        format!("'{}'", arg.replace('\'', r"'\''"))
+        crate::shell::quote(arg)
     }
 }
 
