@@ -283,11 +283,18 @@ other projects, and it cannot be pressed in a popup that never opened.
 
 ## Claude Code window marker
 
-`dot_claude/hooks/notify.sh` publishes `@claude_status` on the window Claude Code
-is running in — `waiting` on the `Notification` event, `done` on `Stop`, cleared
-on `UserPromptSubmit` — and the window list renders it as a yellow or green `✻`.
-All three hook entries are the same command; the event comes from
-`hook_event_name` in the payload rather than an argument.
+`atelier hook claude` publishes `@claude_status` on the window Claude Code is
+running in — `waiting` on the `Notification` event, `done` on `Stop`, cleared on
+`UserPromptSubmit` — and the window list renders it as a yellow or green `✻`.
+All three hook entries in `dot_claude/settings.json` are the same command; the
+event comes from `hook_event_name` in the payload on stdin rather than an
+argument, and the window from `$TMUX_PANE`, not the session's current window.
+
+The command always ends in `|| true`. Claude Code treats a hook's exit status 2
+as *blocking* — on `UserPromptSubmit` it discards the prompt — and 2 is also
+what clap exits with on an unknown subcommand, so an atelier binary older than
+the hook would otherwise eat every prompt. `atelier hook claude` itself exits 0
+whatever goes wrong; a missing binary is the same as no marker.
 
 **It replaced a `terminal-notifier` banner, which failed for reasons no amount of
 fixing addressed**: with several sessions running there was no telling which
@@ -321,10 +328,12 @@ The states reuse the task palette because they mean the same things — yellow i
 carries exactly two signals, blue for focus and the marker for state. Only the
 glyph says which subsystem is talking.
 
-A marker is not set when its window is the active one of an attached client, and
-`after-select-window` clears it, so going to look is what dismisses it. Without
-that skip the marker would appear on the window being watched with nothing left
-to clear it, since selecting it has already happened.
+A marker is not set when its window is the current window of an attached
+client, and `after-select-window` in `dot_tmux.conf` clears it, so going to look
+is what dismisses it. Without that skip the marker would appear on the window
+being watched with nothing left to clear it, since selecting it has already
+happened. Control-mode clients (`tmux -C`, as iTerm2 and the planned daemon attach) do not
+count as looking. All of this is covered by `atelier/tests/hook_claude.rs`.
 
 ## One-shot command popup
 
