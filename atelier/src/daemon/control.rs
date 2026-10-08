@@ -21,6 +21,7 @@ pub enum Notification {
     WindowRenamed { window: String, name: String },
     ClientSessionChanged,
     ClientDetached,
+    Message(String),
     Exit,
     Ignored,
 }
@@ -92,6 +93,7 @@ fn notification(line: &str) -> Notification {
         },
         "%client-session-changed" => Notification::ClientSessionChanged,
         "%client-detached" => Notification::ClientDetached,
+        "%message" => Notification::Message(rest.to_string()),
         "%exit" => Notification::Exit,
         _ => Notification::Ignored,
     }
@@ -202,6 +204,33 @@ mod tests {
                 note(WindowAdd),
                 note(SessionsChanged),
                 note(SessionsChanged),
+                note(Exit),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_resize_reaches_the_control_client_as_the_message_its_hook_displays() {
+        use Notification::*;
+        let resized = || note(Message("atelier:client-resized".into()));
+        assert_eq!(
+            parse(include_str!("../../tests/fixtures/control/client-resized.txt")),
+            vec![
+                reply(false, true, &[]),
+                note(SessionChanged),
+                renamed_window("@0", "sh"),
+                reply(true, true, &[]),
+                note(WindowAdd),
+                note(SessionsChanged),
+                note(ClientSessionChanged),
+                note(Ignored),
+                resized(),
+                renamed_window("@1", "tmux"),
+                resized(),
+                note(Ignored),
+                note(SessionsChanged),
+                note(SessionsChanged),
+                note(ClientDetached),
                 note(Exit),
             ]
         );

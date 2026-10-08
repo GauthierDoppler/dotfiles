@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 use serde::{Deserialize, Serialize};
 
+use crate::session::Field;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -17,7 +18,11 @@ impl Query {
 
     pub fn args(self) -> [&'static str; 3] {
         match self {
-            Query::Sessions => ["list-sessions", "-F", "#{session_id} #{session_name}"],
+            Query::Sessions => [
+                "list-sessions",
+                "-F",
+                "#{session_id} #{q:@grove_project} #{q:@grove_root} #{q:@grove_worktree} #{q:session_path} #{session_name}",
+            ],
             Query::Windows => [
                 "list-windows",
                 "-aF",
@@ -26,7 +31,7 @@ impl Query {
             Query::Clients => [
                 "list-clients",
                 "-F",
-                "#{client_control_mode} #{session_id} #{client_name}",
+                "#{client_control_mode} #{session_id} #{client_width} #{client_activity} #{client_name}",
             ],
         }
     }
@@ -37,6 +42,41 @@ impl Query {
     }
 }
 
+struct SessionRow {
+    id: String,
+    fields: [String; Field::ALL.len()],
+}
+
+impl SessionRow {
+    fn parse(line: &str) -> Option<SessionRow> {
+        let (id, mut rest) = line.split_once(' ')?;
+        let mut fields: [String; Field::ALL.len()] = Default::default();
+        for field in &mut fields[..Field::Name as usize] {
+            let mut chars = rest.char_indices();
+            loop {
+                match chars.next() {
+                    Some((_, '\\')) => field.push(chars.next()?.1),
+                    Some((at, ' ')) => {
+                        rest = &rest[at + 1..];
+                        break;
+                    }
+                    Some((_, c)) => field.push(c),
+                    None => return None,
+                }
+            }
+        }
+        fields[Field::Name as usize] = rest.to_string();
+        Some(SessionRow {
+            id: id.to_string(),
+            fields,
+        })
+    }
+
+    fn name(&self) -> &str {
+        &self.fields[Field::Name as usize]
+    }
+}
+
 struct Winlink {
     session: String,
     window: String,
@@ -44,11 +84,23 @@ struct Winlink {
     name: String,
 }
 
+struct Watcher {
+    session: String,
+    width: u16,
+    activity: u64,
+}
+
+pub struct Watched {
+    pub session: String,
+    pub width: u16,
+    pub fields: [String; Field::ALL.len()],
+}
+
 #[derive(Default)]
 pub struct State {
-    sessions: Vec<(String, String)>,
+    sessions: Vec<SessionRow>,
     winlinks: Vec<Winlink>,
-    watchers: Vec<String>,
+    watchers: Vec<Watcher>,
 }
 
 impl State {
@@ -63,12 +115,7 @@ impl State {
 
     pub fn apply<'a>(&mut self, query: Query, lines: impl Iterator<Item = &'a str>) {
         match query {
-            Query::Sessions => {
-                self.sessions = lines
-                    .filter_map(|line| line.split_once(' '))
-                    .map(|(id, name)| (id.to_string(), name.to_string()))
-                    .collect()
-            }
+            Query::Sessions => self.sessions = lines.filter_map(SessionRow::parse).collect(),
             Query::Windows => {
                 self.winlinks = lines
                     .filter_map(|line| {
@@ -85,9 +132,15 @@ impl State {
             Query::Clients => {
                 self.watchers = lines
                     .filter_map(|line| {
-                        let mut fields = line.splitn(3, ' ');
-                        let control = fields.next()?;
-                        (control == "0").then(|| fields.next().map(str::to_string))?
+                        let mut fields = line.splitn(5, ' ');
+                        if fields.next()? != "0" {
+                            return None;
+                        }
+                        Some(Watcher {
+                            session: fields.next()?.to_string(),
+                            width: fields.next()?.parse().ok()?,
+                            activity: fields.next()?.parse().ok()?,
+                        })
                     })
                     .collect()
             }
@@ -95,8 +148,8 @@ impl State {
     }
 
     pub fn rename_session(&mut self, id: &str, name: &str) {
-        for session in self.sessions.iter_mut().filter(|(sid, _)| sid == id) {
-            session.1 = name.to_string();
+        for session in self.sessions.iter_mut().filter(|s| s.id == id) {
+            session.fields[Field::Name as usize] = name.to_string();
         }
     }
 
@@ -110,15 +163,33 @@ impl State {
         self.winlinks.retain(|w| w.window != id);
     }
 
+    pub fn watched(&self) -> Vec<Watched> {
+        self.sessions
+            .iter()
+            .filter_map(|session| {
+                let watcher = self
+                    .watchers
+                    .iter()
+                    .filter(|w| w.session == session.id)
+                    .max_by_key(|w| w.activity)?;
+                Some(Watched {
+                    session: session.id.clone(),
+                    width: watcher.width,
+                    fields: session.fields.clone(),
+                })
+            })
+            .collect()
+    }
+
     pub fn snapshot(&self) -> Vec<Session> {
         let mut sessions: Vec<Session> = self
             .sessions
             .iter()
-            .map(|(id, name)| {
+            .map(|session| {
                 let mut windows: Vec<Window> = self
                     .winlinks
                     .iter()
-                    .filter(|w| &w.session == id)
+                    .filter(|w| w.session == session.id)
                     .map(|w| Window {
                         index: w.index,
                         name: w.name.clone(),
@@ -126,8 +197,12 @@ impl State {
                     .collect();
                 windows.sort_by_key(|w| w.index);
                 Session {
-                    name: name.clone(),
-                    watchers: self.watchers.iter().filter(|s| *s == id).count(),
+                    name: session.name().to_string(),
+                    watchers: self
+                        .watchers
+                        .iter()
+                        .filter(|w| w.session == session.id)
+                        .count(),
                     windows,
                 }
             })

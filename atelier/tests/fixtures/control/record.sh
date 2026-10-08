@@ -62,12 +62,31 @@ session_killed() {
   sleep 0.3
 }
 
+client_resized() {
+  sleep 0.5
+  local me
+  me=$(t list-clients -F '#{?client_control_mode,#{client_name},}' | grep .)
+  echo "set-hook -g client-resized[73] \"display-message -c $me atelier:client-resized\""
+  sleep 0.3
+  t new-session -d -s viewer -x 100 -y 24
+  t set-option -t viewer window-size manual
+  t respawn-pane -k -t viewer: "unset TMUX; exec tmux -L $socket attach-session -t work"
+  sleep 0.5
+  t resize-window -t viewer: -x 120 -y 24
+  sleep 0.5
+  t kill-server
+  sleep 0.3
+}
+
 record() {
   local scenario=$1 flags=$2
+  [ -z "$only" ] || [ "$only" = "$scenario" ] || return 0
   t -f /dev/null new-session -d -s work -x 80 -y 24 -c / "env PS1='$ ' sh"
   "$scenario" | tmux -L "$socket" -C attach-session -t work $flags >"$here/${scenario//_/-}.txt"
 }
 
+only=${1:-}
 record lifecycle "-f no-output,ignore-size"
 record output ""
 record session_killed "-f no-output,ignore-size"
+record client_resized "-f no-output,ignore-size"
