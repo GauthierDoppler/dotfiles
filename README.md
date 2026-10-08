@@ -122,10 +122,11 @@ and nothing else does.
 
 Claude Code is the awkward one: it has no user-scope local settings file, and it
 rewrites `~/.claude/settings.json` in place (reordering keys, absolutising
-paths). So that file is generated rather than linked. `atelier claude-settings-sync`
-merges the tracked base with the local override, and before each regeneration it
-captures whatever the app changed into the local override — so app-side edits are
-never lost and the shared base still propagates. `--dry-run` previews it.
+paths). So that file is generated rather than linked. `atelier
+claude-settings-sync` merges the tracked base with the local override, and before
+each regeneration it captures whatever the app changed into the local override —
+so app-side edits are never lost and the shared base still propagates.
+`--dry-run` previews it.
 
 ### Helpers
 

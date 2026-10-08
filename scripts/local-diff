@@ -90,9 +90,9 @@ diff_shell     "$HOME/.zshrc"                              "$DOTFILES/dot_zshrc"
 diff_shell     "$HOME/.zprofile"                           "$DOTFILES/dot_zprofile"
 diff_gitconfig "$HOME/.gitconfig"                          "$DOTFILES/dot_gitconfig"
 # Claude Code has no user-scope local settings file, so the override lives in the
-# repo dir (untracked) and `atelier claude-settings-sync` merges it. Anything listed here
-# accumulated on this machine and will not reach your other machines until you
-# promote it into dot_claude/settings.json by hand.
+# repo dir (untracked) and `atelier claude-settings-sync` merges it. Anything
+# listed here accumulated on this machine and will not reach your other machines
+# until you promote it into dot_claude/settings.json by hand.
 diff_json      "$DOTFILES/dot_claude/settings.local.json"  "$DOTFILES/dot_claude/settings.json"
 
 # ─── Legacy *.local files ──────────────────────────────────

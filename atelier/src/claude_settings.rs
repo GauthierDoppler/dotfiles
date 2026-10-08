@@ -45,11 +45,12 @@ impl Command {
         let snapshot_path = repo.join("dot_claude/settings.generated.json");
         let live_path = home.join(".claude/settings.json");
 
-        let base = read_object(&base_path, "")?
+        let base = read_object(&base_path)?
             .ok_or_else(|| format!("missing base {}", base_path.display()))?;
-        let local = read_object(&local_path, "")?.unwrap_or_default();
-        let snapshot = read_object(&snapshot_path, "").ok().flatten();
-        let live = read_object(&live_path, " — refusing to touch it")?;
+        let local = read_object(&local_path)?.unwrap_or_default();
+        let snapshot = read_object(&snapshot_path).ok().flatten();
+        let live =
+            read_object(&live_path).map_err(|error| format!("{error} — refusing to touch it"))?;
 
         let drift = match &live {
             Some(live) => difference(live, snapshot.as_ref().unwrap_or(&base)),
@@ -76,22 +77,18 @@ impl Command {
             fs::write(&local_path, render(&new_local)?)?;
             println!("updated: {}", local_path.display());
         }
-        match &live {
-            Some(live) if *live == merged => println!("up to date: {}", live_path.display()),
-            Some(_) => {
+        if live.as_ref() == Some(&merged) {
+            println!("up to date: {}", live_path.display());
+        } else {
+            if live.is_some() {
                 let mut backup = live_path.clone().into_os_string();
                 backup.push(".bak");
                 fs::copy(&live_path, backup)?;
-                fs::write(&live_path, &rendered)?;
-                println!("regenerated: {}", live_path.display());
+            } else if let Some(parent) = live_path.parent() {
+                fs::create_dir_all(parent)?;
             }
-            None => {
-                if let Some(parent) = live_path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::write(&live_path, &rendered)?;
-                println!("regenerated: {}", live_path.display());
-            }
+            fs::write(&live_path, &rendered)?;
+            println!("regenerated: {}", live_path.display());
         }
         if fs::read_to_string(&snapshot_path).ok().as_ref() != Some(&rendered) {
             fs::write(&snapshot_path, &rendered)?;
@@ -100,7 +97,7 @@ impl Command {
     }
 }
 
-fn read_object(path: &Path, refusal: &str) -> Result<Option<Map<String, Value>>> {
+fn read_object(path: &Path) -> Result<Option<Map<String, Value>>> {
     let content = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
@@ -108,8 +105,8 @@ fn read_object(path: &Path, refusal: &str) -> Result<Option<Map<String, Value>>>
     };
     match serde_json::from_str(&content) {
         Ok(Value::Object(object)) => Ok(Some(object)),
-        Ok(_) => Err(format!("{} is not a JSON object{refusal}", path.display()).into()),
-        Err(_) => Err(format!("{} is not valid JSON{refusal}", path.display()).into()),
+        Ok(_) => Err(format!("{} is not a JSON object", path.display()).into()),
+        Err(_) => Err(format!("{} is not valid JSON", path.display()).into()),
     }
 }
 
