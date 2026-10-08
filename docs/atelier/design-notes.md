@@ -9,7 +9,9 @@ everyday work. Test names are under `atelier/tests/` unless prefixed `src/`.
 **One control client is the daemon's only link to tmux:** `tmux -C
 attach-session -f no-output,ignore-size`. tmux 3.4 has no session-less control
 client — one started with no session prints `%exit` at once — so the daemon
-attaches to an existing session and never creates one.
+attaches to an existing session and never creates one. `dot_tmux.conf` runs
+`atelier daemon --ensure` at load *and* from a `session-created` hook, because
+the load-time run can race the first session.
 
 - Attaching bumps that session's `#{session_last_attached}`, which the session
   picker sorts by (newest first, then name), so the daemon attaches to whichever
@@ -62,7 +64,8 @@ better: the key-table slot stays a tmux format (`#{p10:…client_key_table…}`)
 because control mode has no key-table notification and a subscription would
 report the *daemon's* key table; the date goes in as the literal `%a %d %b`
 (battery `%` doubled) and is shown through `#{T:@bar_right}`, so it turns over at
-midnight with no timer; the clock is `%H:%M` in the config, after it.
+midnight with no timer; the clock is `%H:%M` in the config, after it
+(`bar_daemon.rs::the_pushed_right_block_shows_what_the_fallback_renders`).
 
 ## Repo counts without polling
 

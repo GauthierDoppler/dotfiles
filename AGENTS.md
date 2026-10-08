@@ -451,7 +451,8 @@ The branch is deliberately not shown. Layout reasoning is in the design notes.
   (`src/bar/left.rs::below_the_widest_tier_the_padding_gives_way_to_the_list`).
 - **Repo state** (`+412 −89 ↑2 ↓1`) uses plumbing `diff-index`, never `git
   diff`, which rewrites a stat-dirty index even under `--no-optional-locks`
-  (`bar_right.rs::reading_the_counts_never_rewrites_the_index`).
+  (`bar_right.rs::reading_the_counts_never_rewrites_the_index`). Counts never
+  outgrow 15 cells (`src/bar/right.rs::counts_of_a_thousand_and_more_are_abbreviated`).
 - **Widths are terminal cells, never `LANG`-dependent**: tmux runs `#()` with the
   server's environment
   (`bar_right.rs::the_block_is_as_wide_whatever_the_locale_and_the_repo_state`).
