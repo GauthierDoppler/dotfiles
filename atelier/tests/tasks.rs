@@ -194,6 +194,40 @@ fn the_root_is_the_session_path_not_the_cwd() {
 }
 
 #[test]
+fn from_inside_a_pane_three_directories_deep_the_pane_s_session_is_used() {
+    let project = Project::new();
+    project.task("doctor", "#!/bin/sh\n");
+    let deep = project.root.join("src/main/kotlin");
+    std::fs::create_dir_all(&deep).unwrap();
+    let elsewhere = Project::new();
+    elsewhere.task("other", "#!/bin/sh\n");
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    tmux.new_session("elsewhere", &elsewhere.root);
+    let pane = tmux.tmux(&[
+        "new-window",
+        "-t",
+        &session,
+        "-c",
+        deep.to_str().unwrap(),
+        "-P",
+        "-F",
+        "#{pane_id}",
+    ]);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_atelier"))
+        .args(["tasks", "list"])
+        .current_dir(&deep)
+        .env("TMPDIR", &project.tmpdir)
+        .env("TMUX", format!("{},1,0", tmux.socket().display()))
+        .env("TMUX_PANE", &pane)
+        .output()
+        .expect("atelier runs");
+
+    assert_eq!(common::stdout_of(&["tasks", "list"], output), "doctor");
+}
+
+#[test]
 fn a_session_opened_in_a_subdirectory_finds_the_tasks_above_it() {
     let project = Project::new();
     project.task("doctor", "#!/bin/sh\n");
