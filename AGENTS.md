@@ -130,6 +130,8 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   the `features!` list in `main.rs`, which declares the module and the
   subcommand. Shared modules (`tmux`, `session`, `git`) are plain `mod` lines.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
+  A module whose commands sit at the top level (`atelier daemon`, `atelier
+  status`) goes after `; top level:` in the same list and is flattened.
 - **tmux is reached only through `tmux::Tmux`**, which always targets an explicit
   socket: `--socket`/`-S`, else the one in `$TMUX`. tmux sets `$TMUX` for `#()`
   jobs and `run-shell`, so the default is right when tmux calls atelier.
@@ -146,6 +148,37 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   one per test so tests run in parallel. `atelier(..)` passes `--socket`,
   `atelier_inside(..)` sets `$TMUX` instead. Assert on what tmux or the binary
   shows, never on internals; pure render functions are the only other seam.
+- **The daemon (`src/daemon/`) is one per tmux socket.** `dot_tmux.conf` runs
+  `atelier daemon --ensure` through `run-shell -b` at load and from a
+  `session-created` hook (the load-time run can race the first session).
+  `--ensure` returns at once when the lock is held, else spawns `atelier daemon`
+  detached; the daemon itself takes the lock, so racing ensures still leave one.
+  Lock, socket and log live in `$XDG_RUNTIME_DIR/atelier/` (else
+  `$TMPDIR/atelier-<uid>/`) as `<fnv1a of the socket path>.{lock,sock,log}`.
+  `atelier status` asks the daemon over that socket (JSON lines) and reads tmux
+  directly when nothing answers; its first line says which.
+- **Its only link to tmux is `tmux -C attach-session -f no-output,ignore-size`.**
+  tmux 3.4 has no session-less control client — one started with no session
+  prints `%exit` at once — so the daemon attaches to an existing session and
+  never creates one. With `detach-on-destroy on` (tmux's default, not this
+  config's) killing that session sends `%exit` while the server lives on, so
+  after `%exit` the daemon reattaches if any session is left and exits
+  otherwise; the `session-created` hook brings it back. Being attached, it is a
+  client like any other in `list-clients`, `#{session_attached}` and the
+  `client-*` hooks: every "is someone looking" check must skip
+  `#{client_control_mode}` = 1. State is rebuilt from `list-sessions`,
+  `list-windows -a`, `list-clients` on structural notifications; renames and
+  window closes are applied in place. Replies are paired with requests in
+  order, `%begin`/`%end` by command number, because a block's lines are not
+  escaped and a window named `%end 1 1 1` is legal. Control mode prints a tab in
+  format output as `_`, so fields are space-separated with the free-text one
+  last.
+- **Automatic rename is lazy.** tmux re-evaluates `automatic-rename` only when
+  its event loop wakes, so a fresh window can read `tmux` (the forked server,
+  before `exec`) until some unrelated command or output wakes it, and only then
+  does `%window-renamed` arrive. Daemon tests turn `automatic-rename` off.
+  Parser fixtures in `tests/fixtures/control/` are real tmux 3.4 transcripts;
+  `record.sh` there re-records them.
 - **Installed into `~/.local/bin/atelier`** by `install.sh` (`cargo install
   --locked --root ~/.local`, target dir `atelier/target` so a re-run is
   incremental; rustup with `--no-modify-path` when cargo is missing, and

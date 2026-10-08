@@ -35,6 +35,17 @@ impl Tmux {
         Ok(stdout)
     }
 
+    pub fn socket_path(&self) -> Result<PathBuf> {
+        match &self.socket {
+            Some(socket) => Ok(socket.clone()),
+            None => Ok(PathBuf::from(self.run(&[
+                "display-message",
+                "-p",
+                "#{socket_path}",
+            ])?)),
+        }
+    }
+
     pub fn display(&self, target: &str, format: &str) -> Result<String> {
         self.run(&["display-message", "-p", "-t", target, format])
     }
