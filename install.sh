@@ -133,7 +133,6 @@ if ! command -v bun &>/dev/null; then
   echo "Installing bun..."
   curl -fsSL https://bun.sh/install | bash
 fi
-"$HOME/.bun/bin/bun" install --cwd "$DOTFILES/scripts/md-preview" --frozen-lockfile
 
 # ─── Phase 9: Node LTS via fnm ─────────────────────────────
 eval "$(fnm env)"

@@ -879,22 +879,27 @@ drops SSE, so the server died under any tab left in the background, and a bumped
 port changed the origin — which is what notes were keyed on.
 
 **Everything the page loads is compiled into the binary**: `index.html` and
-`app.js` from `scripts/md-preview/`, and the eight library files under
+`app.js` from `atelier/assets/preview/`, and the eight library files under
 `atelier/assets/preview/lib/` (markdown-it 14.1.0, markdown-it-anchor 9.2.0,
 markdown-it-footnote 4.0.0, markdown-it-task-lists 2.1.1, highlight.js 11.11.1
 from `@highlightjs/cdn-assets`, mermaid 11.4.1, DOMPurify 3.2.6, js-yaml 4.1.0;
 licences alongside), served from `/__lib/`. A fresh clone builds without bun and
-the preview works offline; editing the page means rebuilding atelier. The Bun
-server still in `scripts/md-preview/` is no longer run by anything and goes with
-ticket 15.
+the preview works offline. **Editing the page means rebuilding atelier**: a
+change to `index.html` or `app.js` shows up only after `cargo install` (or
+`./install.sh`) replaces the binary, which the running server then picks up by
+restarting itself (below). There is no Bun server, `package.json` or
+`node_modules` any more; bun is still installed, for grove.
 
 **Notes live in `~/.local/share/md-preview/notes/<sha1 of path>.json`**, through
 `GET`/`PUT /__notes/<path>`, never in `localStorage`. Moving or renaming a file
-loses its notes; that is accepted. The file format is the Bun server's, so
-existing notes load unchanged.
+loses its notes; that is accepted. The file format is the old Bun server's,
+byte for byte (`tests/fixtures/preview/notes-written-by-bun.json` was written by
+it), so notes from before the port load unchanged. The page's "copy all" and
+cursor-follow logic live in `app.js` and are pinned by `tests/preview.rs`.
 
 **The server restarts itself when its binary changes** (the path it was started
-from changes mtime or size, which `cargo install` does), via `launchctl
+from changes mtime or size, which `cargo install` does — and so does any edit to
+the embedded page), via `launchctl
 kickstart -k` under launchd and by exiting anywhere else. Exiting and relying on
 `KeepAlive` does not work: launchd marks the respawn `pended nondemand spawn =
 inefficient` and defers it for minutes, whatever the exit code. The same
