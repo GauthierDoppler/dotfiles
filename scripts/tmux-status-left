@@ -41,8 +41,7 @@ RCAP=''
 #
 # The other block sheds segments as the client narrows, so its width is asked
 # for rather than hardcoded -- a copy of its tier table here would drift.
-# --width returns before any git or pmset call, so the extra fork is cheap.
-RIGHT="$("$(dirname "$0")/tmux-status-right" --width "$client_width" 2>/dev/null)"
+RIGHT="$("$HOME/.local/bin/atelier" bar right --width "$client_width" 2>/dev/null)"
 [ -n "$RIGHT" ] || RIGHT=59
 
 # Below RIGHT + RIGHT + MIN_LIST columns there is not enough room to both centre

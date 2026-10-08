@@ -19,12 +19,15 @@ Add the config at `$ARGUMENTS` to the dotfiles repo.
    - Remove the original
    - Create a symlink from the original location to the dotfiles copy
    - If it's a folder with auto-generated files, add a `.gitignore` inside it
-   - Update `install.sh` with the new `link` entry (keep alphabetical order)
+   - Add the entry to the `LINKS` table in `atelier/src/setup.rs`, and the
+     expected pair to `DESKTOP_LINKS` in `atelier/tests/setup.rs`
    - Stage and show the result, but do NOT commit
 
-3. `install.sh` format:
-   - Folders: `link "foldername"          "$HOME/.config/foldername"`
-   - Individual files: `link "path/file"  "$HOME/.config/path/file"`
-   - Home dotfiles: `link "dot_name"      "$HOME/.name"`
+3. `LINKS` format (source relative to the repo, destination relative to `$HOME`):
+   - Folders: `link("foldername", ".config/foldername")`
+   - Individual files: `link("path/file", ".config/path/file")`
+   - Home dotfiles: `link("dot_name", ".name")`
+   - A GUI app's config, skipped on the `remote` profile: `desktop(...)`
 
-4. Verify the symlink works before finishing.
+4. Run `cargo test --test setup` in `atelier/`, then `atelier setup --dry-run`
+   to check the plan, then `atelier setup`.

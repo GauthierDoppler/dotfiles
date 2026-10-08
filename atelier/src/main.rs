@@ -39,6 +39,18 @@ macro_rules! features {
 features! {
     /// The tmux status bar
     Bar => bar,
+    /// Regenerate ~/.claude/settings.json from the shared base, local overrides and app drift
+    ClaudeSettingsSync => claude_settings,
+    /// Entry points for other tools' hooks
+    Hook => hook,
+    /// Link the dotfiles into $HOME and write the shell and git stubs
+    Setup => setup,
+    /// Markdown preview: `atelier preview <file.md>` or `atelier preview serve`
+    Preview => preview,
+    /// Pick a URL or file path off a pane
+    Pick => pick,
+    /// The session picker
+    Sessions => sessions,
     ; top level:
     Daemon => daemon,
 }
