@@ -7,7 +7,7 @@
 **Status:** done
 
 - [x] Snapshot tests: short and long project names, root vs worktree, a non-grove session, every width tier
-- [x] Padding equals the right block's width above the widest tier and stops below it
+- [x] Padding equals the right block's width while the list fits centred (`client_width ≥ 2 × right + 36`, the bash's rule) and gives way below it — narrower than the ticket first said, see Deviations
 - [x] Long project names truncate with an ellipsis without changing the block width
 - [x] Old and new output compared before deletion
 - [x] Bash script removed, `AGENTS.md` updated
