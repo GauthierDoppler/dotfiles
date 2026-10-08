@@ -372,3 +372,115 @@ fn a_repo_outside_home_is_loaded_by_its_absolute_path() {
         format!("{STUB_HEADER}source \"{}/dot_zshrc\"\n\n", repo().display())
     );
 }
+
+fn dangle(home: &Home, relative: &str, target: &Path) {
+    let path = home.join(relative);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    symlink(target, path).unwrap();
+}
+
+#[test]
+fn links_left_dangling_into_the_repo_by_an_older_install_are_removed() {
+    let home = Home::new();
+    for name in ["tmux-pick", "tmux-status-right", "md-preview"] {
+        dangle(
+            &home,
+            &format!(".local/bin/{name}"),
+            &repo().join("scripts").join(name),
+        );
+    }
+    dangle(&home, ".config/gone", &repo().join("gone"));
+
+    let output = home.setup(&[]);
+
+    let h = home.path().display();
+    let r = repo().display().to_string();
+    for name in ["tmux-pick", "tmux-status-right", "md-preview"] {
+        assert!(fs::symlink_metadata(home.join(&format!(".local/bin/{name}"))).is_err());
+        let line = format!("pruned: {h}/.local/bin/{name} -> {r}/scripts/{name}");
+        assert!(output.lines().any(|l| l == line), "{line:?} in {output}");
+    }
+    assert!(fs::symlink_metadata(home.join(".config/gone")).is_err());
+}
+
+#[test]
+fn a_relative_dangling_link_into_the_repo_is_removed() {
+    let home = Home::new();
+    symlink(repo(), home.join("dotfiles")).unwrap();
+    dangle(
+        &home,
+        ".local/bin/tmux-tasks",
+        Path::new("../../dotfiles/scripts/tmux-tasks"),
+    );
+
+    home.setup_from(&home.join("dotfiles"), &[]);
+
+    assert!(fs::symlink_metadata(home.join(".local/bin/tmux-tasks")).is_err());
+}
+
+#[test]
+fn a_dangling_link_through_another_spelling_of_the_repo_path_is_removed() {
+    let home = Home::new();
+    symlink(repo(), home.join("dotfiles")).unwrap();
+    dangle(
+        &home,
+        ".local/bin/local-diff",
+        &repo().join("scripts/local-diff"),
+    );
+
+    home.setup_from(&home.join("dotfiles"), &[]);
+
+    assert!(fs::symlink_metadata(home.join(".local/bin/local-diff")).is_err());
+}
+
+#[test]
+fn only_dangling_links_into_the_repo_in_managed_folders_are_removed() {
+    let home = Home::new();
+    let outside = tempfile::tempdir().unwrap();
+    dangle(&home, ".local/bin/elsewhere", &outside.path().join("gone"));
+    dangle(&home, ".local/bin/zshrc", &repo().join("dot_zshrc"));
+    dangle(
+        &home,
+        "projects/tmux-pick",
+        &repo().join("scripts/tmux-pick"),
+    );
+    dangle(
+        &home,
+        ".local/bin/nested/tmux-pick",
+        &repo().join("scripts/tmux-pick"),
+    );
+    home.write(".local/bin/tool", "#!/bin/sh\n");
+
+    let output = home.setup(&[]);
+
+    for kept in [
+        ".local/bin/elsewhere",
+        ".local/bin/zshrc",
+        "projects/tmux-pick",
+        ".local/bin/nested/tmux-pick",
+        ".local/bin/tool",
+    ] {
+        assert!(fs::symlink_metadata(home.join(kept)).is_ok(), "{kept} kept");
+    }
+    assert!(!output.contains("pruned"), "{output}");
+}
+
+#[test]
+fn a_dry_run_lists_dangling_links_and_keeps_them() {
+    let home = Home::new();
+    dangle(
+        &home,
+        ".local/bin/tmux-sessions",
+        &repo().join("scripts/tmux-sessions"),
+    );
+
+    let output = home.setup(&["--dry-run"]);
+
+    assert!(fs::symlink_metadata(home.join(".local/bin/tmux-sessions")).is_ok());
+    let line = format!(
+        "pruned: {}/.local/bin/tmux-sessions -> {}/scripts/tmux-sessions",
+        home.path().display(),
+        repo().display()
+    );
+    assert!(output.lines().any(|l| l == line), "{line:?} in {output}");
+}

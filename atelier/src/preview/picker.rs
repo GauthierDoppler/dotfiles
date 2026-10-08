@@ -1,9 +1,8 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
 use std::time::SystemTime;
 
-use crate::shell;
+use crate::fzf;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -99,33 +98,20 @@ fn walk(root: &Path, relative: &Path, depth: usize, files: &mut Vec<String>) {
 pub fn pick(tmux: &Tmux, target: Option<&str>) -> Result<()> {
     let root = session_root(tmux, target)?;
     let rows = rows(&root);
-    let atelier = shell::quote(&std::env::current_exe()?.to_string_lossy());
-    let mut fzf = Process::new("fzf")
-        .args([
-            "--no-multi",
-            "--disabled",
-            "--height=100%",
-            "--layout=reverse",
-            "--info=inline",
-            "--prompt=  markdown  ",
-            "--header=j/k move   i search\nenter preview   esc close",
-            "--bind=j:down,k:up",
-            "--bind=q:abort",
-            "--bind=i:enable-search+unbind(j,k,q)+change-prompt(  search  )",
-            "--bind=esc:transform:[ \"$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+change-prompt(  markdown  )' || echo abort",
-            &format!("--bind=enter:become({atelier} preview {{}})"),
-            "--color=fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee",
-        ])
-        .current_dir(if root.is_dir() { &root } else { Path::new("/") })
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("fzf: {error}"))?;
-    if let Some(mut stdin) = fzf.stdin.take() {
-        for row in rows {
-            writeln!(stdin, "{row}")?;
-        }
-    }
-    fzf.wait()?;
+    let atelier = fzf::atelier(tmux)?;
+    let mut picker = fzf::picker(
+        "  markdown  ",
+        "j/k move   i search\nenter preview   esc close",
+        fzf::MODAL_KEYS,
+    );
+    picker
+        .arg(fzf::leave_search(
+            fzf::MODAL_KEYS,
+            "change-prompt(  markdown  )",
+        ))
+        .arg(format!("--bind=enter:become({atelier} preview {{}})"))
+        .current_dir(if root.is_dir() { &root } else { Path::new("/") });
+    fzf::spawn(&mut picker, rows)?.wait()?;
     Ok(())
 }
 

@@ -32,4 +32,4 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [25](25-spike-clickable-notification-from-a-daemon.md) | Spike: clickable notification from a daemon | 09 | needs-human |
 | [26](26-waiting-notification-click-to-focus-the-pane.md) | Waiting notification, click to focus the pane | 25 | ready-for-agent |
 | [27](27-shrink-agents-md.md) | Shrink AGENTS.md | 06, 08, 10, 13, 15 | ready-for-agent |
-| [28](28-housekeeping-after-the-first-merges.md) | Housekeeping after the first merges | 04, 08, 20 | ready-for-agent |
+| [28](28-housekeeping-after-the-first-merges.md) | Housekeeping after the first merges | 04, 08, 20 | done |

@@ -212,8 +212,7 @@ fn previewing_the_placeholder_row_does_nothing() {
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn enter_in_the_picker_previews_the_newest_file() {
-    if Command::new("fzf").arg("--version").output().is_err() {
-        eprintln!("fzf is not installed: skipping");
+    if !common::fzf_available() {
         return;
     }
     let (_dir, root) = real_tempdir();
@@ -223,6 +222,7 @@ fn enter_in_the_picker_previews_the_newest_file() {
     let tmux = TmuxServer::start();
     let session = tmux.new_session("docs", &root);
     let printed = root.join("printed");
+    let opener = common::FakeOpener::new();
     let picker = tmux.tmux(&[
         "new-window",
         "-d",
@@ -234,7 +234,8 @@ fn enter_in_the_picker_previews_the_newest_file() {
         "-F",
         "#{pane_id}",
         &format!(
-            "MD_PREVIEW_PORT={} '{}' --socket '{}' preview pick -t '{session}' > '{}'",
+            "PATH='{}' MD_PREVIEW_PORT={} '{}' --socket '{}' preview pick -t '{session}' > '{}'",
+            opener.path(),
             server.port,
             env!("CARGO_BIN_EXE_atelier"),
             tmux.socket().display(),

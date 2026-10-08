@@ -216,3 +216,75 @@ pub fn git_repo(dir: &Path) {
     git(dir, &["init", "-q"]);
     git(dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
 }
+
+pub struct FakeOpener {
+    dir: tempfile::TempDir,
+}
+
+impl FakeOpener {
+    pub fn new() -> Self {
+        let dir = tempfile::tempdir().expect("opener dir created");
+        let log = dir.path().join("opened");
+        for opener in ["open", "xdg-open"] {
+            let script = dir.path().join(opener);
+            std::fs::write(
+                &script,
+                format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display()),
+            )
+            .expect("opener written");
+            std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+                .expect("opener made executable");
+        }
+        FakeOpener { dir }
+    }
+
+    pub fn dir(&self) -> &Path {
+        self.dir.path()
+    }
+
+    pub fn path(&self) -> String {
+        format!(
+            "{}:{}",
+            self.dir.path().display(),
+            std::env::var("PATH").expect("PATH is set")
+        )
+    }
+
+    pub fn opened(&self) -> String {
+        std::fs::read_to_string(self.dir.path().join("opened")).unwrap_or_default()
+    }
+
+    pub fn wait_opened(&self) -> String {
+        for _ in 0..200 {
+            let opened = self.opened();
+            if opened.ends_with('\n') {
+                return opened;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!("the opener was never called");
+    }
+}
+
+pub fn fzf_available() -> bool {
+    let version = Command::new("fzf")
+        .arg("--version")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default();
+    let mut numbers = version
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .split('.')
+        .map(|part| part.parse::<u32>().unwrap_or(0));
+    let recent = (numbers.next().unwrap_or(0), numbers.next().unwrap_or(0)) >= (0, 45);
+    if !recent {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "CI must install fzf >= 0.45, found {version:?}"
+        );
+        eprintln!("fzf >= 0.45 is not installed: skipping");
+    }
+    recent
+}

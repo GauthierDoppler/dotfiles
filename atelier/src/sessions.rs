@@ -1,9 +1,8 @@
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 
 use clap::Subcommand;
 
+use crate::fzf;
 use crate::session;
 use crate::shell;
 use crate::tmux::Tmux;
@@ -185,28 +184,18 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
     picker.set_scope(Scope::Project)?;
     let rows = picker.rows()?;
 
-    let atelier = picker.atelier_command()?;
+    let atelier = fzf::atelier(tmux)?;
     let mut switch = format!("{atelier} sessions switch");
     if !client.is_empty() {
         switch.push_str(&format!(" -c {}", shell::quote(&client)));
     }
-    let mut fzf = std::process::Command::new("fzf")
-        .args([
-            "--disabled",
-            "--delimiter=\t",
-            "--with-nth=2..",
-            "--header-first",
-            "--pointer=▸",
-            "--no-multi",
-            "--cycle",
-        ])
-        .arg(format!("--prompt={}", picker.scope()?.prompt()))
-        .arg(format!("--header={}", picker.header()?))
-        .args(["--bind", "j:down,k:up", "--bind", "q:abort"])
-        .arg("--bind")
-        .arg(format!(
-            "i:enable-search+unbind({NAVIGATION_KEYS})+change-prompt(  search  )"
-        ))
+    let mut finder = fzf::picker(
+        picker.scope()?.prompt(),
+        &picker.header()?,
+        NAVIGATION_KEYS,
+    );
+    finder
+        .args(["--delimiter=\t", "--with-nth=2.."])
         .arg("--bind")
         .arg(format!("esc:transform:{}", picker.call("escape")?))
         .arg("--bind")
@@ -224,16 +213,8 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
         .arg("--bind")
         .arg(format!("ctrl-x:transform:{} {{1}}", picker.call("kill")?))
         .arg(format!("--preview={atelier} sessions preview {{1}}"))
-        .arg("--preview-window=right,70%,border-left,nowrap")
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("fzf: {error}"))?;
-    if let Some(mut stdin) = fzf.stdin.take() {
-        for row in rows {
-            writeln!(stdin, "{row}")?;
-        }
-    }
-    fzf.wait()?;
+        .arg("--preview-window=right,70%,border-left,nowrap");
+    fzf::spawn(&mut finder, rows)?.wait()?;
     Ok(())
 }
 
@@ -394,19 +375,10 @@ impl<'a> Picker<'a> {
         ))
     }
 
-    fn atelier_command(&self) -> Result<String> {
-        let mut command = shell::quote(&std::env::current_exe()?.to_string_lossy());
-        if let Some(socket) = self.tmux.socket() {
-            command.push_str(" --socket ");
-            command.push_str(&shell::quote(&socket.to_string_lossy()));
-        }
-        Ok(command)
-    }
-
     fn call(&self, subcommand: &str) -> Result<String> {
         Ok(format!(
             "{} sessions {subcommand} -t {}",
-            self.atelier_command()?,
+            fzf::atelier(self.tmux)?,
             shell::quote(&self.session)
         ))
     }

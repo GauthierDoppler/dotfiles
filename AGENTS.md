@@ -40,7 +40,10 @@ never overwritten), replaces a symlink pointing elsewhere without one, and print
 only what it changes, so a second run says `setup: up to date`. The repo is
 `--repo`, else the current git root, else `~/dotfiles`, and must look like this
 repo (`dot_zshrc` plus `atelier/Cargo.toml`) so running it from another project
-cannot link that project into `$HOME`. `tests/setup.rs` runs it against a
+cannot link that project into `$HOME`. It also removes ("pruned:") symlinks left
+by an older install, and only those: a link directly inside a folder it links
+into, whose target resolves inside the repo and no longer exists — what deleting
+a script leaves behind in `~/.local/bin`. `tests/setup.rs` runs it against a
 temporary `$HOME`, twice. When adding a new config, use the `/add-config` skill.
 
 **Profiles.** `desktop` (the default on macOS) is everything; `remote` (the
@@ -159,13 +162,20 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `src/<feature>/`), exposes `pub enum Command` deriving `clap::Subcommand` with
   `pub fn run(self, tmux: &Tmux) -> Result<()>`, and is registered by one line in
   the `features!` list in `main.rs`, which declares the module and the
-  subcommand. Shared modules (`tmux`, `session`, `git`, `shell`) are plain `mod` lines.
+  subcommand. Shared modules (`tmux`, `session`, `git`, `shell`, `fzf`, `opener`) are plain `mod` lines.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
   A module whose commands sit at the top level (`atelier daemon`, `atelier
   status`) goes after `; top level:` in the same list and is flattened.
 - **tmux is reached only through `tmux::Tmux`**, which always targets an explicit
   socket: `--socket`/`-S`, else the one in `$TMUX`. tmux sets `$TMUX` for `#()`
   jobs and `run-shell`, so the default is right when tmux calls atelier.
+  The binary is the first `tmux` on `PATH`, else in `/opt/homebrew/bin`,
+  `/usr/local/bin`, Linuxbrew's prefix, `/usr/bin` or `/bin`: hooks such as
+  Claude Code's can run with a `PATH` that lacks the Homebrew prefix.
+- **Every picker builds fzf through `fzf::picker`**, which carries the shared
+  flags, colours and the `j`/`k`/`q` + `i` search mode, and calls back into
+  atelier through `fzf::atelier` (the binary plus `--socket`). `fzf::leave_search`
+  is the `esc` bind for pickers that restore their prompt without a callback.
 - **Session identity comes from `session::resolve`, for every consumer**:
   `@grove_project`, else the basename of the main worktree (first entry of
   `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
@@ -266,7 +276,10 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
   shellcheck on `install.sh` and every executable shell script in `scripts/`.
-  Run the same three cargo commands in `atelier/` before pushing.
+  CI installs a pinned fzf release (Homebrew's on macOS), since distro packages
+  are older than 0.45; the fzf-driven tests skip without a recent fzf locally
+  but fail under `CI`. Run the same three cargo commands in `atelier/` before
+  pushing.
 
 ## Tmux
 
@@ -1006,7 +1019,8 @@ cannot send without a preflight this server never answers.
 Tab reuse is macOS only: JXA against Google Chrome (`w.tabs.url()` per window,
 matched without the fragment); the first run triggers macOS's automation prompt.
 If Chrome is not running or the script fails, it falls back to `open -a`. On
-other systems the URL is only printed.
+other systems the URL goes to `xdg-open` when it is on `PATH`, and is printed
+either way.
 
 **`Prefix + m` picks a markdown file of the session** (`atelier preview pick`,
 `atelier/src/preview/picker.rs`) and previews it, so reviewing an agent's plan

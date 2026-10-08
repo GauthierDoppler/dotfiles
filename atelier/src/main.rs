@@ -1,4 +1,6 @@
+mod fzf;
 mod git;
+mod opener;
 mod session;
 mod shell;
 mod tmux;
