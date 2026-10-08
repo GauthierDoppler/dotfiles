@@ -41,6 +41,8 @@ features! {
     Preview => preview,
     /// Pick a URL or file path off a pane
     Pick => pick,
+    /// The session picker
+    Sessions => sessions,
 }
 
 #[derive(Parser)]

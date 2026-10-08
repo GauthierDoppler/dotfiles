@@ -39,6 +39,10 @@ impl Tmux {
         Ok(stdout)
     }
 
+    pub fn socket(&self) -> Option<&Path> {
+        self.socket.as_deref()
+    }
+
     pub fn display(&self, target: &str, format: &str) -> Result<String> {
         self.run(&["display-message", "-p", "-t", target, format])
     }
