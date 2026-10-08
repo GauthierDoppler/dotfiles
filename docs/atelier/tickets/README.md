@@ -5,7 +5,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 
 | # | Ticket | Blocked by | Status |
 | - | ------ | ---------- | ------ |
-| [01](01-grove-tags-its-sessions.md) | Grove tags its sessions | — | ready-for-agent |
+| [01](01-grove-tags-its-sessions.md) | Grove tags its sessions | — | done |
 | [02](02-atelier-tracer-bullet-the-bar-s-project.md) | Atelier tracer bullet: the bar's project name comes from atelier | — | done |
 | [03](03-right-block-of-the-bar-rendered-by.md) | Right block of the bar rendered by atelier | 02 | ready-for-agent |
 | [04](04-left-block-of-the-bar-rendered-by.md) | Left block of the bar rendered by atelier | 01, 03 | ready-for-agent |
