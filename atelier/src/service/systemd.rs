@@ -3,9 +3,8 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use super::{
-    failures, stdout_of, succeeds, write_if_changed, Day, FileState, Schedule, Service, Status,
-};
+use super::{failures, write_if_changed, Day, FileState, Schedule, Service, Status};
+use crate::process::{stdout_of, succeeds};
 use crate::Result;
 
 struct Unit {
@@ -113,7 +112,11 @@ fn units_dir(home: &Path) -> PathBuf {
         .join("systemd/user")
 }
 
-fn systemctl(args: &[&str]) -> bool {
+pub(super) fn installed(label: &str, home: &Path) -> bool {
+    units_dir(home).join(format!("{label}.service")).is_file()
+}
+
+pub(super) fn systemctl(args: &[&str]) -> bool {
     let args: Vec<&str> = std::iter::once("--user").chain(args.iter().copied()).collect();
     succeeds("systemctl", &args)
 }

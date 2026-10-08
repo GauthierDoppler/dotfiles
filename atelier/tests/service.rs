@@ -15,7 +15,11 @@ echo "launchctl $*" >>"$FAKE_LOG"
 state="$FAKE_STATE/launchd"
 mkdir -p "$state"
 case "$1" in
-  print) [ -e "$state/${2##*/}" ] ;;
+  print)
+    [ -e "$state/${2##*/}" ] || exit 113
+    running=running
+    [ -s "$state/${2##*/}" ] && read -r running <"$state/${2##*/}"
+    printf '%s = {\n\tstate = %s\n\tjob state = exited\n}\n' "$2" "$running" ;;
   bootstrap) touch "$state/$(basename "$3" .plist)" ;;
   bootout) [ -e "$state/${2##*/}" ] && rm "$state/${2##*/}" ;;
   kickstart) [ -e "$state/${2##*/}" ] ;;
@@ -259,7 +263,7 @@ fn launchd_uninstall_boots_out_and_removes_every_agent() {
 }
 
 #[test]
-fn launchd_list_shows_each_agent_file_and_load_state() {
+fn launchd_list_shows_each_agent_file_and_state() {
     let machine = Machine::new();
     machine.ok(&["install", "--system", "launchd"]);
     fs::write(
@@ -274,17 +278,25 @@ fn launchd_list_shows_each_agent_file_and_load_state() {
             .join("state/launchd/com.theodo.cc-tap.update"),
     )
     .unwrap();
+    fs::write(
+        machine
+            .fakes
+            .path()
+            .join("state/launchd/com.theodo.cc-tap.proxy"),
+        "spawn scheduled\n",
+    )
+    .unwrap();
 
     assert_eq!(
         rows(&machine.ok(&["list", "--system", "launchd"])),
         [
-            ["com.theodo.cc-tap.dashboard", "up to date", "loaded"],
-            ["com.theodo.cc-tap.proxy", "outdated", "loaded"],
+            ["com.theodo.cc-tap.dashboard", "up to date", "running"],
+            ["com.theodo.cc-tap.proxy", "outdated", "spawn scheduled"],
             ["com.theodo.cc-tap.update", "up to date", "not loaded"],
             [
                 "com.github.gauthierdoppler.md-preview",
                 "up to date",
-                "loaded"
+                "running"
             ],
         ]
     );

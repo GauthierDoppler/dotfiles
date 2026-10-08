@@ -39,7 +39,11 @@ esac
 
 const FAKE_LAUNCHCTL: &str = r#"#!/bin/sh
 case "$1" in
-  print) [ ! -e "$FAKE_STATE/inactive/${2##*/}" ] ;;
+  print)
+    [ -e "$FAKE_STATE/inactive/${2##*/}" ] && exit 113
+    state=running
+    [ -e "$FAKE_STATE/launchd/${2##*/}" ] && read -r state <"$FAKE_STATE/launchd/${2##*/}"
+    printf '%s = {\n\tstate = %s\n\tjob state = exited\n}\n' "$2" "$state" ;;
 esac
 "#;
 
@@ -71,10 +75,10 @@ impl Machine {
             home: tempfile::tempdir().unwrap(),
             fakes: tempfile::tempdir().unwrap(),
         };
-        for dir in ["bin", "state/terminfo", "state/inactive"] {
+        for dir in ["bin", "state/terminfo", "state/inactive", "state/launchd"] {
             fs::create_dir_all(machine.fakes.path().join(dir)).unwrap();
         }
-        for program in ["tmux", "id", "uname"] {
+        for program in ["tmux", "uname"] {
             std::os::unix::fs::symlink(real(program), machine.bin(program)).unwrap();
         }
         for (name, script) in [
@@ -348,6 +352,25 @@ fn a_stopped_launchd_agent_fails_naming_it() {
     let report = assert_fails(&machine, &["--system", "launchd"], "services");
     assert!(check(&report, "services").contains("com.theodo.cc-tap.dashboard"));
     assert!(check(&report, "linger").starts_with("skip"), "{report}");
+}
+
+#[test]
+fn a_crash_looping_launchd_agent_fails_although_it_stays_loaded() {
+    let machine = Machine::healthy();
+    machine.state("launchd/com.theodo.cc-tap.proxy", "spawn scheduled\n");
+    machine.state("launchd/com.theodo.cc-tap.update", "not running\n");
+    let report = assert_fails(&machine, &["--system", "launchd"], "services");
+    let line = check(&report, "services");
+    assert!(line.contains("com.theodo.cc-tap.proxy"), "{report}");
+    assert!(!line.contains("update"), "{report}");
+}
+
+#[test]
+fn a_tmux_outside_path_is_still_found() {
+    let machine = Machine::healthy();
+    fs::remove_file(machine.bin("tmux")).unwrap();
+    let report = report(&machine.doctor(&[]));
+    assert!(check(&report, "tmux version").starts_with("ok"), "{report}");
 }
 
 #[test]

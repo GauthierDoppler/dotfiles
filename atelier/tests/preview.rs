@@ -2,6 +2,7 @@ mod common;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -696,18 +697,34 @@ fn a_cursor_post_reaches_the_page_and_is_replayed_on_connect() {
 }
 
 #[test]
-fn the_server_exits_when_its_binary_is_replaced() {
+fn the_server_restarts_from_its_binary_when_it_is_replaced() {
     let (_dir, root) = real_tempdir();
     let binary = root.join("atelier");
     std::fs::copy(env!("CARGO_BIN_EXE_atelier"), &binary).unwrap();
     let mut server = Preview::start_with(&binary);
+    let marker = root.join("restarted");
 
     std::fs::remove_file(&binary).unwrap();
-    std::fs::copy(env!("CARGO_BIN_EXE_atelier"), &binary).unwrap();
+    std::fs::write(
+        &binary,
+        format!(
+            "#!/bin/sh\necho \"$@\" >'{}'\nexec '{}' \"$@\"\n",
+            marker.display(),
+            env!("CARGO_BIN_EXE_atelier")
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    wait_until("the server to exit", || {
-        server.child.try_wait().unwrap().is_some()
+    wait_until("the server to restart", || {
+        marker.exists() && alive(server.port)
     });
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "preview serve\n");
+    assert!(
+        server.child.try_wait().unwrap().is_none(),
+        "it restarted in place"
+    );
+    assert_eq!(server.get("/__meta").status, 200);
 }
 
 fn open(port: u16, home: &Path, file: &Path) -> Output {

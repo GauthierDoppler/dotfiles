@@ -11,6 +11,7 @@ use std::time::Duration;
 use clap::Subcommand;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 
+use crate::service;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -152,39 +153,13 @@ fn ensure_server(port: u16) -> Result<()> {
     Err(format!("server did not come up on port {port}").into())
 }
 
-#[cfg(target_os = "macos")]
-fn launchd_domain() -> String {
-    format!("gui/{}/{LABEL}", unsafe { libc::getuid() })
-}
-
-#[cfg(target_os = "macos")]
-fn start_server(_port: u16) -> Result<()> {
-    let kicked = Process::new("/bin/launchctl")
-        .args(["kickstart", &launchd_domain()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()?
-        .success();
-    if !kicked {
-        return Err(
-            format!("server down and launchd agent {LABEL} not loaded -- run atelier service install").into(),
-        );
-    }
-    Ok(())
-}
-
-#[cfg(not(target_os = "macos"))]
 fn start_server(port: u16) -> Result<()> {
     use std::os::unix::process::CommandExt;
-    let started = port == DEFAULT_PORT
-        && Process::new("systemctl")
-            .args(["--user", "start", &format!("{LABEL}.service")])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success());
-    if started {
-        return Ok(());
+    if port == DEFAULT_PORT && service::installed(LABEL) {
+        if service::start(LABEL) {
+            return Ok(());
+        }
+        return Err(format!("server down and service {LABEL} did not start -- see atelier service list").into());
     }
     Process::new(std::env::current_exe()?)
         .args(["preview", "serve"])
@@ -228,11 +203,25 @@ fn show(url: &str) {
         .status()
         .is_ok_and(|status| status.success());
     if !opened {
-        let _ = Process::new("/usr/bin/open").arg(url).status();
+        let _ = crate::opener::open(url);
     }
 }
 
 #[cfg(not(target_os = "macos"))]
 fn show(url: &str) {
     let _ = crate::opener::open(url);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_label_names_the_service_that_runs_the_preview_server() {
+        let label = format!("label = \"{}\"", super::LABEL);
+        let service = include_str!("../../../services.toml")
+            .split("[[service]]")
+            .find(|block| block.contains(&label))
+            .expect("services.toml declares the preview's label");
+        assert!(service.contains(r#""preview", "serve""#), "{service}");
+        assert!(service.contains(&format!("127.0.0.1:{}", super::DEFAULT_PORT)));
+    }
 }

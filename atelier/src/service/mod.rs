@@ -3,7 +3,6 @@ mod systemd;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command as Process, Stdio};
 
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Deserialize;
@@ -138,13 +137,19 @@ impl Command {
     }
 }
 
-impl Target {
-    fn system(&self) -> System {
-        self.system.unwrap_or(if cfg!(target_os = "macos") {
+impl System {
+    fn of_this_machine() -> Self {
+        if cfg!(target_os = "macos") {
             System::Launchd
         } else {
             System::Systemd
-        })
+        }
+    }
+}
+
+impl Target {
+    fn system(&self) -> System {
+        self.system.unwrap_or_else(System::of_this_machine)
     }
 
     pub(crate) fn repo(&self) -> Option<PathBuf> {
@@ -198,6 +203,30 @@ pub(crate) fn linger(target: &Target) -> Option<Result<(String, bool)>> {
     }
 }
 
+pub(crate) fn installed(label: &str) -> bool {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return false;
+    };
+    match System::of_this_machine() {
+        System::Launchd => launchd::installed(label, &home),
+        System::Systemd => systemd::installed(label, &home),
+    }
+}
+
+pub(crate) fn start(label: &str) -> bool {
+    match System::of_this_machine() {
+        System::Launchd => launchd::kickstart(label, false),
+        System::Systemd => systemd::systemctl(&["start", &format!("{label}.service")]),
+    }
+}
+
+pub(crate) fn restart(label: &str) -> bool {
+    match System::of_this_machine() {
+        System::Launchd => launchd::kickstart(label, true),
+        System::Systemd => systemd::systemctl(&["restart", &format!("{label}.service")]),
+    }
+}
+
 fn load(path: &Path) -> Result<Vec<Service>> {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
@@ -234,26 +263,6 @@ fn is_label_char(c: char) -> bool {
 
 fn is_shell_safe(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '/' | ':' | '=' | '@' | '+' | ',')
-}
-
-fn succeeds(program: &str, args: &[&str]) -> bool {
-    Process::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-fn stdout_of(program: &str, args: &[&str]) -> Option<String> {
-    let output = Process::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<bool> {

@@ -64,6 +64,10 @@ impl Tmux {
         }
     }
 
+    pub fn version(&self) -> Option<String> {
+        crate::process::stdout_of(&self.program, &["-V"])
+    }
+
     pub fn display(&self, target: &str, format: &str) -> Result<String> {
         self.run(&["display-message", "-p", "-t", target, format])
     }

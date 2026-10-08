@@ -4,7 +4,8 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::{failures, stdout_of, succeeds, write_if_changed, Day, FileState, Service, Status};
+use super::{failures, write_if_changed, Day, FileState, Service, Status};
+use crate::process::{self, succeeds};
 use crate::Result;
 
 const HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -15,7 +16,7 @@ const HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 
 pub(super) fn install(services: &[Service], home: &Path) -> Result<()> {
     let dir = writable_agents_dir(home)?;
-    let domain = domain()?;
+    let domain = domain();
     let mut failed = Vec::new();
     for service in services {
         let path = plist_path(&dir, service);
@@ -52,15 +53,19 @@ pub(super) fn install(services: &[Service], home: &Path) -> Result<()> {
 
 pub(super) fn statuses(services: &[Service], home: &Path) -> Result<Vec<Status>> {
     let dir = agents_dir(home);
-    let domain = domain()?;
+    let domain = domain();
     let mut statuses = Vec::new();
     for service in services {
-        let running = loaded(&format!("{domain}/{}", service.label));
+        let state = match state(&format!("{domain}/{}", service.label)) {
+            None => "not loaded".to_owned(),
+            Some(_) if service.schedule.is_some() => "loaded".to_owned(),
+            Some(state) => state,
+        };
         statuses.push(Status {
             label: service.label.clone(),
             file: FileState::of(&plist_path(&dir, service), &render(service)?),
-            state: if running { "loaded" } else { "not loaded" }.into(),
-            running,
+            running: matches!(state.as_str(), "loaded" | "running"),
+            state,
         });
     }
     Ok(statuses)
@@ -68,7 +73,7 @@ pub(super) fn statuses(services: &[Service], home: &Path) -> Result<Vec<Status>>
 
 pub(super) fn uninstall(services: &[Service], home: &Path) -> Result<()> {
     let dir = agents_dir(home);
-    let domain = domain()?;
+    let domain = domain();
     for service in services {
         let path = plist_path(&dir, service);
         let unloaded = succeeds("launchctl", &["bootout", &format!("{domain}/{}", service.label)]);
@@ -82,6 +87,19 @@ pub(super) fn uninstall(services: &[Service], home: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+pub(super) fn installed(label: &str, home: &Path) -> bool {
+    agents_dir(home).join(format!("{label}.plist")).is_file()
+}
+
+pub(super) fn kickstart(label: &str, kill: bool) -> bool {
+    let target = format!("{}/{label}", domain());
+    if kill {
+        succeeds("launchctl", &["kickstart", "-k", &target])
+    } else {
+        succeeds("launchctl", &["kickstart", &target])
+    }
 }
 
 fn agents_dir(home: &Path) -> PathBuf {
@@ -122,13 +140,26 @@ fn plist_path(dir: &Path, service: &Service) -> PathBuf {
     dir.join(format!("{}.plist", service.label))
 }
 
-fn domain() -> Result<String> {
-    let uid = stdout_of("id", &["-u"]).filter(|uid| !uid.is_empty());
-    Ok(format!("gui/{}", uid.ok_or("cannot read the user id")?))
+fn domain() -> String {
+    format!("gui/{}", process::uid())
 }
 
 fn loaded(target: &str) -> bool {
     succeeds("launchctl", &["print", target])
+}
+
+fn state(target: &str) -> Option<String> {
+    let output = process::output("launchctl", &["print", target])?;
+    if !output.status.success() {
+        return None;
+    }
+    let printed = String::from_utf8_lossy(&output.stdout);
+    let state = printed
+        .lines()
+        .filter_map(|line| line.strip_prefix('\t'))
+        .find_map(|line| line.strip_prefix("state = "))
+        .unwrap_or("unknown");
+    Some(state.trim().to_owned())
 }
 
 fn render(service: &Service) -> Result<String> {
