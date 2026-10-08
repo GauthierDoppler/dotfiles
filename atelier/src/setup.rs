@@ -114,7 +114,6 @@ const LINKS: &[Link] = &[
     link("scripts/tmux-tasks", ".local/bin/tmux-tasks"),
     link("scripts/tmux-task-run", ".local/bin/tmux-task-run"),
     link("scripts/tmux-status-left", ".local/bin/tmux-status-left"),
-    link("scripts/tmux-status-right", ".local/bin/tmux-status-right"),
     link("scripts/md-preview/md-preview", ".local/bin/md-preview"),
     link("scripts/cc-tap-service", ".local/bin/cc-tap-service"),
 ];
