@@ -25,4 +25,4 @@ What deliberately stays machine-local:
 - `~/.pi/agent/sessions/` — session history.
 - `~/.pi/agent/npm/` and `~/.pi/agent/git/` — installed package caches.
 
-`install.sh` links the extension directory and each agent file individually so other local Pi resources are not hidden.
+`atelier setup` links the extension directory and each agent file individually so other local Pi resources are not hidden.

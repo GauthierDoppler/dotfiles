@@ -21,7 +21,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [14](14-markdown-preview-served-by-atelier.md) | Markdown preview served by atelier | 02 | ready-for-agent |
 | [15](15-markdown-notes-and-cursor-sync.md) | Markdown notes and cursor sync | 14 | ready-for-agent |
 | [16](16-markdown-picker-on-prefix-plus-m.md) | Markdown picker on Prefix + m | 14 | ready-for-agent |
-| [17](17-setup-links-and-stubs.md) | Setup: links and stubs | 02 | ready-for-agent |
+| [17](17-setup-links-and-stubs.md) | Setup: links and stubs | 02 | done |
 | [18](18-claude-settings-merge-in-atelier.md) | Claude settings merge in atelier | 17 | ready-for-agent |
 | [19](19-local-diff-in-atelier.md) | local-diff in atelier | 17 | ready-for-agent |
 | [20](20-services-on-launchd-and-systemd.md) | Services on launchd and systemd | 15, 17 | ready-for-agent |

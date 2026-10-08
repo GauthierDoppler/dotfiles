@@ -35,6 +35,8 @@ features! {
     Bar => bar,
     /// Entry points for other tools' hooks
     Hook => hook,
+    /// Link the dotfiles into $HOME and write the shell and git stubs
+    Setup => setup,
 }
 
 #[derive(Parser)]
