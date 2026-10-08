@@ -258,6 +258,25 @@ fn killing_the_daemon_leaves_the_bar_on_its_fallback() {
 }
 
 #[test]
+fn without_atelier_the_bar_still_shows_the_session_name_and_the_clock() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let tmux = server();
+    tmux.new_session("work", dir.path());
+    let viewer = attach_terminal_client(&tmux, "work", 130);
+    load_the_bar_from_dot_tmux_conf(&tmux, home.path());
+
+    eventually("both fallbacks on screen", || {
+        let line = viewer.status_line(&tmux);
+        let clock = line.trim_end().rsplit(' ').next().unwrap_or_default();
+        line.starts_with(" work")
+            && clock.len() == 5
+            && clock.as_bytes()[2] == b':'
+            && clock.bytes().filter(u8::is_ascii_digit).count() == 4
+    });
+}
+
+#[test]
 fn a_session_seen_only_by_control_clients_gets_no_bar() {
     let dir = tempfile::tempdir().unwrap();
     let tmux = server();
