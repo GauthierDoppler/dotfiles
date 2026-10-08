@@ -114,8 +114,13 @@ config, or in `~/.zprofile` below the load line.
 
 `dot_tmux.conf` is still a plain symlink: nothing appends to `~/.tmux.conf`.
 
-Run `local-diff` to list what has accumulated locally. Each finding is a
-decision: promote it into the tracked config, or leave it local.
+Run `atelier local-diff` (`local-diff` is a `dot_zshrc` alias for it) to list
+what has accumulated locally. Each finding is a decision: promote it into the
+tracked config, or leave it local. It walks the same `STUBS` table `atelier
+setup` writes from, so a new stub is diffed with no second list to update: shell
+stubs as a set of non-comment lines, `~/.gitconfig` as `git config --list` keys,
+the Claude override as `key.path=value` pairs. Covered by
+`atelier/tests/local_diff.rs`.
 
 **Claude Code settings are a special case.** Claude Code has no user-scope
 `settings.local.json`, and it *rewrites* `~/.claude/settings.json` in place —
@@ -156,6 +161,8 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   the `features!` list in `main.rs`, which declares the module and the
   subcommand. Shared modules (`tmux`, `session`, `git`) are plain `mod` lines.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
+  A module whose commands sit at the top level (`atelier daemon`, `atelier
+  status`) goes after `; top level:` in the same list and is flattened.
 - **tmux is reached only through `tmux::Tmux`**, which always targets an explicit
   socket: `--socket`/`-S`, else the one in `$TMUX`. tmux sets `$TMUX` for `#()`
   jobs and `run-shell`, so the default is right when tmux calls atelier.
@@ -184,6 +191,37 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   one per test so tests run in parallel. `atelier(..)` passes `--socket`,
   `atelier_inside(..)` sets `$TMUX` instead. Assert on what tmux or the binary
   shows, never on internals; pure render functions are the only other seam.
+- **The daemon (`src/daemon/`) is one per tmux socket.** `dot_tmux.conf` runs
+  `atelier daemon --ensure` through `run-shell -b` at load and from a
+  `session-created` hook (the load-time run can race the first session).
+  `--ensure` returns at once when the lock is held, else spawns `atelier daemon`
+  detached; the daemon itself takes the lock, so racing ensures still leave one.
+  Lock, socket and log live in `$XDG_RUNTIME_DIR/atelier/` (else
+  `$TMPDIR/atelier-<uid>/`) as `<fnv1a of the socket path>.{lock,sock,log}`.
+  `atelier status` asks the daemon over that socket (JSON lines) and reads tmux
+  directly when nothing answers; its first line says which.
+- **Its only link to tmux is `tmux -C attach-session -f no-output,ignore-size`.**
+  tmux 3.4 has no session-less control client — one started with no session
+  prints `%exit` at once — so the daemon attaches to an existing session and
+  never creates one. With `detach-on-destroy on` (tmux's default, not this
+  config's) killing that session sends `%exit` while the server lives on, so
+  after `%exit` the daemon reattaches if any session is left and exits
+  otherwise; the `session-created` hook brings it back. Being attached, it is a
+  client like any other in `list-clients`, `#{session_attached}` and the
+  `client-*` hooks: every "is someone looking" check must skip
+  `#{client_control_mode}` = 1. State is rebuilt from `list-sessions`,
+  `list-windows -a`, `list-clients` on structural notifications; renames and
+  window closes are applied in place. Replies are paired with requests in
+  order, `%begin`/`%end` by command number, because a block's lines are not
+  escaped and a window named `%end 1 1 1` is legal. Control mode prints a tab in
+  format output as `_`, so fields are space-separated with the free-text one
+  last.
+- **Automatic rename is lazy.** tmux re-evaluates `automatic-rename` only when
+  its event loop wakes, so a fresh window can read `tmux` (the forked server,
+  before `exec`) until some unrelated command or output wakes it, and only then
+  does `%window-renamed` arrive. Daemon tests turn `automatic-rename` off.
+  Parser fixtures in `tests/fixtures/control/` are real tmux 3.4 transcripts;
+  `record.sh` there re-records them.
 - **Installed into `~/.local/bin/atelier`** by `install.sh` (`cargo install
   --locked --root ~/.local`, target dir `atelier/target` so a re-run is
   incremental; rustup with `--no-modify-path` when cargo is missing, and
@@ -191,8 +229,10 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   absolute path, and every caller must still work when it is absent. The install
   itself is the exception: `install.sh` stops if the build fails, since
   `atelier setup` is what links everything.
-- **A feature with flags and no subcommands** (`setup`) derives `clap::Args` and
-  implements `clap::Subcommand` by hand, delegating to the args and clearing
+- **A feature with flags and no subcommands** (`setup`, `local-diff`,
+  `claude-settings-sync`) derives
+  `clap::Args` and calls `crate::flags_only!(Command)`, which implements
+  `clap::Subcommand` by delegating to the args and clearing
   `subcommand_required`, so it still registers with one `features!` line.
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
@@ -247,7 +287,8 @@ resize bindings, on purpose — resizing is done by dragging the pane border.
 
 ## Per-project tmux tasks
 
-`Prefix + e` opens a task picker (`scripts/tmux-tasks`) over `<project>/.tmux/`.
+`Prefix + e` opens a task picker (`atelier tasks pick`, or `scripts/tmux-tasks`
+when atelier is not installed) over `<project>/.tmux/`.
 Build, run and debug loops live there rather than in Neovim, so they can be
 driven from any window of the session.
 
@@ -281,11 +322,15 @@ directory, **not** the pane's. That is what makes the picker behave identically
 from a pane three directories deep. Ordering is most-recently-run first, cached
 per project under `$TMPDIR`.
 
-`scripts/tmux-task-run` is the wrapper that actually runs the task. It exists as
-a separate file, invoked with an explicit `bash` shebang, because tmux runs
-commands through `default-shell` (zsh) where `read -rsn1` would not parse — and
-because building it as a `printf %q` string stopped being readable once it had
-to publish state.
+A `window` task runs under `atelier tasks exec`, which tmux starts directly as
+the window's command (argv, no shell), so it publishes the marker, rings and
+waits for a key itself. The other placements are still handed to the bash pair
+until ticket 08: `split-*` and `detach` go to `tmux-tasks --run`, and `popup`
+execs `scripts/tmux-task-run` inside the picker's popup. That wrapper exists as a
+separate file, invoked with an explicit `bash` shebang, because tmux runs
+commands through `default-shell` (zsh) where `read -rsn1` would not parse.
+The picker, the rows and its fzf callbacks (`atelier tasks list|advance|prompt|header`)
+and the window runner are covered by `atelier/tests/tasks.rs`.
 
 **Task completion is signalled by `@task_status`**, a per-window user option the
 wrapper sets to `running` / `ok` / `fail`; the `window-status-*` formats render
@@ -299,15 +344,15 @@ Only `window` and `detach` are marked. A split or popup shares the window you
 are working in, where a `✗` would be ambiguous — and the output is right in
 front of you anyway.
 
-Those same two placements also **notify** on completion: a `\a` bell (picked up by
+Those same two placements also **ring** on completion: a `\a` bell, picked up by
 `monitor-bell on`, then passed on to the terminal, which decides whether that
-means a dock bounce or a badge) plus a `terminal-notifier` banner under its own
-name. It used to borrow ghostty's bundle id with `-sender` so a click focused the
-terminal; that tied the banner to one terminal app, so it is now informational
-only and clicking it does not bring anything forward. Both are skipped when
-the task's window is the active window of an attached client — notifying about
-output the user is staring at is noise — and `terminal-notifier` is probed with
-`command -v` so a machine without it degrades to the bell alone.
+means a dock bounce or a badge. It is skipped when the task's window is the
+active window of a session a non-control-mode client is attached to — ringing
+about output the user is staring at is noise, and a control-mode client (the
+daemon) looks at nothing. A `window` task rings and nothing else: the spec keeps
+desktop notifications for Claude's `waiting` only. A `detach` task, still run by
+the bash wrapper until ticket 08, also posts an informational `terminal-notifier`
+banner when that is installed.
 
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no

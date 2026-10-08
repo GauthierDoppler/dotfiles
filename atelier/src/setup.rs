@@ -27,23 +27,7 @@ pub struct Command {
     repo: Option<PathBuf>,
 }
 
-impl clap::Subcommand for Command {
-    fn augment_subcommands(command: clap::Command) -> clap::Command {
-        <Self as Args>::augment_args(command)
-            .subcommand_required(false)
-            .arg_required_else_help(false)
-    }
-
-    fn augment_subcommands_for_update(command: clap::Command) -> clap::Command {
-        <Self as Args>::augment_args_for_update(command)
-            .subcommand_required(false)
-            .arg_required_else_help(false)
-    }
-
-    fn has_subcommand(_name: &str) -> bool {
-        false
-    }
-}
+crate::flags_only!(Command);
 
 enum Source {
     Path(&'static str),
@@ -104,7 +88,6 @@ const LINKS: &[Link] = &[
         ".pi/agent/extensions/subagents",
     ),
     each_markdown_in("dot_pi_agent/agents", ".pi/agent/agents"),
-    link("scripts/local-diff", ".local/bin/local-diff"),
     link("scripts/ssh-setup", ".local/bin/ssh-setup"),
     link("scripts/tmux-sessions", ".local/bin/tmux-sessions"),
     link("scripts/tmux-tasks", ".local/bin/tmux-tasks"),
@@ -113,31 +96,44 @@ const LINKS: &[Link] = &[
     link("scripts/cc-tap-service", ".local/bin/cc-tap-service"),
 ];
 
-struct Stub {
-    dest: &'static str,
+pub(crate) enum Format {
+    Shell,
+    Git,
+}
+
+pub(crate) struct Stub {
+    pub(crate) dest: &'static str,
+    pub(crate) shared: &'static str,
+    pub(crate) format: Format,
     home: &'static str,
     load: &'static str,
     legacy: Option<&'static str>,
 }
 
-const STUBS: &[Stub] = &[
+pub(crate) const STUBS: &[Stub] = &[
     Stub {
         dest: ".zshrc",
+        shared: "dot_zshrc",
+        format: Format::Shell,
         home: "$HOME",
-        load: "source \"{repo}/dot_zshrc\"",
+        load: "source \"{shared}\"",
         legacy: Some(".zshrc.local"),
     },
     Stub {
-        dest: ".gitconfig",
-        home: "~",
-        load: "[include]\n\tpath = {repo}/dot_gitconfig",
-        legacy: Some(".gitconfig.local"),
+        dest: ".zprofile",
+        shared: "dot_zprofile",
+        format: Format::Shell,
+        home: "$HOME",
+        load: "source \"{shared}\"",
+        legacy: None,
     },
     Stub {
-        dest: ".zprofile",
-        home: "$HOME",
-        load: "source \"{repo}/dot_zprofile\"",
-        legacy: None,
+        dest: ".gitconfig",
+        shared: "dot_gitconfig",
+        format: Format::Git,
+        home: "~",
+        load: "[include]\n\tpath = {shared}",
+        legacy: Some(".gitconfig.local"),
     },
 ];
 
@@ -283,7 +279,9 @@ fn plan_stub(actions: &mut Vec<Action>, stub: &Stub, repo: &Path, home: &Path) -
         Ok(relative) => format!("{}/{}", stub.home, relative.display()),
         Err(_) => repo.display().to_string(),
     };
-    let load = stub.load.replace("{repo}", &repo);
+    let load = stub
+        .load
+        .replace("{shared}", &format!("{repo}/{}", stub.shared));
     let dest = home.join(stub.dest);
 
     let stubbed = match fs::symlink_metadata(&dest) {

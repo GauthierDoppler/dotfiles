@@ -11,13 +11,11 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [04](04-left-block-of-the-bar-rendered-by.md) | Left block of the bar rendered by atelier | 01, 03 | ready-for-agent |
 | [05](05-session-picker-list-scope-and-switch.md) | Session picker: list, scope and switch | 01, 02 | done |
 | [06](06-session-picker-preview-window-cycling-and-kill.md) | Session picker: preview, window cycling and kill | 05 | ready-for-agent |
-| [07](07-task-picker-and-window-tasks.md) | Task picker and window tasks | 02 | ready-for-agent |
+| [07](07-task-picker-and-window-tasks.md) | Task picker and window tasks | 02 | done |
 | [08](08-task-placements-split-popup-and-detach.md) | Task placements: split, popup and detach | 07 | ready-for-agent |
 | [09](09-claude-code-marker-through-atelier.md) | Claude Code marker through atelier | 02 | done |
-| [10](10-token-picker.md) | Token picker | 02 | ready-for-agent |
-| [09](09-claude-code-marker-through-atelier.md) | Claude Code marker through atelier | 02 | ready-for-agent |
 | [10](10-token-picker.md) | Token picker | 02 | done |
-| [11](11-daemon-tracer-bullet-atelier-knows-the-live.md) | Daemon tracer bullet: atelier knows the live tmux state | 02 | ready-for-agent |
+| [11](11-daemon-tracer-bullet-atelier-knows-the-live.md) | Daemon tracer bullet: atelier knows the live tmux state | 02 | done |
 | [12](12-daemon-pushes-the-bar.md) | Daemon pushes the bar | 04, 11 | ready-for-agent |
 | [13](13-repo-counts-follow-git-without-polling.md) | Repo counts follow git without polling | 12 | ready-for-agent |
 | [14](14-markdown-preview-served-by-atelier.md) | Markdown preview served by atelier | 02 | done |
@@ -25,7 +23,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [16](16-markdown-picker-on-prefix-plus-m.md) | Markdown picker on Prefix + m | 14 | ready-for-agent |
 | [17](17-setup-links-and-stubs.md) | Setup: links and stubs | 02 | done |
 | [18](18-claude-settings-merge-in-atelier.md) | Claude settings merge in atelier | 17 | done |
-| [19](19-local-diff-in-atelier.md) | local-diff in atelier | 17 | ready-for-agent |
+| [19](19-local-diff-in-atelier.md) | local-diff in atelier | 17 | done |
 | [20](20-services-on-launchd-and-systemd.md) | Services on launchd and systemd | 15, 17 | ready-for-agent |
 | [21](21-atelier-doctor.md) | atelier doctor | 17, 20 | ready-for-agent |
 | [22](22-first-install-on-the-remote-linux-machine.md) | First install on the remote Linux machine | 18, 19, 21 | needs-human |
