@@ -88,7 +88,7 @@ win, so anything below the include overrides the shared config.
 | `dot_gitconfig`            | `~/.gitconfig`, below the include  |
 | `dot_claude/settings.json` | `dot_claude/settings.local.json`  |
 
-`local-diff` lists what has accumulated locally, so you can decide whether to
+`local-diff` (an alias for `atelier local-diff`) lists what has accumulated locally, so you can decide whether to
 promote it into the tracked config or leave it machine-specific. Some of what it
 reports is permanently local — project registrations below are the main case, and
 they stay flagged on every run rather than being filtered out, because a diff
@@ -133,9 +133,7 @@ so app-side edits are never lost and the shared base still propagates.
 Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
-- `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
-- `tmux-sessions` — previous session picker, no longer bound (`Prefix + Space` runs `atelier sessions pick`); removed once atelier's has the preview
-- `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
+- `tmux-tasks` / `tmux-task-run` — fallback task picker behind `Prefix + e` when atelier is missing, and the runner for non-window placements
 
 ## Dependencies
 
@@ -158,7 +156,8 @@ Prefix is `Ctrl+a`. Modes are displayed in the status bar.
 | `Prefix → t` | **Tab mode** — `n` new, `x` close, `,` rename, `hl` prev/next, `Tab` last used |
 | `Prefix → Space` | Session picker (`s` does the same) |
 | `Prefix → e` | Task picker — scripts from `<project>/.tmux/` |
-| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies |
+| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies, `Ctrl-v` previews a `.md` |
+| `Prefix → m` | Pick a markdown file of the session, newest first, and preview it in the browser |
 | `Prefix → v` | Copy mode, then select with the mouse (`[` is an alias) |
 | `Prefix → L` | Next layout — the keyboard way to rebalance a split |
 | `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware; also inside copy mode) |

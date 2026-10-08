@@ -11,19 +11,48 @@ use crate::tmux::Tmux;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+macro_rules! flags_only {
+    ($args:ty) => {
+        impl clap::Subcommand for $args {
+            fn augment_subcommands(command: clap::Command) -> clap::Command {
+                <Self as clap::Args>::augment_args(command)
+                    .subcommand_required(false)
+                    .arg_required_else_help(false)
+            }
+
+            fn augment_subcommands_for_update(command: clap::Command) -> clap::Command {
+                <Self as clap::Args>::augment_args_for_update(command)
+                    .subcommand_required(false)
+                    .arg_required_else_help(false)
+            }
+
+            fn has_subcommand(_name: &str) -> bool {
+                false
+            }
+        }
+    };
+}
+pub(crate) use flags_only;
+
 macro_rules! features {
-    ($($(#[$doc:meta])* $variant:ident => $module:ident,)*) => {
+    (
+        $($(#[$doc:meta])* $variant:ident => $module:ident,)*
+        $(; top level: $($tvariant:ident => $tmodule:ident,)*)?
+    ) => {
         $(mod $module;)*
+        $($(mod $tmodule;)*)?
 
         #[derive(Subcommand)]
         enum Feature {
             $($(#[$doc])* #[command(subcommand)] $variant($module::Command),)*
+            $($(#[command(flatten)] $tvariant($tmodule::Command),)*)?
         }
 
         impl Feature {
             fn run(self, tmux: &Tmux) -> Result<()> {
                 match self {
                     $(Feature::$variant(command) => command.run(tmux),)*
+                    $($(Feature::$tvariant(command) => command.run(tmux),)*)?
                 }
             }
         }
@@ -37,6 +66,8 @@ features! {
     ClaudeSettingsSync => claude_settings,
     /// Entry points for other tools' hooks
     Hook => hook,
+    /// List what this machine's config adds beyond the shared dotfiles
+    LocalDiff => local_diff,
     /// Link the dotfiles into $HOME and write the shell and git stubs
     Setup => setup,
     /// Markdown preview: `atelier preview <file.md>` or `atelier preview serve`
@@ -45,6 +76,10 @@ features! {
     Pick => pick,
     /// The session picker
     Sessions => sessions,
+    /// The per-project task picker and runner over `.tmux/`
+    Tasks => tasks,
+    ; top level:
+    Daemon => daemon,
 }
 
 #[derive(Parser)]

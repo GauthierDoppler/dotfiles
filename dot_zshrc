@@ -49,6 +49,7 @@ fi
 # ─── Aliases ───────────────────────────────────────────────
 n() { if [ "$#" -eq 0 ]; then command nvim .; else command nvim "$@"; fi; }
 alias c="clear"
+alias local-diff="atelier local-diff"
 cl() {
   local -a args=("${@:#--no-proxy}")
   if (( ${#args} == $# )) && nc -z 127.0.0.1 8089 2>/dev/null; then
