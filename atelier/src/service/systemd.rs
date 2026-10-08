@@ -59,11 +59,7 @@ pub(super) fn list(services: &[Service], home: &Path) -> Result<()> {
             .files
             .iter()
             .map(|unit| FileState::of(&dir.join(&unit.name), &unit.content))
-            .max_by_key(|state| match state {
-                FileState::Current => 0,
-                FileState::Outdated => 1,
-                FileState::Missing => 2,
-            })
+            .max()
             .unwrap_or(FileState::Missing);
         let active = stdout_of("systemctl", &["--user", "is-active", &rendered.start])
             .filter(|active| !active.is_empty())

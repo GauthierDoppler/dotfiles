@@ -21,12 +21,13 @@ pub(super) fn install(services: &[Service], home: &Path) -> Result<()> {
         let path = plist_path(&dir, service);
         let plist = render(service)?;
         let target = format!("{domain}/{}", service.label);
-        let current = matches!(FileState::of(&path, &plist), FileState::Current);
-        if current && loaded(&target) {
+        if FileState::of(&path, &plist) == FileState::Current && loaded(&target) {
             succeeds("launchctl", &["kickstart", &target]);
             println!("agent ok: {}", service.label);
             continue;
         }
+        // bootout returns before the service is gone, and a bootstrap issued in
+        // that window fails with "5: Input/output error".
         if succeeds("launchctl", &["bootout", &target]) {
             for _ in 0..50 {
                 if !loaded(&target) {
@@ -37,6 +38,8 @@ pub(super) fn install(services: &[Service], home: &Path) -> Result<()> {
         }
         write_if_changed(&path, &plist)?;
         if succeeds("launchctl", &["bootstrap", &domain, &path.to_string_lossy()]) {
+            // A fresh bootstrap can sit at "pended nondemand spawn = speculative"
+            // for minutes; kickstart without -k starts it and leaves a running one alone.
             succeeds("launchctl", &["kickstart", &target]);
             println!("loaded: {}", service.label);
         } else {

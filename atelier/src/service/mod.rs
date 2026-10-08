@@ -88,7 +88,7 @@ impl Schedule {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum FileState {
     Current,
     Outdated,
@@ -194,7 +194,7 @@ fn stdout_of(program: &str, args: &[&str]) -> Option<String> {
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<bool> {
-    if matches!(FileState::of(path, content), FileState::Current) {
+    if FileState::of(path, content) == FileState::Current {
         return Ok(false);
     }
     fs::write(path, content).map_err(|error| format!("cannot write {}: {error}", path.display()))?;
