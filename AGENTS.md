@@ -792,7 +792,8 @@ Two mechanisms, for two shapes of thing:
   **token**: URL or file path. `Enter` opens (URL → the browser, file → the nvim
   in this session, or a new `nvim` window at the session root if there is none),
   `Ctrl-y` copies, `Ctrl-o` hands it to the OS opener (`open` on macOS,
-  `xdg-open` elsewhere).
+  `xdg-open` elsewhere), `Ctrl-v` previews a markdown path (`atelier preview`)
+  and does nothing on anything else.
 - **`Prefix + v`** — copy-mode, then drag with the mouse. For a **region**.
 
 `Prefix + v` matters because tmux's default `MouseDrag1Pane` only starts a
@@ -881,6 +882,18 @@ Tab reuse is macOS only: JXA against Google Chrome (`w.tabs.url()` per window,
 matched without the fragment); the first run triggers macOS's automation prompt.
 If Chrome is not running or the script fails, it falls back to `open -a`. On
 other systems the URL is only printed.
+
+**`Prefix + m` picks a markdown file of the session** (`atelier preview pick`,
+`atelier/src/preview/picker.rs`) and previews it, so reviewing an agent's plan
+needs no nvim. Rows are paths relative to `#{session_path}` — the session's own
+checkout, so a worktree session lists its worktree — newest mtime first. Inside a
+repo they come from `git ls-files -co --exclude-standard`, so gitignored files
+are left out; elsewhere from a walk that skips dot-directories and stops at six
+levels, so a session rooted at `$HOME` stays usable. `atelier preview list`
+prints the rows `tests/markdown_picker.rs` checks. Like `sessions pick`, it
+resolves the session itself, since tmux 3.4 does not expand formats in
+`display-popup`'s command. The binding replaces tmux's default `m` (mark pane),
+which nothing here used.
 
 The cursor sync is a `CursorHold` autocmd, registered once `<leader>mr` has run
 in that buffer, that `POST`s the line to `/__cursor/<path>`; the URL comes from
