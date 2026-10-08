@@ -1,5 +1,6 @@
 mod git;
 mod session;
+mod shell;
 mod tmux;
 
 use std::path::PathBuf;

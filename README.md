@@ -134,7 +134,6 @@ Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
 - `tmux-sessions` — previous session picker, no longer bound (`Prefix + Space` runs `atelier sessions pick`); removed once atelier's has the preview
-- `tmux-tasks` / `tmux-task-run` — fallback task picker behind `Prefix + e` when atelier is missing, and the runner for non-window placements
 - `tmux-status-left` — renders project · root/wt · branch in the status bar
 
 ## Dependencies
