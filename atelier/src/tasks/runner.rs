@@ -116,11 +116,7 @@ fn in_popup_of_its_own(tmux: &Tmux, catalog: &Catalog, name: &str) -> Result<()>
         .iter()
         .map(|word| shell::quote(word))
         .collect();
-    let mut popup = Command::new("tmux");
-    if let Some(socket) = tmux.socket() {
-        popup.arg("-S").arg(socket);
-    }
-    popup
+    tmux.command()
         .args(["display-popup", "-E", "-w", "80%", "-h", "60%"])
         .args(["-t", &catalog.session, "-d", path_arg(&catalog.root)?])
         .arg(command.join(" "))
