@@ -3,7 +3,9 @@ mod common;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::Command;
+#[cfg(not(target_os = "macos"))]
+use std::process::{Child, Stdio};
 use std::time::{Duration, SystemTime};
 
 use common::{git, git_repo, TmuxServer};
@@ -133,12 +135,14 @@ fn answers(port: u16) -> bool {
     response.contains("md-preview")
 }
 
+#[cfg(not(target_os = "macos"))]
 struct Server {
     port: u16,
     _home: tempfile::TempDir,
     child: Child,
 }
 
+#[cfg(not(target_os = "macos"))]
 impl Server {
     fn start() -> Self {
         let port = common::free_port();
@@ -160,6 +164,7 @@ impl Server {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 impl Drop for Server {
     fn drop(&mut self) {
         let _ = self.child.kill();
