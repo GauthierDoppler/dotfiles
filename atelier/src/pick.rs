@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
 
+use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -30,6 +31,12 @@ pub enum Command {
         target: String,
         token: String,
     },
+    /// Open a markdown path in the preview; anything else does nothing
+    Preview {
+        #[arg(short = 't', long, value_name = "PANE", default_value = "")]
+        target: String,
+        token: String,
+    },
     /// Copy a token to the clipboard through tmux (OSC 52)
     Copy { token: String },
     /// Run the fzf picker over a pane, for `display-popup -E`
@@ -49,7 +56,10 @@ impl Command {
                 Ok(())
             }
             Command::Popup { target } => popup(tmux, &resolve_pane(tmux, &target)?),
-            Command::Open { token, .. } | Command::System { token, .. } | Command::Copy { token }
+            Command::Open { token, .. }
+            | Command::System { token, .. }
+            | Command::Preview { token, .. }
+            | Command::Copy { token }
                 if token == PLACEHOLDER =>
             {
                 Ok(())
@@ -62,6 +72,13 @@ impl Command {
                 let pane = resolve_pane(tmux, &target)?;
                 system_open(&absolute(tmux, &pane, &token)?)
             }
+            Command::Preview { target, token } => {
+                if is_url(&token) || !crate::preview::is_markdown(Path::new(&token)) {
+                    return Ok(());
+                }
+                let pane = resolve_pane(tmux, &target)?;
+                crate::preview::open(&absolute(tmux, &pane, &token)?)
+            }
             Command::Copy { token } => {
                 tmux.run(&["set-buffer", "-w", "--", &token])?;
                 Ok(())
@@ -72,11 +89,11 @@ impl Command {
 
 fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
     let input = rows(tmux, pane)?.join("\n") + "\n";
-    let mut atelier = shell_quote(&std::env::current_exe()?.to_string_lossy());
+    let mut atelier = shell::quote(&std::env::current_exe()?.to_string_lossy());
     if let Some(socket) = tmux.socket() {
-        atelier += &format!(" -S {}", shell_quote(&socket.to_string_lossy()));
+        atelier += &format!(" -S {}", shell::quote(&socket.to_string_lossy()));
     }
-    let pane = shell_quote(pane);
+    let pane = shell::quote(pane);
     let mut fzf = std::process::Command::new("fzf")
         .args([
             "--no-multi",
@@ -85,7 +102,7 @@ fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
             "--layout=reverse",
             "--info=inline",
             "--prompt=  pick  ",
-            "--header=j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   esc close",
+            "--header=j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   ctrl-v preview .md   esc close",
             "--bind=j:down,k:up",
             "--bind=q:abort",
             "--bind=i:enable-search+unbind(j,k,q)+change-prompt(  search  )",
@@ -95,6 +112,7 @@ fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
             &format!("--bind=enter:execute-silent({atelier} pick open -t {pane} {{}})+abort"),
             &format!("--bind=ctrl-y:execute-silent({atelier} pick copy {{}})+abort"),
             &format!("--bind=ctrl-o:execute-silent({atelier} pick system -t {pane} {{}})+abort"),
+            &format!("--bind=ctrl-v:execute-silent({atelier} pick preview -t {pane} {{}})+abort"),
             "--color=fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee",
         ])
         .stdin(std::process::Stdio::piped())
@@ -104,10 +122,6 @@ fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
     }
     fzf.wait()?;
     Ok(())
-}
-
-fn shell_quote(arg: &str) -> String {
-    format!("'{}'", arg.replace('\'', r"'\''"))
 }
 
 fn is_url(token: &str) -> bool {

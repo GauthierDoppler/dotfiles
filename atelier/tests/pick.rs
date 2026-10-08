@@ -528,3 +528,88 @@ fn ctrl_y_in_the_picker_copies_the_selected_token() {
     });
     assert_eq!(tmux.tmux(&["show-buffer"]), "https://acme.dev/a");
 }
+
+fn preview(tmux: &TmuxServer, port: u16, home: &Path, pane: &str, token: &str) -> String {
+    let args = ["pick", "preview", "-t", pane, token];
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_atelier"))
+        .arg("--socket")
+        .arg(tmux.socket())
+        .args(args)
+        .env("HOME", home)
+        .env("MD_PREVIEW_PORT", port.to_string())
+        .env_remove("TMUX")
+        .output()
+        .unwrap();
+    common::stdout_of(&args, output)
+}
+
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
+}
+
+struct PreviewServer(std::process::Child);
+
+impl Drop for PreviewServer {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn preview_server(port: u16, home: &Path) -> PreviewServer {
+    let server = PreviewServer(
+        std::process::Command::new(env!("CARGO_BIN_EXE_atelier"))
+            .args(["preview", "serve"])
+            .env("HOME", home)
+            .env("MD_PREVIEW_PORT", port.to_string())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    wait_for("the preview server", || {
+        std::net::TcpStream::connect(("127.0.0.1", port)).is_ok()
+    });
+    server
+}
+
+#[test]
+fn previewing_a_markdown_path_opens_it_from_the_pane_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    touch(&root.join("docs/plan.md"));
+    let port = free_port();
+    let _server = preview_server(port, &root);
+    let tmux = TmuxServer::start();
+    let pane = idle_pane(&tmux, &root);
+
+    assert_eq!(
+        preview(&tmux, port, &root, &pane, "docs/plan.md"),
+        format!(
+            "http://127.0.0.1:{port}{}",
+            root.join("docs/plan.md").display()
+        )
+    );
+}
+
+#[test]
+fn previewing_anything_but_a_markdown_path_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("src/main.rs"));
+    let port = free_port();
+    let tmux = TmuxServer::start();
+    let pane = idle_pane(&tmux, dir.path());
+
+    for token in [
+        "https://acme.dev/plan.md",
+        "src/main.rs",
+        "(no URL or existing path on this pane)",
+    ] {
+        assert_eq!(preview(&tmux, port, dir.path(), &pane, token), "");
+    }
+    assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_err());
+}

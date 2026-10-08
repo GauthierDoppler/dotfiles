@@ -518,3 +518,232 @@ fn a_finished_task_stays_silent_in_the_window_being_watched() {
 
     assert!(!rang(&tmux), "the watched window rang");
 }
+
+fn pane_sizes(tmux: &TmuxServer, session: &str) -> Vec<String> {
+    tmux.tmux(&[
+        "list-panes",
+        "-t",
+        session,
+        "-F",
+        "#{pane_width}x#{pane_height}",
+    ])
+    .lines()
+    .map(str::to_string)
+    .collect()
+}
+
+fn split_sizes(header: &str) -> Vec<String> {
+    let project = Project::new();
+    project.task("watch", &format!("#!/bin/sh\n# tmux: {header}\n"));
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+
+    run(&tmux, &project, &session, &project.root, "watch");
+    wait_until("the split", || pane_sizes(&tmux, &session).len() == 2);
+
+    pane_sizes(&tmux, &session)
+}
+
+#[test]
+fn split_down_takes_thirty_percent_of_the_height_by_default() {
+    assert_eq!(split_sizes("split-down"), ["80x16", "80x7"]);
+}
+
+#[test]
+fn split_down_takes_the_rows_its_header_asks_for() {
+    assert_eq!(split_sizes("split-down 15"), ["80x8", "80x15"]);
+}
+
+#[test]
+fn split_right_takes_thirty_percent_of_the_width_by_default() {
+    assert_eq!(split_sizes("split-right"), ["55x24", "24x24"]);
+}
+
+#[test]
+fn split_right_takes_the_percentage_its_header_asks_for() {
+    assert_eq!(split_sizes("split-right 40%"), ["47x24", "32x24"]);
+}
+
+#[test]
+fn split_alone_splits_down() {
+    assert_eq!(split_sizes("split"), ["80x16", "80x7"]);
+}
+
+#[test]
+fn a_split_task_neither_marks_nor_rings() {
+    let project = Project::new();
+    let done = project.out("done");
+    project.task(
+        "watch",
+        &format!(
+            "#!/bin/sh\n# tmux: split-right\ntouch '{}'\nexit 1\n",
+            done.display()
+        ),
+    );
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    count_bells(&tmux);
+
+    run(&tmux, &project, &session, &project.root, "watch");
+    wait_until("the task to run", || done.exists());
+    std::thread::sleep(Duration::from_millis(300));
+
+    assert_eq!(
+        (
+            tmux.tmux(&["display-message", "-p", "-t", &session, "#{@task_status}"]),
+            rang(&tmux),
+        ),
+        (String::new(), false)
+    );
+}
+
+#[test]
+fn a_detached_task_runs_in_its_own_window_without_selecting_it() {
+    let project = Project::new();
+    project.task("logcat", "#!/bin/sh\n# tmux: detach\nexit 1\n");
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    let active = tmux.tmux(&["display-message", "-p", "-t", &session, "#{window_id}"]);
+
+    run(&tmux, &project, &session, &project.root, "logcat");
+    wait_until("the task to fail", || {
+        window_option(&tmux, &session, "logcat", "@task_status") == "fail"
+    });
+
+    assert_eq!(
+        (
+            tmux.tmux(&["display-message", "-p", "-t", &session, "#{window_id}"]),
+            tmux.tmux(&["display-message", "-p", "-t", &active, "#{@task_status}"]),
+        ),
+        (active.clone(), String::new())
+    );
+}
+
+#[test]
+fn rerunning_a_detached_task_reuses_its_window_without_selecting_it() {
+    let project = Project::new();
+    project.task("logcat", "#!/bin/sh\n# tmux: detach\n");
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    let active = tmux.tmux(&["display-message", "-p", "-t", &session, "#{window_id}"]);
+    run(&tmux, &project, &session, &project.root, "logcat");
+    wait_until("the first run to succeed", || {
+        window_option(&tmux, &session, "logcat", "@task_status") == "ok"
+    });
+
+    run(&tmux, &project, &session, &project.root, "logcat");
+    wait_until("the re-run to succeed", || {
+        window_option(&tmux, &session, "logcat", "@task_status") == "ok"
+    });
+
+    assert_eq!(
+        (
+            windows_named(&tmux, &session, "logcat"),
+            tmux.tmux(&["display-message", "-p", "-t", &session, "#{window_id}"]),
+        ),
+        (1, active)
+    );
+}
+
+fn popup_task(project: &Project) -> PathBuf {
+    let done = project.out("done");
+    project.task(
+        "doctor",
+        &format!(
+            "#!/bin/sh\n# tmux: popup\ntty -s && touch '{}'\n",
+            done.display()
+        ),
+    );
+    done
+}
+
+fn first_row_fzf(project: &Project) -> PathBuf {
+    let bin = project.tmpdir.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let fzf = bin.join("fzf");
+    std::fs::write(&fzf, "#!/bin/sh\nsed -n 1p\n").unwrap();
+    std::fs::set_permissions(&fzf, std::fs::Permissions::from_mode(0o755)).unwrap();
+    bin
+}
+
+fn real_client(tmux: &TmuxServer) -> String {
+    tmux.tmux(&[
+        "list-clients",
+        "-F",
+        "#{client_control_mode} #{client_name}",
+    ])
+    .lines()
+    .find_map(|line| line.strip_prefix("0 "))
+    .expect("a real client is attached")
+    .to_string()
+}
+
+#[test]
+fn a_popup_task_picked_in_the_picker_runs_in_the_picker_s_popup() {
+    let project = Project::new();
+    let done = popup_task(&project);
+    let bin = first_row_fzf(&project);
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    count_bells(&tmux);
+    let _client = attach(&tmux, &session);
+    let path = format!(
+        "PATH={}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let tmpdir = format!("TMPDIR={}", project.tmpdir.display());
+    let picker = format!(
+        "'{}' --socket '{}' tasks pick -t '{session}'",
+        env!("CARGO_BIN_EXE_atelier"),
+        tmux.socket().display()
+    );
+
+    let _popup = Client(
+        Command::new("tmux")
+            .arg("-S")
+            .arg(tmux.socket())
+            .args(["display-popup", "-c", &real_client(&tmux), "-E"])
+            .args(["-e", &path, "-e", &tmpdir, &picker])
+            .env_remove("TMUX")
+            .spawn()
+            .expect("tmux runs"),
+    );
+    wait_until("the task to run in a terminal", || done.exists());
+    std::thread::sleep(Duration::from_millis(300));
+
+    assert_eq!(
+        (
+            tmux.tmux(&["display-message", "-p", "-t", &session, "#{@task_status}"]),
+            rang(&tmux),
+        ),
+        (String::new(), false)
+    );
+}
+
+#[test]
+fn a_popup_task_run_outside_the_picker_opens_a_popup() {
+    let project = Project::new();
+    let done = popup_task(&project);
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    let _client = attach(&tmux, &session);
+
+    run(&tmux, &project, &session, &project.root, "doctor");
+
+    wait_until("the task to run in a terminal", || done.exists());
+}
+
+#[test]
+fn a_finished_detached_task_rings() {
+    let project = Project::new();
+    project.task("logcat", "#!/bin/sh\n# tmux: detach\n");
+    let tmux = TmuxServer::start();
+    let session = tmux.new_session("app", &project.root);
+    count_bells(&tmux);
+    let _client = attach(&tmux, &session);
+
+    run(&tmux, &project, &session, &project.root, "logcat");
+
+    wait_until("the bell", || rang(&tmux));
+}

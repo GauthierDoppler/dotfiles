@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -21,13 +22,13 @@ pub fn header(catalog: &Catalog) -> &'static str {
 
 pub fn pick(tmux: &Tmux, catalog: &Catalog) -> Result<()> {
     catalog.set_group("all")?;
-    let mut atelier = quote(&std::env::current_exe()?.to_string_lossy());
+    let mut atelier = shell::quote(&std::env::current_exe()?.to_string_lossy());
     if let Some(socket) = tmux.socket() {
-        atelier.push_str(&format!(" --socket {}", quote(&socket.to_string_lossy())));
+        atelier.push_str(&format!(" --socket {}", shell::quote(&socket.to_string_lossy())));
     }
     let callback =
-        |command: &str| format!("{atelier} tasks {command} -t {}", quote(&catalog.session));
-    let dir = quote(&catalog.dir().to_string_lossy());
+        |command: &str| format!("{atelier} tasks {command} -t {}", shell::quote(&catalog.session));
+    let dir = shell::quote(&catalog.dir().to_string_lossy());
     let preview = format!(
         "f={{1}}; d={dir}; [ -f \"$d/$f\" ] || exit 0; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 \"$d/$f\"; else cat \"$d/$f\"; fi"
     );
@@ -74,8 +75,4 @@ pub fn pick(tmux: &Tmux, catalog: &Catalog) -> Result<()> {
     }
     let name = selected.split_whitespace().next().unwrap_or_default();
     runner::place(tmux, catalog, name, true)
-}
-
-fn quote(word: &str) -> String {
-    format!("'{}'", word.replace('\'', r"'\''"))
 }
