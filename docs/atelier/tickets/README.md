@@ -10,7 +10,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [03](03-right-block-of-the-bar-rendered-by.md) | Right block of the bar rendered by atelier | 02 | done |
 | [04](04-left-block-of-the-bar-rendered-by.md) | Left block of the bar rendered by atelier | 01, 03 | ready-for-agent |
 | [05](05-session-picker-list-scope-and-switch.md) | Session picker: list, scope and switch | 01, 02 | done |
-| [06](06-session-picker-preview-window-cycling-and-kill.md) | Session picker: preview, window cycling and kill | 05 | ready-for-agent |
+| [06](06-session-picker-preview-window-cycling-and-kill.md) | Session picker: preview, window cycling and kill | 05 | done |
 | [07](07-task-picker-and-window-tasks.md) | Task picker and window tasks | 02 | done |
 | [08](08-task-placements-split-popup-and-detach.md) | Task placements: split, popup and detach | 07 | ready-for-agent |
 | [09](09-claude-code-marker-through-atelier.md) | Claude Code marker through atelier | 02 | done |

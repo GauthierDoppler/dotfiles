@@ -41,7 +41,6 @@ const DESKTOP_LINKS: &[(&str, &str)] = &[
     ),
     (".pi/agent/agents/scout.md", "dot_pi_agent/agents/scout.md"),
     (".local/bin/ssh-setup", "scripts/ssh-setup"),
-    (".local/bin/tmux-sessions", "scripts/tmux-sessions"),
     (".local/bin/tmux-tasks", "scripts/tmux-tasks"),
     (".local/bin/tmux-task-run", "scripts/tmux-task-run"),
     (".local/bin/tmux-status-left", "scripts/tmux-status-left"),

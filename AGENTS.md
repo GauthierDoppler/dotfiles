@@ -174,12 +174,23 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
 - **The session picker is `atelier sessions pick`**, run by `Prefix + Space`
   and `Prefix + s` inside `display-popup -E`. It execs fzf with rows of
   `<session id><TAB><label>` (`--with-nth=2..`), and every bind calls back into
-  `atelier sessions <rows|toggle|header|escape|switch> -t <session>`, which is
-  what `tests/sessions.rs` drives. The scope lives in `@atelier_sessions_scope`
-  on the session the picker was opened from, reset to `project` on every open.
-  tmux 3.4 does not expand formats in `display-popup`'s shell command, so
-  `pick` resolves the session and client itself rather than taking
-  `#{session_id}` from the binding. Needs fzf ≥ 0.45 (`transform`).
+  `atelier sessions <rows|toggle|header|escape|switch|preview|next|prev|kill>`,
+  which is what `tests/sessions.rs` drives. The scope lives in
+  `@atelier_sessions_scope` on the session the picker was opened from, reset to
+  `project` on every open. tmux 3.4 does not expand formats in
+  `display-popup`'s shell command, so `pick` resolves the session and client
+  itself rather than taking `#{session_id}` from the binding. Needs fzf ≥ 0.45
+  (`transform`).
+- **The preview is the highlighted session's window list plus the tail of its
+  current window**, because fzf previews cannot be focused; `h`/`l` run
+  `previous-window`/`next-window` on that *other* session (no client needed),
+  so Enter lands on the window being watched. The capture comes at the source
+  pane's geometry, bigger than the popup both ways: width is `nowrap` (a
+  full-screen TUI cannot reflow, and a cut right edge reads where wrapping does
+  not), height takes the tail sized from `$FZF_PREVIEW_LINES`, since fzf clips
+  the bottom, which is the prompt or the error. Trailing lines that are blank
+  once SGR is stripped are dropped first. `ctrl-x` is a `transform` that kills
+  and prints `reload(rows)`.
 - **`display-message -p` returns one field per call.** It prints control
   characters as octal and newlines as `_`, so fields cannot be joined with a
   delimiter — except numeric fields ahead of a single free-text one, split with
