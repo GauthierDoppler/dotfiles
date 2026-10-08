@@ -193,7 +193,7 @@ fn assert_fails(machine: &Machine, args: &[&str], name: &str) -> String {
 #[test]
 fn a_healthy_machine_passes_every_check() {
     let machine = Machine::healthy();
-    let output = machine.doctor(&[]);
+    let output = machine.doctor(&["--system", "systemd"]);
     let report = report(&output);
     assert!(
         output.status.success(),
