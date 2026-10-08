@@ -11,6 +11,29 @@ use crate::tmux::Tmux;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+macro_rules! flags_only {
+    ($args:ty) => {
+        impl clap::Subcommand for $args {
+            fn augment_subcommands(command: clap::Command) -> clap::Command {
+                <Self as clap::Args>::augment_args(command)
+                    .subcommand_required(false)
+                    .arg_required_else_help(false)
+            }
+
+            fn augment_subcommands_for_update(command: clap::Command) -> clap::Command {
+                <Self as clap::Args>::augment_args_for_update(command)
+                    .subcommand_required(false)
+                    .arg_required_else_help(false)
+            }
+
+            fn has_subcommand(_name: &str) -> bool {
+                false
+            }
+        }
+    };
+}
+pub(crate) use flags_only;
+
 macro_rules! features {
     ($($(#[$doc:meta])* $variant:ident => $module:ident,)*) => {
         $(mod $module;)*
@@ -35,6 +58,8 @@ features! {
     Bar => bar,
     /// Entry points for other tools' hooks
     Hook => hook,
+    /// List what this machine's config adds beyond the shared dotfiles
+    LocalDiff => local_diff,
     /// Link the dotfiles into $HOME and write the shell and git stubs
     Setup => setup,
 }

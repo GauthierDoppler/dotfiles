@@ -40,7 +40,6 @@ const DESKTOP_LINKS: &[(&str, &str)] = &[
         "dot_pi_agent/agents/reviewer.md",
     ),
     (".pi/agent/agents/scout.md", "dot_pi_agent/agents/scout.md"),
-    (".local/bin/local-diff", "scripts/local-diff"),
     (".local/bin/ssh-setup", "scripts/ssh-setup"),
     (
         ".local/bin/claude-settings-sync",
