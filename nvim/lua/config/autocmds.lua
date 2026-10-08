@@ -62,7 +62,7 @@ vim.api.nvim_create_autocmd({ 'FocusLost', 'BufLeave', 'InsertLeave' }, {
   end,
 })
 
--- Markdown preview: dotfiles/scripts/md-preview
+-- Markdown preview: atelier preview
 local function md_preview_cursor(buf)
   local url = vim.b[buf].md_preview_cursor
   if not url then return end
@@ -81,8 +81,9 @@ vim.api.nvim_create_autocmd('FileType', {
     vim.keymap.set('n', '<leader>mr', function()
       local file = vim.api.nvim_buf_get_name(buf)
       if file == '' then return vim.notify('md-preview: buffer has no file', vim.log.levels.WARN) end
-      if vim.fn.executable 'md-preview' == 0 then return vim.notify('md-preview: not on PATH -- run ./install.sh', vim.log.levels.ERROR) end
-      vim.system({ 'md-preview', file }, { text = true }, function(res)
+      local atelier = vim.fn.expand '~/.local/bin/atelier'
+      if vim.fn.executable(atelier) == 0 then return vim.notify('md-preview: ' .. atelier .. ' missing -- run ./install.sh', vim.log.levels.ERROR) end
+      vim.system({ atelier, 'preview', file }, { text = true }, function(res)
         vim.schedule(function()
           if res.code ~= 0 then return vim.notify(vim.trim(res.stderr or '') ~= '' and vim.trim(res.stderr) or 'md-preview failed', vim.log.levels.ERROR) end
           if not vim.api.nvim_buf_is_valid(buf) then return end
