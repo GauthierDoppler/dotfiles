@@ -550,16 +550,17 @@ fn edits_are_still_seen_in_a_directory_a_checkout_removed_and_recreated() {
     counts_become(&tmux, "work", "+1", Duration::from_secs(1));
 }
 
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn a_directory_that_cannot_be_watched_is_logged_once() {
-    let dir = tempfile::tempdir().unwrap();
-    let work = repo_with_upstream(dir.path());
+    let (_dir, root) = common::real_tempdir();
+    let work = repo_with_upstream(&root);
     std::fs::create_dir(work.join("sub")).unwrap();
     std::fs::write(work.join("sub/a.txt"), "a\n").unwrap();
     common::git(&work, &["add", "sub"]);
     common::git(&work, &["commit", "-qm", "a"]);
     std::fs::remove_dir_all(work.join("sub")).unwrap();
-    let log = dir.path().join("daemon.log");
+    let log = root.join("daemon.log");
     let tmux = server();
     tmux.new_session("work", &work);
     let _viewer = attach_terminal_client(&tmux, "work", 130);
