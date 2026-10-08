@@ -17,7 +17,8 @@ disable-model-invocation: true
 run and debug loops live — deliberately **not** in Neovim, so they can be driven from any
 window of the session.
 
-Implementation: `~/dotfiles/scripts/tmux-tasks`. Read it if behaviour here is unclear.
+Implementation: `atelier tasks` (`~/dotfiles/atelier/src/tasks/`), falling back to
+`~/dotfiles/scripts/tmux-tasks` when atelier is not installed. Read them if behaviour here is unclear.
 
 ## Where tasks live
 
@@ -124,7 +125,7 @@ deep. Never write a task that depends on the pane's cwd.
 2. Create `<root>/.tmux/<group>/<name>` (or `<root>/.tmux/<name>` if ungrouped).
 3. Shebang, `# task:` description, `# tmux:` placement, `set -euo pipefail`.
 4. `chmod +x` it.
-5. Verify it is discovered: `~/.local/bin/tmux-tasks --list`.
+5. Verify it is discovered: `~/.local/bin/atelier tasks list` (from inside the session).
 6. Only then tell the user it is ready.
 
 Shared logic goes in `.tmux/lib/*.sh`, sourced via `"$TMUX_TASK_ROOT/.tmux/lib/common.sh"`, and
@@ -184,9 +185,9 @@ adb devices
 | symptom | cause |
 | --- | --- |
 | task missing from picker | not executable, or nested deeper than 2 levels |
-| `Prefix + e` flashes a message instead of opening | the project has no tasks; the binding gates on `tmux-tasks --check` so the popup never opens empty |
+| `Prefix + e` lists only a `(no …)` placeholder row | nothing executable at depth 1–2, or `#{session_path}` is not inside the project |
 | duplicate windows on re-run | the task name changed, so the derived window name changed |
 | task runs in the wrong directory | it `cd`s relative to itself instead of trusting the root |
 | helper file shows up as a task | it is `chmod +x`; remove the executable bit |
 
-Do not hand-edit the MRU cache in `$TMPDIR/tmux-tasks.<hash>` — it is rewritten on every run.
+Do not hand-edit the MRU cache in `$TMPDIR/atelier-tasks.<hash>.recent` — it is rewritten on every run.

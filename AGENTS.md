@@ -247,7 +247,8 @@ resize bindings, on purpose — resizing is done by dragging the pane border.
 
 ## Per-project tmux tasks
 
-`Prefix + e` opens a task picker (`scripts/tmux-tasks`) over `<project>/.tmux/`.
+`Prefix + e` opens a task picker (`atelier tasks pick`, or `scripts/tmux-tasks`
+when atelier is not installed) over `<project>/.tmux/`.
 Build, run and debug loops live there rather than in Neovim, so they can be
 driven from any window of the session.
 
@@ -281,11 +282,15 @@ directory, **not** the pane's. That is what makes the picker behave identically
 from a pane three directories deep. Ordering is most-recently-run first, cached
 per project under `$TMPDIR`.
 
-`scripts/tmux-task-run` is the wrapper that actually runs the task. It exists as
-a separate file, invoked with an explicit `bash` shebang, because tmux runs
-commands through `default-shell` (zsh) where `read -rsn1` would not parse — and
-because building it as a `printf %q` string stopped being readable once it had
-to publish state.
+A `window` task runs under `atelier tasks exec`, which tmux starts directly as
+the window's command (argv, no shell), so it publishes the marker, rings and
+waits for a key itself. The other placements are still handed to the bash pair
+until ticket 08: `split-*` and `detach` go to `tmux-tasks --run`, and `popup`
+execs `scripts/tmux-task-run` inside the picker's popup. That wrapper exists as a
+separate file, invoked with an explicit `bash` shebang, because tmux runs
+commands through `default-shell` (zsh) where `read -rsn1` would not parse.
+The picker, the rows and its fzf callbacks (`atelier tasks list|advance|prompt|header`)
+and the window runner are covered by `atelier/tests/tasks.rs`.
 
 **Task completion is signalled by `@task_status`**, a per-window user option the
 wrapper sets to `running` / `ok` / `fail`; the `window-status-*` formats render
@@ -299,15 +304,15 @@ Only `window` and `detach` are marked. A split or popup shares the window you
 are working in, where a `✗` would be ambiguous — and the output is right in
 front of you anyway.
 
-Those same two placements also **notify** on completion: a `\a` bell (picked up by
+Those same two placements also **ring** on completion: a `\a` bell, picked up by
 `monitor-bell on`, then passed on to the terminal, which decides whether that
-means a dock bounce or a badge) plus a `terminal-notifier` banner under its own
-name. It used to borrow ghostty's bundle id with `-sender` so a click focused the
-terminal; that tied the banner to one terminal app, so it is now informational
-only and clicking it does not bring anything forward. Both are skipped when
-the task's window is the active window of an attached client — notifying about
-output the user is staring at is noise — and `terminal-notifier` is probed with
-`command -v` so a machine without it degrades to the bell alone.
+means a dock bounce or a badge. It is skipped when the task's window is the
+active window of a session a non-control-mode client is attached to — ringing
+about output the user is staring at is noise, and a control-mode client (the
+daemon) looks at nothing. A `window` task rings and nothing else: the spec keeps
+desktop notifications for Claude's `waiting` only. A `detach` task, still run by
+the bash wrapper until ticket 08, also posts an informational `terminal-notifier`
+banner when that is installed.
 
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
