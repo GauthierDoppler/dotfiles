@@ -3,7 +3,9 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use super::{failures, stdout_of, succeeds, write_if_changed, Day, FileState, Schedule, Service};
+use super::{
+    failures, stdout_of, succeeds, write_if_changed, Day, FileState, Schedule, Service, Status,
+};
 use crate::Result;
 
 struct Unit {
@@ -51,22 +53,28 @@ pub(super) fn install(services: &[Service], home: &Path) -> Result<()> {
     failures(failed)
 }
 
-pub(super) fn list(services: &[Service], home: &Path) -> Result<()> {
+pub(super) fn statuses(services: &[Service], home: &Path) -> Result<Vec<Status>> {
     let dir = units_dir(home);
+    let mut statuses = Vec::new();
     for service in services {
         let rendered = render(service)?;
-        let state = rendered
+        let file = rendered
             .files
             .iter()
             .map(|unit| FileState::of(&dir.join(&unit.name), &unit.content))
             .max()
             .unwrap_or(FileState::Missing);
-        let active = stdout_of("systemctl", &["--user", "is-active", &rendered.start])
+        let state = stdout_of("systemctl", &["--user", "is-active", &rendered.start])
             .filter(|active| !active.is_empty())
             .unwrap_or_else(|| "unknown".into());
-        println!("{:<40} {:<14} {active}", service.label, state.label());
+        statuses.push(Status {
+            label: service.label.clone(),
+            file,
+            running: state == "active",
+            state,
+        });
     }
-    Ok(())
+    Ok(statuses)
 }
 
 pub(super) fn uninstall(services: &[Service], home: &Path) -> Result<()> {
@@ -111,17 +119,8 @@ fn systemctl(args: &[&str]) -> bool {
 }
 
 fn linger() -> Result<()> {
-    let user = match std::env::var("USER") {
-        Ok(user) if !user.is_empty() => user,
-        _ => stdout_of("id", &["-un"])
-            .filter(|user| !user.is_empty())
-            .ok_or("cannot tell which user to enable linger for")?,
-    };
-    let enabled = stdout_of(
-        "loginctl",
-        &["show-user", &user, "--property=Linger", "--value"],
-    );
-    if enabled.as_deref() == Some("yes") {
+    let (user, enabled) = linger_state()?;
+    if enabled {
         return Ok(());
     }
     if succeeds("loginctl", &["enable-linger", &user]) {
@@ -133,6 +132,20 @@ fn linger() -> Result<()> {
         )
         .into())
     }
+}
+
+pub(super) fn linger_state() -> Result<(String, bool)> {
+    let user = match std::env::var("USER") {
+        Ok(user) if !user.is_empty() => user,
+        _ => stdout_of("id", &["-un"])
+            .filter(|user| !user.is_empty())
+            .ok_or("cannot tell which user to check linger for")?,
+    };
+    let enabled = stdout_of(
+        "loginctl",
+        &["show-user", &user, "--property=Linger", "--value"],
+    );
+    Ok((user, enabled.as_deref() == Some("yes")))
 }
 
 fn render(service: &Service) -> Result<Rendered> {

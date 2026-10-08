@@ -243,10 +243,25 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   itself is the exception: `install.sh` stops if the build fails, since
   `atelier setup` is what links everything.
 - **A feature with flags and no subcommands** (`setup`, `local-diff`,
-  `claude-settings-sync`) derives
+  `claude-settings-sync`, `doctor`) derives
   `clap::Args` and calls `crate::flags_only!(Command)`, which implements
   `clap::Subcommand` by delegating to the args and clearing
   `subcommand_required`, so it still registers with one `features!` line.
+- **`atelier doctor` turns what this file asks you to remember into checks**,
+  each a small function in a table in `src/doctor.rs` printing `ok`, `FAIL`
+  with a one-line `fix:`, `skip` or `look`; any `FAIL` exits non-zero. It
+  checks terminfo for `$TERM` and every attached terminal (fix: `infocmp -x
+  <term> | ssh <host> tic -x -`), tmux ≥ 3.3 (`allow-passthrough` and
+  `pane-border-indicators` are the newest options `dot_tmux.conf` sets),
+  `extended-keys`, duplicated `terminal-features`, fzf ≥ 0.45,
+  `~/.local/bin/atelier`, pending `atelier setup` changes, the daemon of this
+  tmux server, every service of `services.toml` (and on launchd a writable
+  `~/Library/LaunchAgents`), and linger on systemd. Checks that need a tmux
+  server are skipped outside one. **The Nerd Font is `look`, never `ok`**: no
+  terminal reports which font draws a glyph, so it prints U+E0B6/U+E0B4 for a
+  human to judge and does not affect the exit code. `tests/doctor.rs` drives it
+  against a private tmux server with fake `infocmp`, `fzf`, `systemctl`,
+  `loginctl` and `launchctl` alone on `PATH`.
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
   shellcheck on `install.sh` and every executable shell script in `scripts/`.
@@ -267,7 +282,8 @@ reconstructs what the project *is*. Do not add a persistence plugin.
 every time; the live server had accumulated 52 duplicated `terminal-overrides`
 entries this way. `set -gu` first resets the option to its default array (which
 carries the stock `xterm*:clipboard:ccolour:cstyle:focus:title`, needed for OSC 52
-and focus events), so the `set -gu` + `set -as` pair is idempotent.
+and focus events), so the `set -gu` + `set -as` pair is idempotent. `atelier
+doctor` fails on a duplicated entry.
 
 **No terminal app is assumed.** Entries are keyed on the client's TERM, outside
 tmux: `xterm-ghostty`, `xterm-kitty` and `wezterm` get `RGB:usstyle:sync` —

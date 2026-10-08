@@ -166,20 +166,7 @@ impl Command {
     pub fn run(self, _tmux: &Tmux) -> Result<()> {
         let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
         let repo = repo_root(self.repo, &home)?;
-        let profile = self.profile.unwrap_or(if cfg!(target_os = "macos") {
-            Profile::Desktop
-        } else {
-            Profile::Remote
-        });
-
-        let mut actions = Vec::new();
-        for (source, dest) in links(&repo, &home, profile)? {
-            plan_link(&mut actions, source, dest)?;
-        }
-        for stub in STUBS {
-            plan_stub(&mut actions, stub, &repo, &home)?;
-        }
-
+        let actions = plan(&repo, &home, self.profile.unwrap_or_else(Profile::of_this_machine))?;
         for action in &actions {
             println!("{}", action.describe());
             if !self.dry_run {
@@ -193,6 +180,36 @@ impl Command {
         }
         Ok(())
     }
+}
+
+impl Profile {
+    fn of_this_machine() -> Self {
+        if cfg!(target_os = "macos") {
+            Profile::Desktop
+        } else {
+            Profile::Remote
+        }
+    }
+}
+
+fn plan(repo: &Path, home: &Path, profile: Profile) -> Result<Vec<Action>> {
+    let mut actions = Vec::new();
+    for (source, dest) in links(repo, home, profile)? {
+        plan_link(&mut actions, source, dest)?;
+    }
+    for stub in STUBS {
+        plan_stub(&mut actions, stub, repo, home)?;
+    }
+    Ok(actions)
+}
+
+pub(crate) fn pending(repo: &Path, home: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths: Vec<PathBuf> = plan(repo, home, Profile::of_this_machine())?
+        .iter()
+        .map(|action| action.path().to_path_buf())
+        .collect();
+    paths.dedup();
+    Ok(paths)
 }
 
 pub(crate) fn repo_root(flag: Option<PathBuf>, home: &Path) -> Result<PathBuf> {
@@ -343,6 +360,16 @@ fn suffixed(path: &Path, suffix: &str) -> PathBuf {
 }
 
 impl Action {
+    fn path(&self) -> &Path {
+        match self {
+            Action::Backup { path, .. }
+            | Action::Unlink { path }
+            | Action::Symlink { dest: path, .. }
+            | Action::WriteStub { path, .. }
+            | Action::Migrate { dest: path, .. } => path,
+        }
+    }
+
     fn describe(&self) -> String {
         match self {
             Action::Backup { path, to } => {
