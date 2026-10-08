@@ -9,6 +9,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use super::bar::{adopt, Pusher, RESIZED};
 use super::control::{Event, Notification, Parser};
+use super::repos::Repos;
 use super::state::{Query, State};
 use super::{Paths, Request, StatusReply};
 use crate::tmux::Tmux;
@@ -60,6 +61,7 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
     let mut pending = VecDeque::from([Pending::Me]);
     let mut out = "display-message -p '#{client_name}'\n".to_string();
     let mut pusher = Pusher::default();
+    let (mut repos, mut changes) = Repos::new();
     let mut push_due = false;
     let mut stale = true;
     let mut attached = false;
@@ -72,8 +74,12 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
             push_due = true;
         }
         if push_due && pending.is_empty() {
-            let watched = lock(state).watched();
-            for command in pusher.commands(watched) {
+            let (watched, sessions) = {
+                let state = lock(state);
+                (state.watched(), state.fields())
+            };
+            repos.follow(&sessions);
+            for command in pusher.commands(watched, &mut repos) {
                 out.push_str(&command);
                 out.push('\n');
                 pending.push_back(Pending::Ignored);
@@ -83,6 +89,7 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
         if !out.is_empty() && input.write_all(std::mem::take(&mut out).as_bytes()).await.is_err() {
             break;
         }
+        let settle = repos.due();
         tokio::select! {
             line = lines.next_line() => {
                 let Ok(Some(line)) = line else { break };
@@ -111,6 +118,10 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
                     }
                     None => {}
                 }
+            }
+            Some(change) = changes.recv() => repos.note(change),
+            _ = tokio::time::sleep_until(settle.unwrap_or_else(std::time::Instant::now).into()), if settle.is_some() => {
+                push_due |= repos.settle();
             }
             _ = battery.tick() => {
                 push_due |= pusher.battery_changed();
