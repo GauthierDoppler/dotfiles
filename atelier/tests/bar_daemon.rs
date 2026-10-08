@@ -509,3 +509,32 @@ fn a_repo_no_session_uses_any_more_is_no_longer_watched() {
 
     assert_eq!(git.calls(), before);
 }
+
+#[test]
+fn edits_are_still_seen_in_a_directory_a_checkout_removed_and_recreated() {
+    let dir = tempfile::tempdir().unwrap();
+    let work = repo_with_upstream(dir.path());
+    std::fs::create_dir(work.join("sub")).unwrap();
+    std::fs::write(work.join("sub/a.txt"), "a\n").unwrap();
+    common::git(&work, &["add", "sub"]);
+    common::git(&work, &["commit", "-qm", "a"]);
+    common::git(
+        &work,
+        &["checkout", "-qb", "other", "--no-track", "origin/main"],
+    );
+    std::fs::create_dir(work.join("sub")).unwrap();
+    std::fs::write(work.join("sub/b.txt"), "b\n").unwrap();
+    common::git(&work, &["add", "sub"]);
+    common::git(&work, &["commit", "-qm", "b"]);
+    common::git(&work, &["checkout", "-q", "main"]);
+    let tmux = server();
+    let git = GitLog::new();
+    let _daemon = watch_session(&tmux, "work", &work, &git);
+    counts_become(&tmux, "work", "↑1", Duration::from_secs(5));
+
+    common::git(&work, &["checkout", "-q", "other"]);
+    counts_become(&tmux, "work", "", Duration::from_secs(1));
+    std::fs::write(work.join("sub/b.txt"), "b\nc\n").unwrap();
+
+    counts_become(&tmux, "work", "+1", Duration::from_secs(1));
+}

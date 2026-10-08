@@ -38,6 +38,15 @@
   watched session, but only the changed repo's counts are recomputed and only
   changed blocks are sent; rendering is pure and cheap.
 - A rescan event (inotify queue overflow) marks every repo changed.
+- Found in review: a branch switch that empties a tracked directory makes git
+  remove and recreate it, which kills its inotify watch while the daemon still
+  counted it as watched. A removed path is now forgotten and watches are
+  reconciled after every settle; covered by
+  `edits_are_still_seen_in_a_directory_a_checkout_removed_and_recreated`. A
+  directory removed and recreated by hand with no index change stays unwatched
+  until the next change in that repo.
+- A failed `watch` (e.g. `max_user_watches` exhausted on a huge repo) is
+  skipped silently: edits there are only picked up with the next git change.
 - Unverified on macOS: the FSEvents path watches the worktree root
   recursively instead of per directory (`notify` restarts its FSEvents stream
   on every added path) and relies on canonicalised paths matching the ones

@@ -13,7 +13,7 @@ const SETTLE: Duration = Duration::from_millis(200);
 pub type Fields = [String; Field::ALL.len()];
 pub type Changes = UnboundedReceiver<notify::Result<Event>>;
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(PartialEq)]
 struct Layout {
     worktree: PathBuf,
     git_dir: PathBuf,
@@ -204,8 +204,14 @@ impl Repos {
                 repo.retrack = true;
             }
         }
-        if matches!(event.kind, EventKind::Access(_)) {
-            return;
+        match event.kind {
+            EventKind::Access(_) => return,
+            EventKind::Remove(_) => {
+                for path in &event.paths {
+                    self.watching.remove(path);
+                }
+            }
+            _ => {}
         }
         for path in &event.paths {
             for repo in self.repos.values_mut() {
@@ -224,7 +230,6 @@ impl Repos {
     pub fn settle(&mut self) -> bool {
         let now = Instant::now();
         let mut settled = false;
-        let mut retracked = false;
         for repo in self.repos.values_mut() {
             if repo.due.is_some_and(|due| due <= now) {
                 repo.due = None;
@@ -232,21 +237,17 @@ impl Repos {
                 settled = true;
                 if std::mem::take(&mut repo.retrack) {
                     repo.track();
-                    retracked = true;
                 }
             }
         }
-        if retracked {
+        if settled {
             self.rewatch();
         }
         settled
     }
 
     fn repo_of(&self, path: &str) -> Option<PathBuf> {
-        match self.located.get(path) {
-            Some(git_dir) => git_dir.clone(),
-            None => Layout::find(Path::new(path)).map(|layout| layout.git_dir),
-        }
+        self.located.get(path).cloned().flatten()
     }
 
     fn rewatch(&mut self) {
