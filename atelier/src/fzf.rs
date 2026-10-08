@@ -10,13 +10,21 @@ pub const MODAL_KEYS: &str = "j,k,q";
 
 const COLORS: &str = "--color=fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee";
 
-pub fn atelier(tmux: &Tmux) -> Result<String> {
-    let mut command = shell::quote(&std::env::current_exe()?.to_string_lossy());
+pub fn atelier_argv(tmux: &Tmux) -> Result<Vec<String>> {
+    let mut argv = vec![std::env::current_exe()?.to_string_lossy().into_owned()];
     if let Some(socket) = tmux.socket() {
-        command.push_str(" --socket ");
-        command.push_str(&shell::quote(&socket.to_string_lossy()));
+        argv.push("--socket".into());
+        argv.push(socket.to_string_lossy().into_owned());
     }
-    Ok(command)
+    Ok(argv)
+}
+
+pub fn atelier(tmux: &Tmux) -> Result<String> {
+    Ok(atelier_argv(tmux)?
+        .iter()
+        .map(|word| shell::quote(word))
+        .collect::<Vec<_>>()
+        .join(" "))
 }
 
 pub fn picker(prompt: &str, header: &str, modal_keys: &str) -> Command {

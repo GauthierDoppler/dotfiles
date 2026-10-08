@@ -2,17 +2,15 @@ name: atelier
 
 on:
   push:
-    paths:
-      - 'atelier/**'
-      - 'install.sh'
-      - 'scripts/**'
-      - '.github/workflows/atelier.yml'
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'nvim/**'
   pull_request:
-    paths:
-      - 'atelier/**'
-      - 'install.sh'
-      - 'scripts/**'
-      - '.github/workflows/atelier.yml'
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'nvim/**'
 
 jobs:
   rust:
@@ -58,9 +56,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Shellcheck install.sh and shell scripts under scripts/
+      - name: Shellcheck install.sh, the Claude statusline and shell scripts under scripts/
         run: |
-          files=(install.sh)
+          files=(install.sh dot_claude/statusline-custom.sh)
           while IFS= read -r -d '' f; do
             if head -n1 "$f" | grep -qE '^#!.*[/ ](ba)?sh$'; then
               files+=("$f")

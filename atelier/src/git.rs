@@ -3,40 +3,69 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-pub fn main_worktree(dir: &Path) -> Option<PathBuf> {
+fn git_bytes(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(dir)
-        .args(["worktree", "list", "--porcelain", "-z"])
+        .args(args)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
         .output()
         .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let listing = String::from_utf8(output.stdout).ok()?;
+    output.status.success().then_some(output.stdout)
+}
+
+fn git(dir: &Path, args: &[&str]) -> Option<String> {
+    git_bytes(dir, args).map(|stdout| String::from_utf8_lossy(&stdout).into_owned())
+}
+
+fn read_only_git(dir: &Path, args: &[&str]) -> Option<String> {
+    let mut read_only = vec!["--no-optional-locks"];
+    read_only.extend_from_slice(args);
+    git(dir, &read_only)
+}
+
+pub fn main_worktree(dir: &Path) -> Option<PathBuf> {
+    let listing = git(dir, &["worktree", "list", "--porcelain", "-z"])?;
     let first = listing.split('\0').next()?;
     first.strip_prefix("worktree ").map(PathBuf::from)
 }
 
 pub fn is_linked_worktree(dir: &Path) -> Option<bool> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args([
+    let listing = git(
+        dir,
+        &[
             "rev-parse",
             "--path-format=absolute",
             "--git-dir",
             "--git-common-dir",
-        ])
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let listing = String::from_utf8(output.stdout).ok()?;
+        ],
+    )?;
     let mut lines = listing.lines();
     Some(lines.next()? != lines.next()?)
+}
+
+pub fn toplevel(dir: &Path) -> Option<PathBuf> {
+    let top = git(dir, &["rev-parse", "--show-toplevel"])?;
+    let top = top.trim_end_matches('\n');
+    (!top.is_empty()).then(|| PathBuf::from(top))
+}
+
+pub fn files(dir: &Path) -> Option<Vec<String>> {
+    let listed = git(dir, &["ls-files", "-z", "-co", "--exclude-standard"])?;
+    Some(
+        listed
+            .split('\0')
+            .filter(|file| !file.is_empty())
+            .map(String::from)
+            .collect(),
+    )
+}
+
+pub fn config_entries(file: &Path) -> Option<Vec<String>> {
+    let file = file.to_str()?;
+    let listed = git(Path::new("."), &["config", "--file", file, "--list"])?;
+    Some(listed.lines().map(String::from).collect())
 }
 
 #[derive(Clone, Copy, Default)]
@@ -82,7 +111,7 @@ pub fn repo_counts(dir: &Path) -> RepoCounts {
 }
 
 pub fn tracked_files(worktree: &Path) -> Option<Vec<PathBuf>> {
-    let listing = read_only_git_bytes(worktree, &["ls-files", "-z"])?;
+    let listing = git_bytes(worktree, &["--no-optional-locks", "ls-files", "-z"])?;
     Some(
         listing
             .split(|byte| *byte == 0)
@@ -90,20 +119,4 @@ pub fn tracked_files(worktree: &Path) -> Option<Vec<PathBuf>> {
             .map(|name| worktree.join(OsStr::from_bytes(name)))
             .collect(),
     )
-}
-
-fn read_only_git(dir: &Path, args: &[&str]) -> Option<String> {
-    read_only_git_bytes(dir, args).map(|stdout| String::from_utf8_lossy(&stdout).into_owned())
-}
-
-fn read_only_git_bytes(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .arg("--no-optional-locks")
-        .args(args)
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    output.status.success().then_some(output.stdout)
 }

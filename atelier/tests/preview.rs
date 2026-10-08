@@ -1,10 +1,11 @@
 mod common;
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpStream;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 struct Preview {
     port: u16,
@@ -31,22 +32,6 @@ impl Response {
     }
 }
 
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn wait_until(what: &str, mut ready: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !ready() {
-        assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(50));
-    }
-}
-
 fn alive(port: u16) -> bool {
     TcpStream::connect(("127.0.0.1", port)).is_ok()
 }
@@ -57,7 +42,7 @@ impl Preview {
     }
 
     fn start_with(binary: &Path) -> Self {
-        let port = free_port();
+        let port = common::free_port();
         let home = tempfile::tempdir().unwrap();
         let spawn = || {
             Command::new(binary)
@@ -80,7 +65,7 @@ impl Preview {
                 result => break result.expect("server starts"),
             }
         };
-        wait_until("the preview server", || alive(port));
+        common::wait_until("the preview server", || alive(port));
         Preview { port, home, child }
     }
 
@@ -253,12 +238,6 @@ fn encode(path: &Path) -> String {
         .join("/")
 }
 
-fn real_tempdir() -> (tempfile::TempDir, PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
-    let real = dir.path().canonicalize().unwrap();
-    (dir, real)
-}
-
 fn write(path: &Path, content: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, content).unwrap();
@@ -355,7 +334,7 @@ fn a_foreign_host_header_is_refused_against_dns_rebinding() {
 
 #[test]
 fn raw_serves_markdown_source_and_nothing_else() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write(&root.join("plan.md"), "# Plan\n");
     write(&root.join("secret.txt"), "hunter2");
     let server = Preview::start();
@@ -373,7 +352,7 @@ fn raw_serves_markdown_source_and_nothing_else() {
 
 #[test]
 fn a_path_with_spaces_and_unicode_round_trips_through_the_url() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let file = root.join("my notes/été #1.md");
     write(&file, "accents");
     let server = Preview::start();
@@ -385,7 +364,7 @@ fn a_path_with_spaces_and_unicode_round_trips_through_the_url() {
 
 #[test]
 fn a_non_markdown_file_needs_a_markdown_referer() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let repo = root.join("repo");
     common::git_repo(&repo);
     write(&repo.join("docs/plan.md"), "![](../img/a.png)");
@@ -416,7 +395,7 @@ fn a_non_markdown_file_needs_a_markdown_referer() {
 
 #[test]
 fn a_markdown_page_cannot_reach_outside_its_repo() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let repo = root.join("repo");
     common::git_repo(&repo);
     write(&repo.join("README.md"), "hi");
@@ -451,7 +430,7 @@ fn a_markdown_page_cannot_reach_outside_its_repo() {
 
 #[test]
 fn outside_git_a_markdown_page_reaches_only_its_own_directory() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write(&root.join("notes/today.md"), "hi");
     write(&root.join("notes/sketch.svg"), "<svg/>");
     write(&root.join("other/sketch.svg"), "<svg/>");
@@ -477,7 +456,7 @@ fn outside_git_a_markdown_page_reaches_only_its_own_directory() {
 
 #[test]
 fn a_referer_from_another_origin_is_not_trusted() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write(&root.join("doc.md"), "hi");
     write(&root.join("data.json"), "{}");
     let server = Preview::start();
@@ -497,7 +476,7 @@ fn a_referer_from_another_origin_is_not_trusted() {
 
 #[test]
 fn an_html_file_served_to_a_page_cannot_run_inline_script() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write(&root.join("doc.md"), "hi");
     write(&root.join("page.html"), "<script>alert(1)</script>");
     let server = Preview::start();
@@ -528,7 +507,7 @@ const NOTES_AS_SENT: &str = r###"{"notes":[{"id":"1759912345678-k3x9a","l0":3,"l
 
 #[test]
 fn notes_written_by_the_old_server_are_read_back_unchanged() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("my plans/é plan.md");
     write(&doc, "# Plan\n");
     let server = Preview::start();
@@ -547,7 +526,7 @@ fn notes_written_by_the_old_server_are_read_back_unchanged() {
 
 #[test]
 fn notes_are_saved_byte_for_byte_where_the_old_server_kept_them() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("my plans/é plan.md");
     let server = Preview::start();
     let path = format!("/__notes{}", encode(&doc));
@@ -614,7 +593,7 @@ fn the_page_scrolls_to_the_cursor_only_when_it_leaves_the_middle_of_the_viewport
 
 #[test]
 fn a_write_without_a_json_content_type_is_refused() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("plan.md");
     write(&doc, "hi");
     let server = Preview::start();
@@ -653,7 +632,7 @@ fn notes_are_only_kept_for_markdown_files() {
 
 #[test]
 fn saving_the_file_pushes_a_change_event() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("live.md");
     write(&doc, "one");
     let server = Preview::start();
@@ -669,7 +648,7 @@ fn saving_the_file_pushes_a_change_event() {
 
 #[test]
 fn a_cursor_post_reaches_the_page_and_is_replayed_on_connect() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("live.md");
     write(&doc, "one");
     let server = Preview::start();
@@ -696,18 +675,34 @@ fn a_cursor_post_reaches_the_page_and_is_replayed_on_connect() {
 }
 
 #[test]
-fn the_server_exits_when_its_binary_is_replaced() {
-    let (_dir, root) = real_tempdir();
+fn the_server_restarts_from_its_binary_when_it_is_replaced() {
+    let (_dir, root) = common::real_tempdir();
     let binary = root.join("atelier");
     std::fs::copy(env!("CARGO_BIN_EXE_atelier"), &binary).unwrap();
     let mut server = Preview::start_with(&binary);
+    let marker = root.join("restarted");
 
     std::fs::remove_file(&binary).unwrap();
-    std::fs::copy(env!("CARGO_BIN_EXE_atelier"), &binary).unwrap();
+    std::fs::write(
+        &binary,
+        format!(
+            "#!/bin/sh\necho \"$@\" >'{}'\nexec '{}' \"$@\"\n",
+            marker.display(),
+            env!("CARGO_BIN_EXE_atelier")
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    wait_until("the server to exit", || {
-        server.child.try_wait().unwrap().is_some()
+    common::wait_until("the server to restart", || {
+        marker.exists() && alive(server.port)
     });
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "preview serve\n");
+    assert!(
+        server.child.try_wait().unwrap().is_none(),
+        "it restarted in place"
+    );
+    assert_eq!(server.get("/__meta").status, 200);
 }
 
 fn open(port: u16, home: &Path, file: &Path) -> Output {
@@ -728,7 +723,7 @@ fn open_with(opener: &common::FakeOpener, port: u16, home: &Path, file: &Path) -
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn opening_a_file_hands_its_url_to_the_os_opener() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("plan.md");
     write(&doc, "hi");
     let server = Preview::start();
@@ -743,7 +738,7 @@ fn opening_a_file_hands_its_url_to_the_os_opener() {
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn opening_a_file_prints_its_url() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("a plan.md");
     write(&doc, "hi");
     let server = Preview::start();
@@ -764,10 +759,10 @@ fn opening_a_file_prints_its_url() {
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn opening_a_file_starts_the_server_when_none_is_running() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     let doc = root.join("plan.md");
     write(&doc, "hi");
-    let port = free_port();
+    let port = common::free_port();
 
     let output = open(port, &root, &doc);
 
@@ -796,9 +791,9 @@ fn opening_a_file_starts_the_server_when_none_is_running() {
 
 #[test]
 fn opening_refuses_what_is_not_an_existing_markdown_file() {
-    let (_dir, root) = real_tempdir();
+    let (_dir, root) = common::real_tempdir();
     write(&root.join("notes.txt"), "hi");
-    let port = free_port();
+    let port = common::free_port();
 
     let text = open(port, &root, &root.join("notes.txt"));
     let missing = open(port, &root, &root.join("missing.md"));

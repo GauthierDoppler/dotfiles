@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::os::unix::process::CommandExt;
 use std::process::Command as Process;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -75,7 +76,7 @@ struct Server {
 }
 
 pub fn serve(port: u16) -> Result<()> {
-    let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
+    let home = crate::dotfiles::home()?;
     let server = Arc::new(Server {
         hosts: [format!("127.0.0.1:{port}"), format!("localhost:{port}")],
         notes: Path::new(&home).join(".local/share/md-preview/notes"),
@@ -129,27 +130,20 @@ async fn poll(server: Arc<Server>, exe: PathBuf) {
         if !restarting {
             if let Some(current) = stamp(&exe) {
                 if Some(current) != boot {
-                    restarting = true;
-                    restart();
+                    restarting = restart(&exe);
                 }
             }
         }
     }
 }
 
-#[cfg(target_os = "macos")]
-fn restart() {
-    if std::env::var("XPC_SERVICE_NAME").as_deref() != Ok(super::LABEL) {
-        std::process::exit(0);
+fn restart(exe: &Path) -> bool {
+    if cfg!(target_os = "macos") && std::env::var("XPC_SERVICE_NAME").as_deref() == Ok(super::LABEL) {
+        return crate::service::restart(super::LABEL);
     }
-    let _ = Process::new("/bin/launchctl")
-        .args(["kickstart", "-k", &super::launchd_domain()])
-        .spawn();
-}
-
-#[cfg(not(target_os = "macos"))]
-fn restart() {
-    std::process::exit(0);
+    let error = Process::new(exe).args(["preview", "serve"]).exec();
+    eprintln!("md-preview: cannot restart from {}: {error}", exe.display());
+    false
 }
 
 async fn ping(server: Arc<Server>) {
@@ -414,17 +408,7 @@ fn root_of(server: &Server, doc: &Path) -> PathBuf {
     roots
         .entry(dir)
         .or_insert_with_key(|dir| {
-            let top = Process::new("git")
-                .arg("-C")
-                .arg(dir)
-                .args(["rev-parse", "--show-toplevel"])
-                .output()
-                .ok()
-                .filter(|out| out.status.success())
-                .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-                .filter(|top| !top.is_empty())
-                .map(PathBuf::from)
-                .unwrap_or_else(|| dir.clone());
+            let top = crate::git::toplevel(dir).unwrap_or_else(|| dir.clone());
             top.canonicalize().unwrap_or(top)
         })
         .clone()

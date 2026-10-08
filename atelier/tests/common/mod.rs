@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
@@ -327,4 +327,33 @@ pub fn fzf_available() -> bool {
         eprintln!("fzf >= 0.45 is not installed: skipping");
     }
     recent
+}
+
+pub fn repo() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the crate sits inside the dotfiles repo")
+        .to_path_buf()
+}
+
+pub fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .expect("a free port")
+        .local_addr()
+        .expect("a bound address")
+        .port()
+}
+
+pub fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done() {
+        assert!(Instant::now() < deadline, "timed out waiting for {what}");
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
+pub fn real_tempdir() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().expect("temp dir created");
+    let real = dir.path().canonicalize().expect("temp dir resolves");
+    (dir, real)
 }

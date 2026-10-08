@@ -1,9 +1,9 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command as Process, Output, Stdio};
 
 use clap::Args;
 
+use crate::process::{output as run, stdout, stdout_of};
 use crate::service::{self, Target};
 use crate::tmux::Tmux;
 use crate::Result;
@@ -62,7 +62,7 @@ impl Command {
         let context = Context {
             tmux,
             server: tmux.run(&["display-message", "-p", "#{pid}"]).is_ok(),
-            home: PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?),
+            home: crate::dotfiles::home()?,
             target: &self.target,
         };
         let mut failed = 0;
@@ -84,18 +84,6 @@ impl Command {
             n => Err(format!("{n} checks failed").into()),
         }
     }
-}
-
-fn run(program: &str, args: &[&str]) -> Option<Output> {
-    Process::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .ok()
-}
-
-fn stdout(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
 fn version(text: &str) -> Option<(u32, u32)> {
@@ -143,8 +131,7 @@ fn terminfo(context: &Context) -> Outcome {
     if missing.is_empty() {
         return Outcome::Ok(terms.join(", "));
     }
-    let host = run("uname", &["-n"])
-        .map(|output| stdout(&output))
+    let host = stdout_of("uname", &["-n"])
         .filter(|host| !host.is_empty())
         .unwrap_or_else(|| "<this host>".into());
     let fix = missing
@@ -169,11 +156,10 @@ fn nerd_font(_: &Context) -> Outcome {
     )
 }
 
-fn tmux_version(_: &Context) -> Outcome {
-    let Some(output) = run("tmux", &["-V"]) else {
+fn tmux_version(context: &Context) -> Outcome {
+    let Some(text) = context.tmux.version() else {
         return fail("tmux not found", install_tmux());
     };
-    let text = stdout(&output);
     let reported = text.strip_prefix("tmux ").unwrap_or(&text).to_owned();
     match version(&reported) {
         None => Outcome::Look(format!(
@@ -278,7 +264,7 @@ fn fzf(_: &Context) -> Outcome {
 }
 
 fn repo(context: &Context) -> Result<PathBuf> {
-    crate::setup::repo_root(context.target.repo(), &context.home)
+    crate::dotfiles::repo(context.target.repo(), &context.home)
 }
 
 fn installed(context: &Context) -> Outcome {

@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
@@ -39,16 +39,13 @@ esac
 
 const FAKE_LAUNCHCTL: &str = r#"#!/bin/sh
 case "$1" in
-  print) [ ! -e "$FAKE_STATE/inactive/${2##*/}" ] ;;
+  print)
+    [ -e "$FAKE_STATE/inactive/${2##*/}" ] && exit 113
+    state=running
+    [ -e "$FAKE_STATE/launchd/${2##*/}" ] && read -r state <"$FAKE_STATE/launchd/${2##*/}"
+    printf '%s = {\n\tstate = %s\n\tjob state = exited\n}\n' "$2" "$state" ;;
 esac
 "#;
-
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("the crate sits inside the dotfiles repo")
-        .to_path_buf()
-}
 
 fn real(program: &str) -> PathBuf {
     let output = Command::new("sh")
@@ -71,10 +68,10 @@ impl Machine {
             home: tempfile::tempdir().unwrap(),
             fakes: tempfile::tempdir().unwrap(),
         };
-        for dir in ["bin", "state/terminfo", "state/inactive"] {
+        for dir in ["bin", "state/terminfo", "state/inactive", "state/launchd"] {
             fs::create_dir_all(machine.fakes.path().join(dir)).unwrap();
         }
-        for program in ["tmux", "id", "uname"] {
+        for program in ["tmux", "uname"] {
             std::os::unix::fs::symlink(real(program), machine.bin(program)).unwrap();
         }
         for (name, script) in [
@@ -100,7 +97,7 @@ impl Machine {
         .unwrap();
         let setup = Command::new(env!("CARGO_BIN_EXE_atelier"))
             .args(["setup", "--repo"])
-            .arg(repo())
+            .arg(common::repo())
             .env("HOME", machine.home.path())
             .output()
             .unwrap();
@@ -147,7 +144,7 @@ impl Machine {
             .arg("doctor")
             .args(args)
             .arg("--repo")
-            .arg(repo())
+            .arg(common::repo())
             .env("HOME", self.home.path())
             .env_remove("XDG_CONFIG_HOME")
             .env("USER", "alice")
@@ -348,6 +345,25 @@ fn a_stopped_launchd_agent_fails_naming_it() {
     let report = assert_fails(&machine, &["--system", "launchd"], "services");
     assert!(check(&report, "services").contains("com.theodo.cc-tap.dashboard"));
     assert!(check(&report, "linger").starts_with("skip"), "{report}");
+}
+
+#[test]
+fn a_crash_looping_launchd_agent_fails_although_it_stays_loaded() {
+    let machine = Machine::healthy();
+    machine.state("launchd/com.theodo.cc-tap.proxy", "spawn scheduled\n");
+    machine.state("launchd/com.theodo.cc-tap.update", "not running\n");
+    let report = assert_fails(&machine, &["--system", "launchd"], "services");
+    let line = check(&report, "services");
+    assert!(line.contains("com.theodo.cc-tap.proxy"), "{report}");
+    assert!(!line.contains("update"), "{report}");
+}
+
+#[test]
+fn a_tmux_outside_path_is_still_found() {
+    let machine = Machine::healthy();
+    fs::remove_file(machine.bin("tmux")).unwrap();
+    let report = report(&machine.doctor(&[]));
+    assert!(check(&report, "tmux version").starts_with("ok"), "{report}");
 }
 
 #[test]

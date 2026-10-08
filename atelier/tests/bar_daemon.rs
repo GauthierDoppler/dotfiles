@@ -78,20 +78,12 @@ fn attach_terminal_client(tmux: &TmuxServer, session: &str, width: u16) -> Viewe
         session
     );
     tmux.tmux(&["respawn-pane", "-k", "-t", &viewer.window, &attach]);
-    eventually("a terminal client attaches", || {
+    common::wait_until("a terminal client attaches", || {
         tmux.tmux(&["list-clients", "-F", "#{client_control_mode}"])
             .lines()
             .any(|mode| mode == "0")
     });
     viewer
-}
-
-fn eventually(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !done() {
-        assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 fn option(tmux: &TmuxServer, session: &str, name: &str) -> String {
@@ -168,7 +160,7 @@ fn the_attached_session_gets_both_blocks_and_switching_pushes_the_other() {
 
     pushed_left_becomes(&tmux, "api", &rendered_left(&tmux, "api", 130));
     assert_ne!(option(&tmux, "api", "@bar_right"), "");
-    eventually(
+    common::wait_until(
         "the pushed api block on screen, with no atelier for #()",
         || {
             let line = viewer.status_line(&tmux);
@@ -245,15 +237,34 @@ fn killing_the_daemon_leaves_the_bar_on_its_fallback() {
     load_the_bar_from_dot_tmux_conf(&tmux, home.path());
     let mut daemon = daemon(&tmux);
     pushed_left_becomes(&tmux, "work", &rendered_left(&tmux, "work", 130));
-    eventually("the pushed left block on screen", || {
+    common::wait_until("the pushed left block on screen", || {
         !viewer.status_line(&tmux).starts_with(" work")
     });
 
     daemon.0.kill().unwrap();
     daemon.0.wait().unwrap();
 
-    eventually("the fallback left block on screen", || {
+    common::wait_until("the fallback left block on screen", || {
         viewer.status_line(&tmux).starts_with(" work")
+    });
+}
+
+#[test]
+fn without_atelier_the_bar_still_shows_the_session_name_and_the_clock() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let tmux = server();
+    tmux.new_session("work", dir.path());
+    let viewer = attach_terminal_client(&tmux, "work", 130);
+    load_the_bar_from_dot_tmux_conf(&tmux, home.path());
+
+    common::wait_until("both fallbacks on screen", || {
+        let line = viewer.status_line(&tmux);
+        let clock = line.trim_end().rsplit(' ').next().unwrap_or_default();
+        line.starts_with(" work")
+            && clock.len() == 5
+            && clock.as_bytes()[2] == b':'
+            && clock.bytes().filter(u8::is_ascii_digit).count() == 4
     });
 }
 
@@ -493,12 +504,12 @@ fn a_repo_no_session_uses_any_more_is_no_longer_watched() {
     let git = GitLog::new();
     tmux.new_session("work", &work);
     let _daemon = watch_session(&tmux, "other", elsewhere.path(), &git);
-    eventually("the daemon to look at the repo", || {
+    common::wait_until("the daemon to look at the repo", || {
         git.calls().iter().any(|call| call.contains("ls-files"))
     });
 
     tmux.tmux(&["kill-session", "-t", "work"]);
-    eventually("the daemon to see the session go", || {
+    common::wait_until("the daemon to see the session go", || {
         !tmux.atelier_stdout(&["status"]).contains("work")
     });
     let before = git.calls();

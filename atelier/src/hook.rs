@@ -42,16 +42,9 @@ fn claude(tmux: &Tmux) -> Result<()> {
         }
         _ => return Ok(()),
     };
-    if watched(tmux, &window)? {
+    if tmux.watched(&window)? {
         return Ok(());
     }
     tmux.run(&["set-option", "-w", "-t", &window, "@claude_status", status])?;
     Ok(())
-}
-
-fn watched(tmux: &Tmux, window: &str) -> Result<bool> {
-    let clients = tmux.run(&["list-clients", "-F", "#{client_control_mode} #{window_id}"])?;
-    Ok(clients
-        .lines()
-        .any(|client| client.strip_prefix("0 ") == Some(window)))
 }

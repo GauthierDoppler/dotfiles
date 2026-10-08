@@ -1,6 +1,9 @@
+mod dotfiles;
+mod fnv;
 mod fzf;
 mod git;
 mod opener;
+mod process;
 mod session;
 mod shell;
 mod tmux;

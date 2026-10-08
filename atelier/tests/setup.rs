@@ -1,3 +1,5 @@
+mod common;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::{symlink, MetadataExt};
@@ -50,13 +52,6 @@ const STUB_HEADER: &str = "# Loads the shared dotfiles config. Everything BELOW 
 # machine-local and stays out of the dotfiles repo — put local overrides\n\
 # here, and let installers append here too.\n";
 
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("the crate sits inside the dotfiles repo")
-        .to_path_buf()
-}
-
 struct Home {
     dir: tempfile::TempDir,
 }
@@ -83,12 +78,13 @@ impl Home {
             .current_dir(cwd)
             .env("HOME", self.path())
             .env_remove("TMUX")
+            .env_remove("DOTFILES")
             .output()
             .expect("atelier runs")
     }
 
     fn setup(&self, args: &[&str]) -> String {
-        self.setup_from(&repo(), args)
+        self.setup_from(&common::repo(), args)
     }
 
     fn setup_from(&self, repo: &Path, args: &[&str]) -> String {
@@ -159,7 +155,7 @@ fn the_desktop_profile_links_every_shared_config_into_home() {
     for (dest, src) in DESKTOP_LINKS {
         assert_eq!(
             home.link_target(dest),
-            Some(repo().join(src)),
+            Some(common::repo().join(src)),
             "{dest} links to {src}"
         );
     }
@@ -173,13 +169,16 @@ fn the_remote_profile_skips_gui_app_configs() {
     for dest in GUI_APP_CONFIGS {
         assert!(!home.join(dest).exists(), "{dest} is not linked on remote");
     }
-    assert_eq!(home.link_target(".config/nvim"), Some(repo().join("nvim")));
+    assert_eq!(
+        home.link_target(".config/nvim"),
+        Some(common::repo().join("nvim"))
+    );
 }
 
 #[test]
 fn shell_and_git_configs_are_stubs_that_load_the_repo_through_home() {
     let home = Home::new();
-    symlink(repo(), home.join("dotfiles")).unwrap();
+    symlink(common::repo(), home.join("dotfiles")).unwrap();
     home.setup_from(&home.join("dotfiles"), &[]);
 
     assert_eq!(
@@ -208,7 +207,7 @@ fn existing_files_and_folders_are_backed_up_before_linking() {
     assert_eq!(home.read(".config/nvim.bak/init.lua"), "-- mine\n");
     assert_eq!(
         home.link_target(".tmux.conf"),
-        Some(repo().join("dot_tmux.conf"))
+        Some(common::repo().join("dot_tmux.conf"))
     );
 }
 
@@ -232,7 +231,7 @@ fn a_symlink_pointing_elsewhere_is_replaced_without_backup() {
 
     assert_eq!(
         home.link_target(".config/lazygit"),
-        Some(repo().join("lazygit"))
+        Some(common::repo().join("lazygit"))
     );
     assert!(fs::symlink_metadata(home.join(".config/lazygit.bak")).is_err());
 }
@@ -242,7 +241,7 @@ fn local_content_below_an_existing_stub_is_left_alone() {
     let home = Home::new();
     let zshrc = format!(
         "{STUB_HEADER}source \"{}/dot_zshrc\"\n\nexport PATH=\"$HOME/.cargo/bin:$PATH\"\n",
-        repo().display()
+        common::repo().display()
     );
     home.write(".zshrc", &zshrc);
     home.setup(&[]);
@@ -262,7 +261,7 @@ fn a_hand_written_config_is_backed_up_and_replaced_by_a_stub() {
         home.read(".gitconfig"),
         format!(
             "{STUB_HEADER}[include]\n\tpath = {}/dot_gitconfig\n\n",
-            repo().display()
+            common::repo().display()
         )
     );
 }
@@ -270,7 +269,7 @@ fn a_hand_written_config_is_backed_up_and_replaced_by_a_stub() {
 #[test]
 fn the_old_symlinked_zshrc_becomes_a_stub_without_backup() {
     let home = Home::new();
-    symlink(repo().join("dot_zshrc"), home.join(".zshrc")).unwrap();
+    symlink(common::repo().join("dot_zshrc"), home.join(".zshrc")).unwrap();
     home.setup(&[]);
 
     assert_eq!(home.link_target(".zshrc"), None);
@@ -289,7 +288,7 @@ fn legacy_local_files_are_folded_into_their_stub_and_kept() {
         home.read(".zshrc"),
         format!(
             "{STUB_HEADER}source \"{}/dot_zshrc\"\n\n\n# ─── migrated from .zshrc.local ───\nalias k=kubectl\n",
-            repo().display()
+            common::repo().display()
         )
     );
     assert!(home.read(".gitconfig").ends_with(
@@ -328,7 +327,7 @@ fn a_dry_run_prints_the_plan_and_touches_nothing() {
 
     assert_eq!(home.snapshot(), before);
     let h = home.path().display();
-    let r = repo().display().to_string();
+    let r = common::repo().display().to_string();
     for line in [
         format!("backup: {h}/.tmux.conf -> {h}/.tmux.conf.bak"),
         format!("linked: {h}/.tmux.conf -> {r}/dot_tmux.conf"),
@@ -342,13 +341,32 @@ fn a_dry_run_prints_the_plan_and_touches_nothing() {
 #[test]
 fn without_repo_the_current_git_root_is_used() {
     let home = Home::new();
-    let output = home.setup_in(&repo().join("atelier/src"), &[]);
+    let output = home.setup_in(&common::repo().join("atelier/src"), &[]);
 
     assert!(output.status.success());
     assert_eq!(
         home.link_target(".config/nvim")
             .map(|t| t.ends_with("nvim")),
         Some(true)
+    );
+}
+
+#[test]
+fn without_repo_the_dotfiles_variable_is_used() {
+    let home = Home::new();
+    let output = Command::new(env!("CARGO_BIN_EXE_atelier"))
+        .args(["setup", "--dry-run"])
+        .current_dir(home.path())
+        .env("HOME", home.path())
+        .env("DOTFILES", common::repo())
+        .env_remove("TMUX")
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 
@@ -369,7 +387,10 @@ fn a_repo_outside_home_is_loaded_by_its_absolute_path() {
 
     assert_eq!(
         home.read(".zshrc"),
-        format!("{STUB_HEADER}source \"{}/dot_zshrc\"\n\n", repo().display())
+        format!(
+            "{STUB_HEADER}source \"{}/dot_zshrc\"\n\n",
+            common::repo().display()
+        )
     );
 }
 
@@ -386,15 +407,15 @@ fn links_left_dangling_into_the_repo_by_an_older_install_are_removed() {
         dangle(
             &home,
             &format!(".local/bin/{name}"),
-            &repo().join("scripts").join(name),
+            &common::repo().join("scripts").join(name),
         );
     }
-    dangle(&home, ".config/gone", &repo().join("gone"));
+    dangle(&home, ".config/gone", &common::repo().join("gone"));
 
     let output = home.setup(&[]);
 
     let h = home.path().display();
-    let r = repo().display().to_string();
+    let r = common::repo().display().to_string();
     for name in ["tmux-pick", "tmux-status-right", "md-preview"] {
         assert!(fs::symlink_metadata(home.join(&format!(".local/bin/{name}"))).is_err());
         let line = format!("pruned: {h}/.local/bin/{name} -> {r}/scripts/{name}");
@@ -406,7 +427,7 @@ fn links_left_dangling_into_the_repo_by_an_older_install_are_removed() {
 #[test]
 fn a_relative_dangling_link_into_the_repo_is_removed() {
     let home = Home::new();
-    symlink(repo(), home.join("dotfiles")).unwrap();
+    symlink(common::repo(), home.join("dotfiles")).unwrap();
     dangle(
         &home,
         ".local/bin/tmux-tasks",
@@ -421,11 +442,11 @@ fn a_relative_dangling_link_into_the_repo_is_removed() {
 #[test]
 fn a_dangling_link_through_another_spelling_of_the_repo_path_is_removed() {
     let home = Home::new();
-    symlink(repo(), home.join("dotfiles")).unwrap();
+    symlink(common::repo(), home.join("dotfiles")).unwrap();
     dangle(
         &home,
         ".local/bin/local-diff",
-        &repo().join("scripts/local-diff"),
+        &common::repo().join("scripts/local-diff"),
     );
 
     home.setup_from(&home.join("dotfiles"), &[]);
@@ -438,16 +459,16 @@ fn only_dangling_links_into_the_repo_in_managed_folders_are_removed() {
     let home = Home::new();
     let outside = tempfile::tempdir().unwrap();
     dangle(&home, ".local/bin/elsewhere", &outside.path().join("gone"));
-    dangle(&home, ".local/bin/zshrc", &repo().join("dot_zshrc"));
+    dangle(&home, ".local/bin/zshrc", &common::repo().join("dot_zshrc"));
     dangle(
         &home,
         "projects/tmux-pick",
-        &repo().join("scripts/tmux-pick"),
+        &common::repo().join("scripts/tmux-pick"),
     );
     dangle(
         &home,
         ".local/bin/nested/tmux-pick",
-        &repo().join("scripts/tmux-pick"),
+        &common::repo().join("scripts/tmux-pick"),
     );
     home.write(".local/bin/tool", "#!/bin/sh\n");
 
@@ -471,7 +492,7 @@ fn a_dry_run_lists_dangling_links_and_keeps_them() {
     dangle(
         &home,
         ".local/bin/tmux-sessions",
-        &repo().join("scripts/tmux-sessions"),
+        &common::repo().join("scripts/tmux-sessions"),
     );
 
     let output = home.setup(&["--dry-run"]);
@@ -480,7 +501,7 @@ fn a_dry_run_lists_dangling_links_and_keeps_them() {
     let line = format!(
         "pruned: {}/.local/bin/tmux-sessions -> {}/scripts/tmux-sessions",
         home.path().display(),
-        repo().display()
+        common::repo().display()
     );
     assert!(output.lines().any(|l| l == line), "{line:?} in {output}");
 }

@@ -38,7 +38,8 @@ tables in `atelier/src/setup.rs` are the one list of what goes where. It backs u
 an existing file or folder as `*.bak` (then `*.bak.1`, … — an earlier backup is
 never overwritten), replaces a symlink pointing elsewhere without one, and prints
 only what it changes, so a second run says `setup: up to date`. The repo is
-`--repo`, else the current git root, else `~/dotfiles`, and must look like this
+`--repo`, else `$DOTFILES`, else the current git root, else `~/dotfiles` — the
+same order for every command that takes `--repo` (`src/dotfiles.rs`) — and must look like this
 repo (`dot_zshrc` plus `atelier/Cargo.toml`) so running it from another project
 cannot link that project into `$HOME`. It also removes ("pruned:") symlinks left
 by an older install, and only those: a link directly inside a folder it links
@@ -162,7 +163,10 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `src/<feature>/`), exposes `pub enum Command` deriving `clap::Subcommand` with
   `pub fn run(self, tmux: &Tmux) -> Result<()>`, and is registered by one line in
   the `features!` list in `main.rs`, which declares the module and the
-  subcommand. Shared modules (`tmux`, `session`, `git`, `shell`, `fzf`, `opener`) are plain `mod` lines.
+  subcommand. Shared modules (`tmux`, `session`, `git`, `shell`, `fzf`, `opener`,
+  `process`, `dotfiles`, `fnv`) are plain `mod` lines: git is only called
+  through `git`, other programs through `process` (run, read stdout, check
+  success), `$HOME` and the dotfiles checkout come from `dotfiles`.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
   A module whose commands sit at the top level (`atelier daemon`, `atelier
   status`) goes after `; top level:` in the same list and is flattened.
@@ -171,11 +175,21 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   jobs and `run-shell`, so the default is right when tmux calls atelier.
   The binary is the first `tmux` on `PATH`, else in `/opt/homebrew/bin`,
   `/usr/local/bin`, Linuxbrew's prefix, `/usr/bin` or `/bin`: hooks such as
-  Claude Code's can run with a `PATH` that lacks the Homebrew prefix.
+  Claude Code's can run with a `PATH` that lacks the Homebrew prefix;
+  `atelier doctor` reads the version from that same binary.
+  `Tmux::resolve` is "the given target, else the current one" for every
+  command that takes `-t`, failing on empty output; `Tmux::watched` is the one
+  "is a terminal client showing this window" check, used by the Claude hook and
+  the task runner.
 - **Every picker builds fzf through `fzf::picker`**, which carries the shared
   flags, colours and the `j`/`k`/`q` + `i` search mode, and calls back into
   atelier through `fzf::atelier` (the binary plus `--socket`). `fzf::leave_search`
   is the `esc` bind for pickers that restore their prompt without a callback.
+  The four pickers look alike on purpose — reverse layout, inline info,
+  `--cycle`, `--header-first`, the `▸` pointer and the Catppuccin colours came
+  together when ticket 28 moved them onto `fzf::picker`; a picker that needs to
+  differ adds its own flags after it. The task runner's window commands use
+  `fzf::atelier_argv`, the same prefix as a word list.
 - **Session identity comes from `session::resolve`, for every consumer**:
   `@grove_project`, else the basename of the main worktree (first entry of
   `git worktree list --porcelain -z`) of `#{session_path}`, else the session name.
@@ -190,8 +204,9 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   which is what `tests/sessions.rs` drives. The scope lives in
   `@atelier_sessions_scope` on the session the picker was opened from, reset to
   `project` on every open. tmux 3.4 does not expand formats in
-  `display-popup`'s shell command, so `pick` resolves the session and client
-  itself rather than taking `#{session_id}` from the binding. Needs fzf ≥ 0.45
+  `display-popup`'s shell command, so every picker bound to a popup resolves its
+  session, pane and client itself rather than taking `#{session_id}` or
+  `#{pane_id}` from the binding. Needs fzf ≥ 0.45
   (`transform`).
 - **The preview is the highlighted session's window list plus the tail of its
   current window**, because fzf previews cannot be focused; `h`/`l` run
@@ -320,7 +335,11 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `loginctl` and `launchctl` alone on `PATH`.
 - **CI** (`.github/workflows/atelier.yml`): `cargo fmt --check`, `cargo clippy
   --all-targets -- -D warnings` and `cargo test` on Linux and macOS, plus
-  shellcheck on `install.sh` and every executable shell script in `scripts/`.
+  shellcheck on `install.sh`, `dot_claude/statusline-custom.sh` and every
+  executable shell script in `scripts/`. It runs on every change except
+  `docs/`, top-level markdown and `nvim/` (`paths-ignore`, not `paths`: the
+  tests read `dot_tmux.conf`, `services.toml` and every file setup links), which
+  `tests/ci.rs` holds it to.
   CI installs a pinned fzf release (Homebrew's on macOS), since distro packages
   are older than 0.45; the fzf-driven tests skip without a recent fzf locally
   but fail under `CI`. Run the same three cargo commands in `atelier/` before
@@ -440,8 +459,9 @@ Those same two placements also **ring** on completion: a `\a` bell, picked up by
 means a dock bounce or a badge. It is skipped when the task's window is the
 active window of a session a non-control-mode client is attached to — ringing
 about output the user is staring at is noise, and a control-mode client (the
-daemon) looks at nothing. Tasks ring and nothing else: the spec keeps desktop
-notifications for Claude's `waiting` only.
+daemon) looks at nothing. Tasks ring and nothing else. Nothing sends a desktop
+notification today; the spec reserves the one planned (ticket 26) for Claude's
+`waiting`.
 
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
@@ -489,7 +509,8 @@ gated on whether the window was already in front. A beep that cannot be
 attributed to a window is a beep that stops being trusted, and an untrusted
 signal is pure noise, so both are gone: the `printf '\a'` from the hook and
 `preferredNotifChannel: notifications_disabled` in `dot_claude/settings.json`.
-Nothing signals from outside the terminal any more — that is the accepted cost.
+Nothing signals from outside the terminal for now — that is the accepted cost
+until ticket 26 brings back an optional, clickable notification for `waiting`.
 `monitor-bell` stays on for tasks, which do still bell.
 
 **It reuses the `@task_status` slot rather than adding a second marker.** That is
@@ -509,7 +530,7 @@ A marker is not set when its window is the current window of an attached
 client, and `after-select-window` in `dot_tmux.conf` clears it, so going to look
 is what dismisses it. Without that skip the marker would appear on the window
 being watched with nothing left to clear it, since selecting it has already
-happened. Control-mode clients (`tmux -C`, as iTerm2 and the planned daemon
+happened. Control-mode clients (`tmux -C`, as iTerm2 and atelier's daemon
 attach) do not count as looking. All of this is covered by
 `atelier/tests/hook_claude.rs`.
 
@@ -669,7 +690,8 @@ turns it into launchd agents on macOS and systemd user units on Linux
 - **launchd**: one plist per service in `~/Library/LaunchAgents`, **copied, not
   linked**, the same treatment as the keyboard bundle. launchd expands neither
   `~` nor `$HOME`, so each runs `/bin/sh -c 'exec "$HOME/…"'`, with the log
-  redirected to `~/Library/Logs/<log>` when the description names one.
+  redirected to `~/Library/Logs/<log>` when the service has a `log` key in
+  `services.toml`.
   Keep-alive is `RunAtLoad` + `KeepAlive` + `ThrottleInterval 10`; a schedule is
   `RunAtLoad` + `StartCalendarInterval` (+ `StartInterval` for `every`).
 - **systemd**: `<label>.service` in `${XDG_CONFIG_HOME:-~/.config}/systemd/user`,
@@ -678,6 +700,11 @@ turns it into launchd agents on macOS and systemd user units on Linux
   `OnCalendar=Mon..Fri 08:00`, `Persistent=true`, `OnActiveSec=0` for
   `RunAtLoad` and `OnUnitActiveSec` for `every`; the timer is what gets enabled.
   Output goes to the journal (`journalctl --user -u <label>`).
+
+`atelier service list` and `atelier doctor` call a keep-alive service running
+only when it is: `state = running` in `launchctl print` (a crash-looping agent
+stays loaded between respawns), `active` from `systemctl --user is-active`. A
+scheduled service is fine once loaded or its timer active.
 
 **A file is written only when its content changed, and a service is reloaded
 only then** — so re-running `install.sh` does not bounce cc-tap's proxy. On
@@ -858,7 +885,8 @@ padding, not layout, so that cap is a purely visual choice and there is room to
 raise it.
 
 `atelier bar right "#{session_path}" "#{client_width}" "#{client_key_table}"`
-renders the *entire* right block — key table, repo state, battery, date, clock
+(falling back to a bare `%H:%M` when atelier is missing, as the left block falls
+back to the session name) renders the *entire* right block — key table, repo state, battery, date, clock
 (`src/bar/right.rs`, a pure function of the counts, the battery and the time;
 its snapshots cover every width tier with and without counts and battery). Every
 cell of it is still laid out in atelier, even the parts tmux fills in: the block
@@ -888,7 +916,9 @@ is left alone). No upstream or a detached HEAD shows the line counts only; an
 empty repo shows nothing.
 
 The counts are padded on the *left*, so they grow away from the clock instead of
-shoving it. Their width accounting charges the separator space where it is
+shoving it. They never outgrow their 15 cells: a count of a thousand or more is
+abbreviated (`1k`, `98k`, `2M`), and parts that still do not fit are dropped from
+the right behind a `…` (snapshot `large_counts`, `huge_counts`). Their width accounting charges the separator space where it is
 emitted, not a flat +2 per part: a flat charge makes a segment whose first part
 is `−` or `↑` come out one column narrow, which drifts the whole centred window
 list by one — visible only when switching to a session that has no local edits
@@ -1045,14 +1075,15 @@ cursor-follow logic live in `app.js` and are pinned by `tests/preview.rs`.
 **The server restarts itself when its binary changes** (the path it was started
 from changes mtime or size, which `cargo install` does — and so does any edit to
 the embedded page), via `launchctl
-kickstart -k` under launchd and by exiting anywhere else. Exiting and relying on
-`KeepAlive` does not work: launchd marks the respawn `pended nondemand spawn =
-inefficient` and defers it for minutes, whatever the exit code. systemd's
-`Restart=always` has no such deferral, only its 10 s `RestartSec`. `atelier
-preview` starts the service itself when `/__meta` does not answer — `launchctl
-kickstart` on macOS, `systemctl --user start` elsewhere, falling back on Linux to
-a detached `atelier preview serve` when no unit answers or `MD_PREVIEW_PORT` is
-not the default the unit serves.
+kickstart -k` under launchd and by re-executing that path in place anywhere
+else, so a server systemd runs keeps its pid and a detached one keeps running.
+Exiting and relying on `KeepAlive` does not work: launchd marks the respawn
+`pended nondemand spawn = inefficient` and defers it for minutes, whatever the
+exit code. `atelier preview` starts the server itself when `/__meta` does not
+answer: through `service::start` (`launchctl kickstart`, `systemctl --user
+start`) when the service of `services.toml` is installed and the port is the
+default — failing rather than spawning a second server that would hold the
+service's port — else as a detached `atelier preview serve`.
 
 **The page renders untrusted markdown on an origin that can read local files**,
 so it is fenced on four sides, each tested over HTTP in `atelier/tests/preview.rs`:

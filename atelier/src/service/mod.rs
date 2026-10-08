@@ -3,11 +3,11 @@ mod systemd;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command as Process, Stdio};
 
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Deserialize;
 
+use crate::dotfiles;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -28,7 +28,7 @@ pub struct Target {
     /// Service manager to write for; defaults to launchd on macOS, systemd elsewhere
     #[arg(long, value_enum)]
     system: Option<System>,
-    /// The dotfiles checkout holding services.toml; defaults to the current git root, then ~/dotfiles
+    /// The dotfiles checkout holding services.toml; defaults to $DOTFILES, the current git root, then ~/dotfiles
     #[arg(long, value_name = "PATH")]
     repo: Option<PathBuf>,
 }
@@ -138,13 +138,19 @@ impl Command {
     }
 }
 
-impl Target {
-    fn system(&self) -> System {
-        self.system.unwrap_or(if cfg!(target_os = "macos") {
+impl System {
+    fn of_this_machine() -> Self {
+        if cfg!(target_os = "macos") {
             System::Launchd
         } else {
             System::Systemd
-        })
+        }
+    }
+}
+
+impl Target {
+    fn system(&self) -> System {
+        self.system.unwrap_or_else(System::of_this_machine)
     }
 
     pub(crate) fn repo(&self) -> Option<PathBuf> {
@@ -152,8 +158,8 @@ impl Target {
     }
 
     fn load(&self) -> Result<(Vec<Service>, PathBuf)> {
-        let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
-        let repo = crate::setup::repo_root(self.repo.clone(), &home)?;
+        let home = dotfiles::home()?;
+        let repo = dotfiles::repo(self.repo.clone(), &home)?;
         Ok((load(&repo.join(DESCRIPTION))?, home))
     }
 }
@@ -184,8 +190,7 @@ pub(crate) fn stopped(target: &Target) -> Result<Vec<String>> {
 pub(crate) fn agents_dir_problem(target: &Target) -> Option<(String, String)> {
     match target.system() {
         System::Launchd => {
-            let home = PathBuf::from(std::env::var_os("HOME")?);
-            launchd::unwritable_agents_dir(&home)
+            launchd::unwritable_agents_dir(&dotfiles::home().ok()?)
         }
         System::Systemd => None,
     }
@@ -195,6 +200,30 @@ pub(crate) fn linger(target: &Target) -> Option<Result<(String, bool)>> {
     match target.system() {
         System::Launchd => None,
         System::Systemd => Some(systemd::linger_state()),
+    }
+}
+
+pub(crate) fn installed(label: &str) -> bool {
+    let Ok(home) = dotfiles::home() else {
+        return false;
+    };
+    match System::of_this_machine() {
+        System::Launchd => launchd::installed(label, &home),
+        System::Systemd => systemd::installed(label, &home),
+    }
+}
+
+pub(crate) fn start(label: &str) -> bool {
+    match System::of_this_machine() {
+        System::Launchd => launchd::kickstart(label, false),
+        System::Systemd => systemd::systemctl(&["start", &format!("{label}.service")]),
+    }
+}
+
+pub(crate) fn restart(label: &str) -> bool {
+    match System::of_this_machine() {
+        System::Launchd => launchd::kickstart(label, true),
+        System::Systemd => systemd::systemctl(&["restart", &format!("{label}.service")]),
     }
 }
 
@@ -234,26 +263,6 @@ fn is_label_char(c: char) -> bool {
 
 fn is_shell_safe(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '/' | ':' | '=' | '@' | '+' | ',')
-}
-
-fn succeeds(program: &str, args: &[&str]) -> bool {
-    Process::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-fn stdout_of(program: &str, args: &[&str]) -> Option<String> {
-    let output = Process::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<bool> {

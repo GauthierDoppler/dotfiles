@@ -17,13 +17,7 @@ pub struct Catalog {
 
 impl Catalog {
     pub fn of_session(tmux: &Tmux, target: Option<&str>) -> Result<Self> {
-        let session = match target {
-            Some(target) => tmux.display(target, "#{session_id}")?,
-            None => tmux.run(&["display-message", "-p", "#{session_id}"])?,
-        };
-        if session.is_empty() {
-            return Err(format!("no session {}", target.unwrap_or("attached")).into());
-        }
+        let session = tmux.resolve(target, "#{session_id}")?;
         let path = tmux.display(&session, "#{session_path}")?;
         let start = if path.is_empty() {
             std::env::current_dir()?
@@ -151,14 +145,7 @@ impl Catalog {
     }
 
     fn state(&self, kind: &str) -> PathBuf {
-        let hash = self
-            .root
-            .as_os_str()
-            .as_encoded_bytes()
-            .iter()
-            .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-                (hash ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3)
-            });
+        let hash = crate::fnv::fnv1a(self.root.as_os_str().as_encoded_bytes());
         std::env::temp_dir().join(format!("atelier-tasks.{hash:016x}.{kind}"))
     }
 }

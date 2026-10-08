@@ -13,16 +13,6 @@ fn touch(path: &Path) {
     std::fs::write(path, "").unwrap();
 }
 
-fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
-    for _ in 0..200 {
-        if done() {
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    panic!("timed out waiting for {what}");
-}
-
 fn idle_pane(tmux: &TmuxServer, dir: &Path) -> String {
     tmux.tmux(&[
         "new-session",
@@ -70,12 +60,9 @@ fn which(program: &str) -> PathBuf {
 }
 
 fn act(tmux: &TmuxServer, bin: &FakeBin, args: &[&str]) {
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_atelier"))
-        .arg("--socket")
-        .arg(tmux.socket())
-        .args(args)
+    let output = tmux
+        .atelier_command(args)
         .env("PATH", bin.path())
-        .env_remove("TMUX")
         .output()
         .unwrap();
     common::stdout_of(args, output);
@@ -100,7 +87,7 @@ fn pane_showing(tmux: &TmuxServer, dir: &Path, file: &str) -> String {
         "#{pane_id}",
         &format!("cat '{file}'; exec cat"),
     ]);
-    wait_for("the capture to be printed", || {
+    common::wait_until("the capture to be printed", || {
         !tmux
             .tmux(&["capture-pane", "-p", "-t", &session])
             .trim()
@@ -110,12 +97,9 @@ fn pane_showing(tmux: &TmuxServer, dir: &Path, file: &str) -> String {
 }
 
 fn list(tmux: &TmuxServer, pane: &str, home: &Path) -> Vec<String> {
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_atelier"))
-        .arg("--socket")
-        .arg(tmux.socket())
-        .args(["pick", "list", "-t", pane])
+    let output = tmux
+        .atelier_command(&["pick", "list", "-t", pane])
         .env("HOME", home)
-        .env_remove("TMUX")
         .output()
         .unwrap();
     common::stdout_of(&["pick", "list"], output)
@@ -198,7 +182,7 @@ fn a_pane_with_nothing_to_pick_lists_a_placeholder_row() {
 }
 
 #[test]
-fn an_unexpanded_pane_format_falls_back_to_the_current_pane() {
+fn without_a_target_the_current_pane_is_listed() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("capture.txt");
     std::fs::write(&file, "https://acme.dev/a\n").unwrap();
@@ -206,9 +190,21 @@ fn an_unexpanded_pane_format_falls_back_to_the_current_pane() {
     pane_showing(&tmux, dir.path(), file.to_str().unwrap());
 
     assert_eq!(
-        list(&tmux, "#{pane_id}", dir.path()),
-        ["https://acme.dev/a"]
+        tmux.atelier_stdout(&["pick", "list"]).trim(),
+        "https://acme.dev/a"
     );
+}
+
+#[test]
+fn a_target_that_is_not_a_pane_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    idle_pane(&tmux, dir.path());
+
+    for target in ["#{pane_id}", "%999"] {
+        let output = tmux.atelier(&["pick", "list", "-t", target]);
+        assert!(!output.status.success(), "{target}: {output:?}");
+    }
 }
 
 #[test]
@@ -222,7 +218,7 @@ fn a_full_scrollback_is_listed_without_a_process_per_line() {
     std::fs::write(&file, capture).unwrap();
     let tmux = TmuxServer::start();
     let pane = pane_showing(&tmux, dir.path(), file.to_str().unwrap());
-    wait_for("the scrollback to fill", || {
+    common::wait_until("the scrollback to fill", || {
         tmux.tmux(&["display", "-p", "-t", &pane, "#{history_size}"]) != "0"
             && tmux
                 .tmux(&["capture-pane", "-p", "-t", &pane])
@@ -270,14 +266,14 @@ fn opening_a_file_edits_it_in_the_nvim_of_this_session() {
         "#{pane_id}",
         &bin.nvim(),
     ]);
-    wait_for("nvim to start", || {
+    common::wait_until("nvim to start", || {
         display(&tmux, &nvim, "#{pane_current_command}") == "nvim"
     });
 
     act(&tmux, &bin, &["pick", "open", "-t", &pane, "src/my lib.rs"]);
 
     let typed = format!(":e {}/src/my\\ lib.rs", dir.path().display());
-    wait_for("nvim to receive :e", || {
+    common::wait_until("nvim to receive :e", || {
         tmux.tmux(&["capture-pane", "-p", "-t", &nvim])
             .contains(&typed)
     });
@@ -332,7 +328,7 @@ fn an_nvim_in_another_session_is_left_alone() {
     tmux.tmux(&["set", "-g", "remain-on-exit", "on"]);
     let other = tmux.tmux(&["new-session", "-d", "-P", "-F", "#{pane_id}", &bin.nvim()]);
     let pane = idle_pane(&tmux, dir.path());
-    wait_for("nvim to start", || {
+    common::wait_until("nvim to start", || {
         display(&tmux, &other, "#{pane_current_command}") == "nvim"
     });
 
@@ -414,13 +410,13 @@ fn copying_reaches_the_terminal_of_the_attached_client_through_osc_52() {
         "-t",
         &session,
     ]);
-    wait_for("the client to attach", || {
+    common::wait_until("the client to attach", || {
         !remote.tmux(&["list-clients"]).is_empty()
     });
 
     act(&remote, &bin, &["pick", "copy", "https://acme.dev/a"]);
 
-    wait_for("the terminal to receive the clipboard", || {
+    common::wait_until("the terminal to receive the clipboard", || {
         !terminal.tmux(&["list-buffers"]).is_empty()
     });
     assert_eq!(terminal.tmux(&["show-buffer"]), "https://acme.dev/a");
@@ -464,7 +460,7 @@ fn picker_on(tmux: &TmuxServer, bin: &FakeBin, pane: &str) -> Option<String> {
         "-t",
         pane,
     ]);
-    wait_for("the picker to list the rows", || {
+    common::wait_until("the picker to list the rows", || {
         tmux.tmux(&["capture-pane", "-p", "-t", &picker])
             .contains("https://acme.dev/b")
     });
@@ -485,7 +481,7 @@ fn enter_in_the_picker_opens_the_newest_token() {
 
     tmux.tmux(&["send-keys", "-t", &picker, "Enter"]);
 
-    wait_for("the browser to be called", || !bin.opened().is_empty());
+    common::wait_until("the browser to be called", || !bin.opened().is_empty());
     assert_eq!(bin.opened(), "https://acme.dev/b\n");
 }
 
@@ -503,7 +499,7 @@ fn ctrl_y_in_the_picker_copies_the_selected_token() {
 
     tmux.tmux(&["send-keys", "-t", &picker, "j", "C-y"]);
 
-    wait_for("the buffer to be set", || {
+    common::wait_until("the buffer to be set", || {
         !tmux.tmux(&["list-buffers"]).is_empty()
     });
     assert_eq!(tmux.tmux(&["show-buffer"]), "https://acme.dev/a");
@@ -512,25 +508,14 @@ fn ctrl_y_in_the_picker_copies_the_selected_token() {
 fn preview(tmux: &TmuxServer, port: u16, home: &Path, pane: &str, token: &str) -> String {
     let args = ["pick", "preview", "-t", pane, token];
     let opener = FakeOpener::new();
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_atelier"))
+    let output = tmux
+        .atelier_command(&args)
         .env("PATH", opener.path())
-        .arg("--socket")
-        .arg(tmux.socket())
-        .args(args)
         .env("HOME", home)
         .env("MD_PREVIEW_PORT", port.to_string())
-        .env_remove("TMUX")
         .output()
         .unwrap();
     common::stdout_of(&args, output)
-}
-
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
 }
 
 struct PreviewServer(std::process::Child);
@@ -553,7 +538,7 @@ fn preview_server(port: u16, home: &Path) -> PreviewServer {
             .spawn()
             .unwrap(),
     );
-    wait_for("the preview server", || {
+    common::wait_until("the preview server", || {
         std::net::TcpStream::connect(("127.0.0.1", port)).is_ok()
     });
     server
@@ -564,7 +549,7 @@ fn previewing_a_markdown_path_opens_it_from_the_pane_directory() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     touch(&root.join("docs/plan.md"));
-    let port = free_port();
+    let port = common::free_port();
     let _server = preview_server(port, &root);
     let tmux = TmuxServer::start();
     let pane = idle_pane(&tmux, &root);
@@ -582,7 +567,7 @@ fn previewing_a_markdown_path_opens_it_from_the_pane_directory() {
 fn previewing_anything_but_a_markdown_path_does_nothing() {
     let dir = tempfile::tempdir().unwrap();
     touch(&dir.path().join("src/main.rs"));
-    let port = free_port();
+    let port = common::free_port();
     let tmux = TmuxServer::start();
     let pane = idle_pane(&tmux, dir.path());
 

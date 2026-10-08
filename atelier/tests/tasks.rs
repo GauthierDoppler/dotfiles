@@ -3,7 +3,7 @@ mod common;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use common::TmuxServer;
 
@@ -45,14 +45,10 @@ impl Project {
 }
 
 fn tasks(tmux: &TmuxServer, project: &Project, cwd: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_atelier"))
-        .arg("--socket")
-        .arg(tmux.socket())
-        .arg("tasks")
+    tmux.atelier_command(&["tasks"])
         .args(args)
         .current_dir(cwd)
         .env("TMPDIR", &project.tmpdir)
-        .env_remove("TMUX")
         .output()
         .expect("atelier runs")
 }
@@ -73,17 +69,6 @@ fn callback(tmux: &TmuxServer, project: &Project, session: &str, name: &str) -> 
 fn run(tmux: &TmuxServer, project: &Project, session: &str, cwd: &Path, task: &str) {
     let args = ["run", "-t", session, task];
     common::stdout_of(&args, tasks(tmux, project, cwd, &args));
-}
-
-fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let start = Instant::now();
-    while !done() {
-        assert!(
-            start.elapsed() < Duration::from_secs(10),
-            "timed out waiting for {what}"
-        );
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 fn window_option(tmux: &TmuxServer, session: &str, window: &str, option: &str) -> String {
@@ -328,7 +313,7 @@ fn a_task_without_headers_runs_in_a_window_from_the_project_root() {
     let session = tmux.new_session("app", &project.root);
 
     run(&tmux, &project, &session, &deep, "android/build");
-    wait_until("the task to succeed", || {
+    common::wait_until("the task to succeed", || {
         window_option(&tmux, &session, "android-build", "@task_status") == "ok"
     });
 
@@ -359,7 +344,7 @@ fn a_failing_task_marks_its_window_failed() {
 
     run(&tmux, &project, &session, &project.root, "lint");
 
-    wait_until("the task to fail", || {
+    common::wait_until("the task to fail", || {
         window_option(&tmux, &session, "lint", "@task_status") == "fail"
     });
 }
@@ -372,18 +357,18 @@ fn rerunning_reuses_the_window_and_resets_the_marker_to_running() {
     let session = tmux.new_session("app", &project.root);
     run(&tmux, &project, &session, &project.root, "build");
     open_gate(&project, "1");
-    wait_until("the first run to fail", || {
+    common::wait_until("the first run to fail", || {
         window_option(&tmux, &session, "build", "@task_status") == "fail"
     });
     let first = window_option(&tmux, &session, "build", "window_id");
     std::fs::remove_file(project.out("gate")).unwrap();
 
     run(&tmux, &project, &session, &project.root, "build");
-    wait_until("the re-run to show running", || {
+    common::wait_until("the re-run to show running", || {
         window_option(&tmux, &session, "build", "@task_status") == "running"
     });
     open_gate(&project, "0");
-    wait_until("the re-run to succeed", || {
+    common::wait_until("the re-run to succeed", || {
         window_option(&tmux, &session, "build", "@task_status") == "ok"
     });
 
@@ -424,7 +409,7 @@ fn close_ok_closes_the_window_on_success() {
 
     run(&tmux, &project, &session, &project.root, "launch");
 
-    wait_until("the window to close", || {
+    common::wait_until("the window to close", || {
         windows_named(&tmux, &session, "launch") == 0
     });
 }
@@ -458,7 +443,7 @@ fn attach(tmux: &TmuxServer, session: &str) -> Client {
         .spawn()
         .expect("script runs");
     let client = Client(client);
-    wait_until("the client to attach", || {
+    common::wait_until("the client to attach", || {
         tmux.tmux(&["list-clients", "-F", "#{client_control_mode}"])
             .lines()
             .any(|mode| mode == "0")
@@ -484,7 +469,7 @@ fn a_finished_task_rings_when_nobody_watches_its_window() {
 
     run(&tmux, &project, &session, &project.root, "build");
 
-    wait_until("the bell", || rang(&tmux));
+    common::wait_until("the bell", || rang(&tmux));
 }
 
 #[test]
@@ -498,7 +483,7 @@ fn a_control_mode_client_does_not_count_as_watching() {
 
     run(&tmux, &project, &session, &project.root, "build");
 
-    wait_until("the bell", || rang(&tmux));
+    common::wait_until("the bell", || rang(&tmux));
 }
 
 #[test]
@@ -511,7 +496,7 @@ fn a_finished_task_stays_silent_in_the_window_being_watched() {
     let _client = attach(&tmux, &session);
 
     run(&tmux, &project, &session, &project.root, "build");
-    wait_until("the task to succeed", || {
+    common::wait_until("the task to succeed", || {
         window_option(&tmux, &session, "build", "@task_status") == "ok"
     });
     std::thread::sleep(Duration::from_millis(300));
@@ -539,7 +524,7 @@ fn split_sizes(header: &str) -> Vec<String> {
     let session = tmux.new_session("app", &project.root);
 
     run(&tmux, &project, &session, &project.root, "watch");
-    wait_until("the split", || pane_sizes(&tmux, &session).len() == 2);
+    common::wait_until("the split", || pane_sizes(&tmux, &session).len() == 2);
 
     pane_sizes(&tmux, &session)
 }
@@ -585,7 +570,7 @@ fn a_split_task_neither_marks_nor_rings() {
     count_bells(&tmux);
 
     run(&tmux, &project, &session, &project.root, "watch");
-    wait_until("the task to run", || done.exists());
+    common::wait_until("the task to run", || done.exists());
     std::thread::sleep(Duration::from_millis(300));
 
     assert_eq!(
@@ -606,7 +591,7 @@ fn a_detached_task_runs_in_its_own_window_without_selecting_it() {
     let active = tmux.tmux(&["display-message", "-p", "-t", &session, "#{window_id}"]);
 
     run(&tmux, &project, &session, &project.root, "logcat");
-    wait_until("the task to fail", || {
+    common::wait_until("the task to fail", || {
         window_option(&tmux, &session, "logcat", "@task_status") == "fail"
     });
 
@@ -627,12 +612,12 @@ fn rerunning_a_detached_task_reuses_its_window_without_selecting_it() {
     let session = tmux.new_session("app", &project.root);
     let active = tmux.tmux(&["display-message", "-p", "-t", &session, "#{window_id}"]);
     run(&tmux, &project, &session, &project.root, "logcat");
-    wait_until("the first run to succeed", || {
+    common::wait_until("the first run to succeed", || {
         window_option(&tmux, &session, "logcat", "@task_status") == "ok"
     });
 
     run(&tmux, &project, &session, &project.root, "logcat");
-    wait_until("the re-run to succeed", || {
+    common::wait_until("the re-run to succeed", || {
         window_option(&tmux, &session, "logcat", "@task_status") == "ok"
     });
 
@@ -709,7 +694,7 @@ fn a_popup_task_picked_in_the_picker_runs_in_the_picker_s_popup() {
             .spawn()
             .expect("tmux runs"),
     );
-    wait_until("the task to run in a terminal", || done.exists());
+    common::wait_until("the task to run in a terminal", || done.exists());
     std::thread::sleep(Duration::from_millis(300));
 
     assert_eq!(
@@ -731,7 +716,7 @@ fn a_popup_task_run_outside_the_picker_opens_a_popup() {
 
     run(&tmux, &project, &session, &project.root, "doctor");
 
-    wait_until("the task to run in a terminal", || done.exists());
+    common::wait_until("the task to run in a terminal", || done.exists());
 }
 
 #[test]
@@ -745,5 +730,5 @@ fn a_finished_detached_task_rings() {
 
     run(&tmux, &project, &session, &project.root, "logcat");
 
-    wait_until("the bell", || rang(&tmux));
+    common::wait_until("the bell", || rang(&tmux));
 }

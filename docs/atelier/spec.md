@@ -112,7 +112,9 @@ tool, Homebrew still installs packages.
 - **Orchestrator boundary.** Atelier owns behaviour (bar, pickers, task runner,
   preview server, setup, services, doctor). Config files stay plain files linked
   from the repo. Grove stays in its own repo and language. Homebrew stays the
-  package installer.
+  package installer. `install.sh` stays the bootstrap that runs before atelier
+  exists and around it: Homebrew and the Brewfile (casks skipped on `remote`),
+  building atelier, and copying the keyboard layout bundle.
 - **The contract with tmux is options.**
   - `@grove_project`, `@grove_root`, `@grove_worktree` on sessions, set by grove.
     `@grove_worktree` is empty at the main checkout. Grove also sets them when
@@ -151,11 +153,12 @@ tool, Homebrew still installs packages.
   "Copy all" stays the way to hand notes to an agent; nothing writes into a Claude
   pane.
 - **Services.** One description file maps to launchd plists or systemd user units
-  and timers. A plist or unit is only reloaded when it changed. On Linux, setup
-  enables linger so services survive SSH logout.
+  and timers. A plist or unit is only reloaded when it changed. On Linux,
+  `atelier service install` enables linger so services survive SSH logout.
 - **Clipboard and opening.** Copy goes through OSC 52 via tmux, so it reaches the
   local clipboard over SSH too. Chrome tab reuse is macOS only; elsewhere the
-  preview prints the URL.
+  preview hands the URL to the OS opener (`xdg-open`) when there is one, and
+  prints it either way.
 - **Terminal agnostic.** Atelier never names a terminal app. When it needs one
   (bringing it to the front after a notification click), it walks up the process
   tree from the tmux client's pid.
