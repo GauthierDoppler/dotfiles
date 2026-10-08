@@ -31,39 +31,6 @@ impl<'a> Placement<'a> {
     }
 }
 
-fn wrapper(catalog: &Catalog, name: &str, mark: bool) -> Result<Vec<String>> {
-    let mut command = vec![
-        path_arg(&std::env::current_exe()?)?.to_string(),
-        "tasks".to_string(),
-        "exec".to_string(),
-    ];
-    if mark {
-        command.push("--mark".to_string());
-    }
-    command.push(path_arg(&catalog.root)?.to_string());
-    command.push(name.to_string());
-    Ok(command)
-}
-
-fn in_split(tmux: &Tmux, catalog: &Catalog, name: &str, flag: &str, size: &str) -> Result<()> {
-    let wrapper = wrapper(catalog, name, false)?;
-    let root = path_arg(&catalog.root)?;
-    let mut split = vec![
-        "split-window",
-        flag,
-        "-l",
-        size,
-        "-t",
-        &catalog.session,
-        "-c",
-        root,
-        "--",
-    ];
-    split.extend(wrapper.iter().map(String::as_str));
-    tmux.run(&split)?;
-    Ok(())
-}
-
 pub fn place(tmux: &Tmux, catalog: &Catalog, name: &str, in_popup: bool) -> Result<()> {
     let script = catalog.script(name);
     if !catalog.names().iter().any(|known| known == name) {
@@ -78,26 +45,6 @@ pub fn place(tmux: &Tmux, catalog: &Catalog, name: &str, in_popup: bool) -> Resu
         Placement::Popup if in_popup => execute(tmux, &catalog.root, name, false),
         Placement::Popup => in_popup_of_its_own(tmux, catalog, name),
     }
-}
-
-fn in_popup_of_its_own(tmux: &Tmux, catalog: &Catalog, name: &str) -> Result<()> {
-    let command: Vec<String> = wrapper(catalog, name, false)?
-        .iter()
-        .map(|word| shell::quote(word))
-        .collect();
-    let mut popup = Command::new("tmux");
-    if let Some(socket) = tmux.socket() {
-        popup.arg("-S").arg(socket);
-    }
-    popup
-        .args(["display-popup", "-E", "-w", "80%", "-h", "60%"])
-        .args(["-t", &catalog.session, "-d", path_arg(&catalog.root)?])
-        .arg(command.join(" "))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-    Ok(())
 }
 
 fn in_window(tmux: &Tmux, catalog: &Catalog, name: &str, select: bool) -> Result<()> {
@@ -143,6 +90,59 @@ fn in_window(tmux: &Tmux, catalog: &Catalog, name: &str, select: bool) -> Result
         }
     }
     Ok(())
+}
+
+fn in_split(tmux: &Tmux, catalog: &Catalog, name: &str, flag: &str, size: &str) -> Result<()> {
+    let wrapper = wrapper(catalog, name, false)?;
+    let root = path_arg(&catalog.root)?;
+    let mut split = vec![
+        "split-window",
+        flag,
+        "-l",
+        size,
+        "-t",
+        &catalog.session,
+        "-c",
+        root,
+        "--",
+    ];
+    split.extend(wrapper.iter().map(String::as_str));
+    tmux.run(&split)?;
+    Ok(())
+}
+
+fn in_popup_of_its_own(tmux: &Tmux, catalog: &Catalog, name: &str) -> Result<()> {
+    let command: Vec<String> = wrapper(catalog, name, false)?
+        .iter()
+        .map(|word| shell::quote(word))
+        .collect();
+    let mut popup = Command::new("tmux");
+    if let Some(socket) = tmux.socket() {
+        popup.arg("-S").arg(socket);
+    }
+    popup
+        .args(["display-popup", "-E", "-w", "80%", "-h", "60%"])
+        .args(["-t", &catalog.session, "-d", path_arg(&catalog.root)?])
+        .arg(command.join(" "))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    Ok(())
+}
+
+fn wrapper(catalog: &Catalog, name: &str, mark: bool) -> Result<Vec<String>> {
+    let mut command = vec![
+        path_arg(&std::env::current_exe()?)?.to_string(),
+        "tasks".to_string(),
+        "exec".to_string(),
+    ];
+    if mark {
+        command.push("--mark".to_string());
+    }
+    command.push(path_arg(&catalog.root)?.to_string());
+    command.push(name.to_string());
+    Ok(command)
 }
 
 fn path_arg(path: &Path) -> Result<&str> {

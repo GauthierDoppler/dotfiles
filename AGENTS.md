@@ -320,8 +320,7 @@ means a dock bounce or a badge. It is skipped when the task's window is the
 active window of a session a non-control-mode client is attached to — ringing
 about output the user is staring at is noise, and a control-mode client (the
 daemon) looks at nothing. Tasks ring and nothing else: the spec keeps desktop
-notifications for Claude's `waiting` only, so the `terminal-notifier` banner the
-bash runner sent for `detach` tasks is gone.
+notifications for Claude's `waiting` only.
 
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
