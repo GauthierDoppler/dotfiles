@@ -89,16 +89,10 @@ const LINKS: &[Link] = &[
     ),
     each_markdown_in("dot_pi_agent/agents", ".pi/agent/agents"),
     link("scripts/ssh-setup", ".local/bin/ssh-setup"),
-    link(
-        "scripts/claude-settings-sync",
-        ".local/bin/claude-settings-sync",
-    ),
     link("scripts/tmux-sessions", ".local/bin/tmux-sessions"),
     link("scripts/tmux-tasks", ".local/bin/tmux-tasks"),
     link("scripts/tmux-task-run", ".local/bin/tmux-task-run"),
     link("scripts/tmux-status-left", ".local/bin/tmux-status-left"),
-    link("scripts/tmux-status-right", ".local/bin/tmux-status-right"),
-    link("scripts/tmux-pick", ".local/bin/tmux-pick"),
     link("scripts/md-preview/md-preview", ".local/bin/md-preview"),
     link("scripts/cc-tap-service", ".local/bin/cc-tap-service"),
 ];

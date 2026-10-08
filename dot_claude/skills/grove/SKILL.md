@@ -99,11 +99,12 @@ pull, then `git skip` it again.
 ## Session naming — and why it matters beyond grove
 
 Default format `{prefix}{project}_{branch}_{key}`, where `{key}` is an FNV-1a hash of the repo
-root, always the **last** field. It is identical for every branch and worktree of one repo,
-which is how `scripts/tmux-sessions` decides "sessions of this project".
+root, always the **last** field.
 
-Changing `session_name_format` so the key is no longer trailing **breaks the session picker's
-project scoping.** Do not move or drop `{key}`.
+Nothing parses that name any more. Grove sets `@grove_project`, `@grove_root` and
+`@grove_worktree` on every session it creates or attaches to, and the session picker
+(`atelier sessions pick`) groups "sessions of this project" by `@grove_root`. Changing
+`session_name_format` is therefore safe.
 
 ## Getting files into new worktrees
 
@@ -174,7 +175,7 @@ Do not report it working until step 6 has actually run.
 | new worktree missing env files | `setup_script` not set, not executable, or `cp_if_exists` used on a directory |
 | global config seems ignored | may not be ported yet — move the setting into `.grove/config.yaml` |
 | project's windows replaced the global ones | expected: arrays replace, they do not merge |
-| session picker no longer scopes to the project | `session_name_format` no longer ends in `{key}` |
+| session picker no longer scopes to the project | session predates grove's tmux options: `grove attach` to it once to tag it |
 | sessions linger after deleting worktrees | `grove prune` |
 | `.grove/` shows up in `git status` | not skipped — `git skip .grove/config.yaml .grove/setup.sh` |
 | `git pull` complains about `.grove/` | `--skip-worktree` on a tracked file upstream changed: `git unskip`, pull, `git skip` again |
