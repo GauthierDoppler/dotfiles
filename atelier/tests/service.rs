@@ -5,6 +5,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+use common::BoundedOutput;
+
 const LABELS: &[&str] = &[
     "com.theodo.cc-tap.dashboard",
     "com.theodo.cc-tap.proxy",
@@ -101,7 +103,7 @@ impl Machine {
     }
 
     fn service(&self, args: &[&str]) -> Output {
-        self.command(args).output().expect("atelier runs")
+        self.command(args).bounded_output().expect("atelier runs")
     }
 
     fn ok(&self, args: &[&str]) -> String {
@@ -131,7 +133,7 @@ impl Machine {
 }
 
 fn uid() -> String {
-    let output = Command::new("id").arg("-u").output().unwrap();
+    let output = Command::new("id").arg("-u").bounded_output().unwrap();
     String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }
 
@@ -391,7 +393,7 @@ fn systemd_install_honours_xdg_config_home() {
     let output = machine
         .command(&["install", "--system", "systemd"])
         .env("XDG_CONFIG_HOME", machine.home("xdg"))
-        .output()
+        .bounded_output()
         .unwrap();
     assert!(output.status.success());
     assert!(machine

@@ -3,7 +3,7 @@ mod common;
 use std::path::Path;
 use std::process::Command;
 
-use common::{git, git_repo, stdout_of};
+use common::{git, git_repo, stdout_of, BoundedOutput};
 
 fn bar_right(args: &[&str], env: &[(&str, &str)]) -> String {
     let mut command = Command::new(env!("CARGO_BIN_EXE_atelier"));
@@ -11,7 +11,7 @@ fn bar_right(args: &[&str], env: &[(&str, &str)]) -> String {
     for (key, value) in env {
         command.env(key, value);
     }
-    stdout_of(args, command.output().expect("atelier runs"))
+    stdout_of(args, command.bounded_output().expect("atelier runs"))
 }
 
 fn visible(rendered: &str) -> String {

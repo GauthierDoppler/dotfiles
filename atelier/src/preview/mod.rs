@@ -189,16 +189,19 @@ function run([url]) {
 
 #[cfg(target_os = "macos")]
 fn show(url: &str) {
-    let focused = Process::new("/usr/bin/osascript")
+    let focused = Process::new("osascript")
         .args(["-l", "JavaScript", "-e", FOCUS, url])
+        .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
         .is_ok_and(|out| out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "found");
     if focused {
         return;
     }
-    let opened = Process::new("/usr/bin/open")
+    let opened = Process::new("open")
         .args(["-a", "Google Chrome", url])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .is_ok_and(|status| status.success());

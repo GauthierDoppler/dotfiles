@@ -1,8 +1,12 @@
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use serde_json::{json, Value};
+
+use common::BoundedOutput;
 
 const BASE: &str = "dot_claude/settings.json";
 const LOCAL: &str = "dot_claude/settings.local.json";
@@ -64,7 +68,7 @@ impl Machine {
             .current_dir(self.home.path())
             .env("HOME", self.home.path())
             .env_remove("TMUX")
-            .output()
+            .bounded_output()
             .expect("atelier runs")
     }
 

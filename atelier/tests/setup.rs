@@ -6,6 +6,8 @@ use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use common::BoundedOutput;
+
 const DESKTOP_LINKS: &[(&str, &str)] = &[
     (".config/delta", "delta"),
     (".config/ghostty", "ghostty"),
@@ -79,7 +81,7 @@ impl Home {
             .env("HOME", self.path())
             .env_remove("TMUX")
             .env_remove("DOTFILES")
-            .output()
+            .bounded_output()
             .expect("atelier runs")
     }
 
@@ -360,7 +362,7 @@ fn without_repo_the_dotfiles_variable_is_used() {
         .env("HOME", home.path())
         .env("DOTFILES", common::repo())
         .env_remove("TMUX")
-        .output()
+        .bounded_output()
         .unwrap();
 
     assert!(

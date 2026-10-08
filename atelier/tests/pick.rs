@@ -2,7 +2,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::{FakeOpener, TmuxServer};
+use common::{BoundedOutput, FakeOpener, TmuxServer};
 
 fn fixture(name: &str) -> String {
     format!("{}/tests/fixtures/pick/{name}", env!("CARGO_MANIFEST_DIR"))
@@ -63,7 +63,7 @@ fn act(tmux: &TmuxServer, bin: &FakeBin, args: &[&str]) {
     let output = tmux
         .atelier_command(args)
         .env("PATH", bin.path())
-        .output()
+        .bounded_output()
         .unwrap();
     common::stdout_of(args, output);
 }
@@ -100,7 +100,7 @@ fn list(tmux: &TmuxServer, pane: &str, home: &Path) -> Vec<String> {
     let output = tmux
         .atelier_command(&["pick", "list", "-t", pane])
         .env("HOME", home)
-        .output()
+        .bounded_output()
         .unwrap();
     common::stdout_of(&["pick", "list"], output)
         .lines()
@@ -513,7 +513,7 @@ fn preview(tmux: &TmuxServer, port: u16, home: &Path, pane: &str, token: &str) -
         .env("PATH", opener.path())
         .env("HOME", home)
         .env("MD_PREVIEW_PORT", port.to_string())
-        .output()
+        .bounded_output()
         .unwrap();
     common::stdout_of(&args, output)
 }
