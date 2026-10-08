@@ -190,8 +190,8 @@ shows a generic icon. Nothing else changes.
 **Copying:** `Prefix + u` for a token (URL, file path), `Prefix + v` for a
 region. Plain dragging is unreliable — tmux only selects when the pane's
 application has not grabbed the mouse, which Neovim always does and Claude Code
-does intermittently. Ghostty's `Shift`+drag also works but selects by screen
-column, so it ignores split boundaries.
+does intermittently. The terminal's own `Shift`+drag (`Option`+drag in iTerm2)
+also works but selects by screen column, so it ignores split boundaries.
 
 Status bar shows **project · root/wt · branch**, resolved with git rather than
 from the session name, plus per-window task markers: `●` running, `✓` ok,
