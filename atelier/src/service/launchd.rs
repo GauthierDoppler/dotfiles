@@ -4,7 +4,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use super::{failures, stdout_of, succeeds, write_if_changed, Day, FileState, Service};
+use super::{failures, stdout_of, succeeds, write_if_changed, Day, FileState, Service, Status};
 use crate::Result;
 
 const HEADER: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -50,19 +50,20 @@ pub(super) fn install(services: &[Service], home: &Path) -> Result<()> {
     failures(failed)
 }
 
-pub(super) fn list(services: &[Service], home: &Path) -> Result<()> {
+pub(super) fn statuses(services: &[Service], home: &Path) -> Result<Vec<Status>> {
     let dir = agents_dir(home);
     let domain = domain()?;
+    let mut statuses = Vec::new();
     for service in services {
-        let state = FileState::of(&plist_path(&dir, service), &render(service)?);
-        let running = if loaded(&format!("{domain}/{}", service.label)) {
-            "loaded"
-        } else {
-            "not loaded"
-        };
-        println!("{:<40} {:<14} {running}", service.label, state.label());
+        let running = loaded(&format!("{domain}/{}", service.label));
+        statuses.push(Status {
+            label: service.label.clone(),
+            file: FileState::of(&plist_path(&dir, service), &render(service)?),
+            state: if running { "loaded" } else { "not loaded" }.into(),
+            running,
+        });
     }
-    Ok(())
+    Ok(statuses)
 }
 
 pub(super) fn uninstall(services: &[Service], home: &Path) -> Result<()> {
@@ -89,22 +90,32 @@ fn agents_dir(home: &Path) -> PathBuf {
 
 fn writable_agents_dir(home: &Path) -> Result<PathBuf> {
     let dir = agents_dir(home);
-    let probe = dir.join(".atelier-write-probe");
-    let writable = fs::create_dir_all(&dir)
-        .and_then(|()| fs::write(&probe, ""))
-        .and_then(|()| fs::remove_file(&probe));
-    match writable {
-        Ok(()) => Ok(dir),
-        Err(error) => {
-            let user = std::env::var("USER").unwrap_or_else(|_| "$USER".into());
-            Err(format!(
-                "{} is not writable ({error}) -- fix it with: sudo chown {user}:staff {}",
-                dir.display(),
-                dir.display()
-            )
-            .into())
-        }
+    if let Err(error) = fs::create_dir_all(&dir).and_then(|()| probe(&dir)) {
+        let (problem, fix) = unwritable(&dir, &error);
+        return Err(format!("{problem} -- fix it with: {fix}").into());
     }
+    Ok(dir)
+}
+
+pub(super) fn unwritable_agents_dir(home: &Path) -> Option<(String, String)> {
+    let dir = agents_dir(home);
+    if !dir.exists() {
+        return None;
+    }
+    probe(&dir).err().map(|error| unwritable(&dir, &error))
+}
+
+fn probe(dir: &Path) -> std::io::Result<()> {
+    let probe = dir.join(".atelier-write-probe");
+    fs::write(&probe, "").and_then(|()| fs::remove_file(&probe))
+}
+
+fn unwritable(dir: &Path, error: &std::io::Error) -> (String, String) {
+    let user = std::env::var("USER").unwrap_or_else(|_| "$USER".into());
+    (
+        format!("{} is not writable ({error})", dir.display()),
+        format!("sudo chown {user}:staff {}", dir.display()),
+    )
 }
 
 fn plist_path(dir: &Path, service: &Service) -> PathBuf {

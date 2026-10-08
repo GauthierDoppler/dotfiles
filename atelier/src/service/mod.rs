@@ -116,22 +116,85 @@ impl FileState {
 impl Command {
     pub fn run(self, _tmux: &Tmux) -> Result<()> {
         let (Command::Install(target) | Command::List(target) | Command::Uninstall(target)) = &self;
-        let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
-        let repo = crate::setup::repo_root(target.repo.clone(), &home)?;
-        let services = load(&repo.join(DESCRIPTION))?;
-        let system = target.system.unwrap_or(if cfg!(target_os = "macos") {
-            System::Launchd
-        } else {
-            System::Systemd
-        });
+        let (services, home) = target.load()?;
+        let system = target.system();
         match (self, system) {
             (Command::Install(_), System::Launchd) => launchd::install(&services, &home),
             (Command::Install(_), System::Systemd) => systemd::install(&services, &home),
-            (Command::List(_), System::Launchd) => launchd::list(&services, &home),
-            (Command::List(_), System::Systemd) => systemd::list(&services, &home),
+            (Command::List(_), system) => {
+                for status in statuses(system, &services, &home)? {
+                    println!(
+                        "{:<40} {:<14} {}",
+                        status.label,
+                        status.file.label(),
+                        status.state
+                    );
+                }
+                Ok(())
+            }
             (Command::Uninstall(_), System::Launchd) => launchd::uninstall(&services, &home),
             (Command::Uninstall(_), System::Systemd) => systemd::uninstall(&services, &home),
         }
+    }
+}
+
+impl Target {
+    fn system(&self) -> System {
+        self.system.unwrap_or(if cfg!(target_os = "macos") {
+            System::Launchd
+        } else {
+            System::Systemd
+        })
+    }
+
+    pub(crate) fn repo(&self) -> Option<PathBuf> {
+        self.repo.clone()
+    }
+
+    fn load(&self) -> Result<(Vec<Service>, PathBuf)> {
+        let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
+        let repo = crate::setup::repo_root(self.repo.clone(), &home)?;
+        Ok((load(&repo.join(DESCRIPTION))?, home))
+    }
+}
+
+struct Status {
+    label: String,
+    file: FileState,
+    state: String,
+    running: bool,
+}
+
+fn statuses(system: System, services: &[Service], home: &Path) -> Result<Vec<Status>> {
+    match system {
+        System::Launchd => launchd::statuses(services, home),
+        System::Systemd => systemd::statuses(services, home),
+    }
+}
+
+pub(crate) fn stopped(target: &Target) -> Result<Vec<String>> {
+    let (services, home) = target.load()?;
+    Ok(statuses(target.system(), &services, &home)?
+        .into_iter()
+        .filter(|status| !status.running)
+        .map(|status| status.label)
+        .collect())
+}
+
+pub(crate) fn agents_dir_problem(target: &Target) -> Option<(String, String)> {
+    match target.system() {
+        System::Launchd => {
+            let home = PathBuf::from(std::env::var_os("HOME")?);
+            launchd::unwritable_agents_dir(&home)
+        }
+        System::Systemd => None,
+    }
+}
+
+pub(crate) fn linger(target: &Target) -> Option<Result<(String, bool)>> {
+    match target.system() {
+        System::Launchd => None,
+        System::Systemd => Some(systemd::linger_state()),
     }
 }
 
