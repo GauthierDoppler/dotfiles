@@ -153,6 +153,46 @@ impl TmuxServer {
     pub fn client_session(&self, client: &ControlClient) -> String {
         self.tmux(&["display", "-p", "-c", &client.name, "#{session_name}"])
     }
+
+    pub fn attach_terminal_client(&self, session: &str) -> TerminalClient {
+        let attach = format!(
+            "tmux -S '{}' attach-session -t '{session}'",
+            self.socket.display()
+        );
+        let mut command = Command::new("script");
+        if cfg!(target_os = "macos") {
+            command.args(["-q", "/dev/null", "sh", "-c", &attach]);
+        } else {
+            command.args(["-qfc", &attach, "/dev/null"]);
+        }
+        let client = TerminalClient(
+            command
+                .env("TERM", "xterm-256color")
+                .env_remove("TMUX")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("script runs"),
+        );
+        for _ in 0..200 {
+            let modes = self.tmux(&["list-clients", "-F", "#{client_control_mode}"]);
+            if modes.lines().any(|mode| mode == "0") {
+                return client;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("terminal client for {session} never attached");
+    }
+}
+
+pub struct TerminalClient(Child);
+
+impl Drop for TerminalClient {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
 pub struct ControlClient {

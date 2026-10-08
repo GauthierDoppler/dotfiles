@@ -7,9 +7,33 @@ use std::path::Path;
 use clap::Subcommand;
 
 use crate::git;
-use crate::session;
+use crate::session::{self, Identity};
 use crate::tmux::Tmux;
 use crate::Result;
+
+pub use battery::Battery;
+
+#[derive(Clone, PartialEq)]
+pub struct Pushed {
+    pub left: String,
+    pub right: String,
+}
+
+pub fn pushed(
+    identity: &Identity,
+    path: &Path,
+    client_width: u16,
+    battery: Option<Battery>,
+) -> Pushed {
+    let block = left::Left {
+        project: &identity.project,
+        checkout: identity.checkout,
+    };
+    Pushed {
+        left: block.render(client_width, right::width(client_width, battery.is_some())),
+        right: right::pushed(git::repo_counts(path), battery, client_width),
+    }
+}
 
 #[derive(Subcommand)]
 pub enum Command {

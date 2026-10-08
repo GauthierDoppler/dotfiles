@@ -300,6 +300,15 @@ impl<'a> Picker<'a> {
             Scope::Project => self.project.as_deref(),
             Scope::All => None,
         };
+        let clients = self.tmux.run(&[
+            "list-clients",
+            "-F",
+            "#{client_control_mode} #{session_id}",
+        ])?;
+        let watched: Vec<&str> = clients
+            .lines()
+            .filter_map(|line| line.strip_prefix("0 "))
+            .collect();
         let mut listed = Vec::new();
         for id in self
             .tmux
@@ -307,7 +316,7 @@ impl<'a> Picker<'a> {
             .lines()
         {
             if id != self.session && in_project(self.tmux, id, project)? {
-                listed.push(Listed::read(self.tmux, id)?);
+                listed.push(Listed::read(self.tmux, id, watched.contains(&id))?);
             }
         }
         if listed.is_empty() {
@@ -400,16 +409,15 @@ struct Listed {
 }
 
 impl Listed {
-    fn read(tmux: &Tmux, id: &str) -> Result<Self> {
+    fn read(tmux: &Tmux, id: &str, attached: bool) -> Result<Self> {
         let line = tmux.display(
             id,
-            "#{session_last_attached} #{session_windows} #{session_attached} #{session_name}",
+            "#{session_last_attached} #{session_windows} #{session_name}",
         )?;
-        let mut fields = line.splitn(4, ' ');
+        let mut fields = line.splitn(3, ' ');
         let mut next = || fields.next().unwrap_or_default().to_string();
         let last_attached = next().parse().unwrap_or(0);
         let windows = next();
-        let attached = next() != "0";
         Ok(Listed {
             id: id.to_string(),
             name: next(),

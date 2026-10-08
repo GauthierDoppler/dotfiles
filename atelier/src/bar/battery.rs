@@ -1,7 +1,7 @@
 use starship_battery::units::ratio::percent;
 use starship_battery::{Manager, State};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Battery {
     pub percent: u8,
     pub plugged: bool,

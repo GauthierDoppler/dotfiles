@@ -1,3 +1,4 @@
+mod bar;
 mod control;
 mod server;
 mod state;

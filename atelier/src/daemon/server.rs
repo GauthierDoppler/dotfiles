@@ -2,10 +2,12 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
+use super::bar::{adopt, Pusher, RESIZED};
 use super::control::{Event, Notification, Parser};
 use super::state::{Query, State};
 use super::{Paths, Request, StatusReply};
@@ -55,17 +57,31 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
     let mut input = child.stdin.take().ok_or("tmux has no stdin")?;
     let mut lines = BufReader::new(child.stdout.take().ok_or("tmux has no stdout")?).lines();
     let mut parser = Parser::default();
-    let mut pending = VecDeque::new();
+    let mut pending = VecDeque::from([Pending::Me]);
+    let mut out = "display-message -p '#{client_name}'\n".to_string();
+    let mut pusher = Pusher::default();
+    let mut push_due = false;
     let mut stale = true;
     let mut attached = false;
+    let mut battery = tokio::time::interval(Duration::from_secs(60));
     loop {
         if stale && pending.is_empty() {
-            let batch: String = Query::ALL.iter().map(|q| q.control_line()).collect();
-            if input.write_all(batch.as_bytes()).await.is_err() {
-                break;
-            }
-            pending.extend(Query::ALL);
+            out.extend(Query::ALL.iter().map(|q| q.control_line()));
+            pending.extend(Query::ALL.map(Pending::Query));
             stale = false;
+            push_due = true;
+        }
+        if push_due && pending.is_empty() {
+            let watched = lock(state).watched();
+            for command in pusher.commands(watched) {
+                out.push_str(&command);
+                out.push('\n');
+                pending.push_back(Pending::Ignored);
+            }
+            push_due = false;
+        }
+        if !out.is_empty() && input.write_all(std::mem::take(&mut out).as_bytes()).await.is_err() {
+            break;
         }
         tokio::select! {
             line = lines.next_line() => {
@@ -73,10 +89,21 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
                 match parser.feed(&line) {
                     Some(Event::Reply(reply)) => {
                         attached = true;
-                        if reply.ours {
-                            if let (Some(query), true) = (pending.pop_front(), reply.ok) {
+                        if !reply.ours {
+                            continue;
+                        }
+                        match (pending.pop_front(), reply.ok) {
+                            (Some(Pending::Query(query)), true) => {
                                 lock(state).apply(query, reply.lines.iter().map(String::as_str));
                             }
+                            (Some(Pending::Me), true) => {
+                                for command in adopt(&reply.lines.concat()) {
+                                    out.push_str(&command);
+                                    out.push('\n');
+                                    pending.push_back(Pending::Ignored);
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     Some(Event::Notification(notification)) => {
@@ -84,6 +111,9 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
                     }
                     None => {}
                 }
+            }
+            _ = battery.tick() => {
+                push_due |= pusher.battery_changed();
             }
             connection = listener.accept() => {
                 tokio::spawn(answer(connection?.0, state.clone()));
@@ -95,11 +125,21 @@ async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> 
     Ok(attached)
 }
 
+enum Pending {
+    Me,
+    Query(Query),
+    Ignored,
+}
+
 fn update(state: &mut State, notification: Notification) -> bool {
     match notification {
-        Notification::SessionRenamed { session, name } => state.rename_session(&session, &name),
+        Notification::SessionRenamed { session, name } => {
+            state.rename_session(&session, &name);
+            return true;
+        }
         Notification::WindowRenamed { window, name } => state.rename_window(&window, &name),
         Notification::WindowClose { window } => state.close_window(&window),
+        Notification::Message(message) => return message == RESIZED,
         Notification::SessionsChanged
         | Notification::SessionChanged
         | Notification::WindowAdd

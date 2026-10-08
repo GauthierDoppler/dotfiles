@@ -16,7 +16,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [09](09-claude-code-marker-through-atelier.md) | Claude Code marker through atelier | 02 | done |
 | [10](10-token-picker.md) | Token picker | 02 | done |
 | [11](11-daemon-tracer-bullet-atelier-knows-the-live.md) | Daemon tracer bullet: atelier knows the live tmux state | 02 | done |
-| [12](12-daemon-pushes-the-bar.md) | Daemon pushes the bar | 04, 11 | ready-for-agent |
+| [12](12-daemon-pushes-the-bar.md) | Daemon pushes the bar | 04, 11 | done |
 | [13](13-repo-counts-follow-git-without-polling.md) | Repo counts follow git without polling | 12 | ready-for-agent |
 | [14](14-markdown-preview-served-by-atelier.md) | Markdown preview served by atelier | 02 | done |
 | [15](15-markdown-notes-and-cursor-sync.md) | Markdown notes and cursor sync | 14 | done |

@@ -239,6 +239,26 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   escaped and a window named `%end 1 1 1` is legal. Control mode prints a tab in
   format output as `_`, so fields are space-separated with the free-text one
   last.
+- **The daemon pushes the bar** (`src/daemon/bar.rs`) for every session a
+  non-control client is on, at the width of its most recently active one
+  (`#{client_activity}`) — the option is per session, the width per client, so
+  one has to win. It re-renders after any structural notification, a rename, a
+  `%message atelier:client-resized` and a battery reading that changed (read
+  once a minute), and only sends `set-option` when a block changed. Repo
+  counts are recomputed on each push. Markers need nothing: they live in the
+  window formats, which tmux evaluates itself. Session fields come over the
+  control connection as `#{q:…}`-quoted words and go through
+  `session::identify`, the resolver behind `session::resolve`.
+- **Control mode has no resize notification for other clients.**
+  `%layout-change` only covers windows of the daemon's own session, and
+  subscriptions are evaluated against the daemon's client. So on attach the
+  daemon sets `@bar_daemon` to its client name and installs
+  `client-resized[73]` → `display-message -c <itself> atelier:client-resized`,
+  which arrives as a bare `%message` (an `if-shell` wrapper would wrap it in a
+  `%begin`/`%end` block instead). `client-detached[73]` unsets `@bar_daemon` and
+  that hook when the detaching client is the daemon, which is what drops the bar
+  to its fallback when the daemon is killed. Display-message's `-c` is not
+  format-expanded, which is why the name is written into the hook.
 - **Automatic rename is lazy.** tmux re-evaluates `automatic-rename` only when
   its event loop wakes, so a fresh window can read `tmux` (the forked server,
   before `exec`) until some unrelated command or output wakes it, and only then
@@ -815,10 +835,21 @@ raise it.
 `atelier bar right "#{session_path}" "#{client_width}" "#{client_key_table}"`
 renders the *entire* right block — key table, repo state, battery, date, clock
 (`src/bar/right.rs`, a pure function of the counts, the battery and the time;
-its snapshots cover every width tier with and without counts and battery). The
-date and clock are not left to `dot_tmux.conf` even though strftime is free
-there: the block has to know its own total width (see below), and a piece it
-does not render is a piece it cannot measure.
+its snapshots cover every width tier with and without counts and battery). Every
+cell of it is still laid out in atelier, even the parts tmux fills in: the block
+has to know its own total width (see below), and a piece it does not lay out is
+a piece it cannot measure.
+
+**Both `#()` calls are only the fallback.** The daemon renders `@bar_left` and
+`@bar_right` per session and `dot_tmux.conf` shows them while the global
+`@bar_daemon` is set, else runs the `#()` as before. The pushed right block
+(`right::pushed`) stops short of three things tmux does better: the key-table
+slot stays a tmux format (`#{p10:…client_key_table…}`), because control mode has
+no key-table notification and a subscription would report the *daemon's* key
+table; the date goes in as the literal `%a %d %b` (battery `%` doubled) and is
+shown through `#{T:@bar_right}`, so it turns over at midnight with no timer; the
+clock is `%H:%M` in the config, after it. `tests/bar_daemon.rs` checks the
+pushed form plus those pieces equals what `atelier bar right` prints.
 
 Repo state is `+412 −89 ↑2 ↓1` — **lines** changed against HEAD, then divergence
 from the upstream. Two cheap calls, `diff-index --shortstat HEAD` and `rev-list

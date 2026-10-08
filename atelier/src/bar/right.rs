@@ -13,6 +13,7 @@ const LOW_BATTERY: &str = "#[fg=#e78284,bold]";
 const DATE: &str = "#[fg=#949cbb,nobold]";
 const CLOCK: &str = "#[fg=#c6d0f5,bold]";
 const END: &str = "#[nobold]  ";
+const DATE_FORMAT: &str = "%a %d %b";
 
 const KEYS_WIDTH: usize = 10;
 const END_WIDTH: usize = 2;
@@ -85,53 +86,74 @@ impl Right<'_> {
         } else {
             self.key_table
         };
-        let mut out = format!("{KEYS}{}", pad_right(keys, KEYS_WIDTH));
-        for segment in segments(client_width, self.battery.is_some()) {
-            out.push_str(&" ".repeat(segment.gap()));
-            match segment {
-                Segment::Repo => out.push_str(&self.repo_segment()),
-                Segment::Battery => {
-                    if let Some(battery) = self.battery {
-                        out.push_str(&battery_segment(battery));
+        format!(
+            "{KEYS}{}{}{}{END}",
+            pad_right(keys, KEYS_WIDTH),
+            body(self.repo, self.battery, client_width, Some(self.now)),
+            self.now.format("%H:%M")
+        )
+    }
+}
+
+pub fn pushed(repo: RepoCounts, battery: Option<Battery>, client_width: u16) -> String {
+    body(repo, battery, client_width, None)
+}
+
+fn body(
+    repo: RepoCounts,
+    battery: Option<Battery>,
+    client_width: u16,
+    now: Option<NaiveDateTime>,
+) -> String {
+    let mut out = String::new();
+    for segment in segments(client_width, battery.is_some()) {
+        out.push_str(&" ".repeat(segment.gap()));
+        match segment {
+            Segment::Repo => out.push_str(&repo_segment(repo)),
+            Segment::Battery => {
+                if let Some(battery) = battery {
+                    let text = battery_segment(battery);
+                    match now {
+                        Some(_) => out.push_str(&text),
+                        None => out.push_str(&text.replace('%', "%%")),
                     }
                 }
-                Segment::Date => {
-                    out.push_str(DATE);
-                    out.push_str(&self.now.format("%a %d %b").to_string());
-                }
-                Segment::Clock => {
-                    out.push_str(CLOCK);
-                    out.push_str(&self.now.format("%H:%M").to_string());
+            }
+            Segment::Date => {
+                out.push_str(DATE);
+                match now {
+                    Some(now) => out.push_str(&now.format(DATE_FORMAT).to_string()),
+                    None => out.push_str(DATE_FORMAT),
                 }
             }
+            Segment::Clock => out.push_str(CLOCK),
         }
-        out.push_str(END);
-        out
     }
+    out
+}
 
-    fn repo_segment(&self) -> String {
-        let parts = [
-            (INSERTIONS, '+', self.repo.insertions),
-            (DELETIONS, '−', self.repo.deletions),
-            (SYNC, '↑', self.repo.ahead),
-            (SYNC, '↓', self.repo.behind),
-        ];
-        let mut body = String::new();
-        let mut cells = 0;
-        for (style, glyph, count) in parts.into_iter().filter(|part| part.2 > 0) {
-            if cells > 0 {
-                body.push(' ');
-                cells += 1;
-            }
-            let text = format!("{glyph}{count}");
-            cells += text.width();
-            body.push_str(style);
-            body.push_str(&text);
+fn repo_segment(repo: RepoCounts) -> String {
+    let parts = [
+        (INSERTIONS, '+', repo.insertions),
+        (DELETIONS, '−', repo.deletions),
+        (SYNC, '↑', repo.ahead),
+        (SYNC, '↓', repo.behind),
+    ];
+    let mut body = String::new();
+    let mut cells = 0;
+    for (style, glyph, count) in parts.into_iter().filter(|part| part.2 > 0) {
+        if cells > 0 {
+            body.push(' ');
+            cells += 1;
         }
-        let mut out = " ".repeat(Segment::Repo.width().saturating_sub(cells));
-        out.push_str(&body);
-        out
+        let text = format!("{glyph}{count}");
+        cells += text.width();
+        body.push_str(style);
+        body.push_str(&text);
     }
+    let mut out = " ".repeat(Segment::Repo.width().saturating_sub(cells));
+    out.push_str(&body);
+    out
 }
 
 fn battery_segment(battery: Battery) -> String {
@@ -311,6 +333,18 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_pushed_block_leaves_the_key_slot_date_and_clock_to_tmux() {
+        assert_eq!(
+            pushed(BOTH, Some(discharging(87)), 120),
+            "#[fg=#eebebe,nobold]+111 #[fg=#ea999c,nobold]−113 #[fg=#99d1db,nobold]↑2 #[fg=#99d1db,nobold]↓1    #[fg=#81c8be,nobold]\u{f0081} 87%%     #[fg=#949cbb,nobold]%a %d %b   #[fg=#c6d0f5,bold]"
+        );
+        assert_eq!(
+            pushed(CLEAN, None, 80),
+            "   #[fg=#c6d0f5,bold]"
+        );
     }
 
     #[test]

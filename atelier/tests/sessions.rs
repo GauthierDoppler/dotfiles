@@ -180,12 +180,23 @@ fn the_last_attached_session_comes_first_and_is_marked_attached() {
     tmux.new_session("alpha", dir.path());
     tmux.new_session("zulu", dir.path());
     tmux.tmux(&["new-window", "-d", "-t", "zulu"]);
-    let _client = tmux.attach_control_client("zulu");
+    let _client = tmux.attach_terminal_client("zulu");
 
     assert_eq!(
         labels(rows(&tmux, &current)),
         vec!["zulu     2 win  · attached", "alpha    1 win"]
     );
+}
+
+#[test]
+fn a_session_seen_only_by_a_control_client_is_not_marked_attached() {
+    let dir = tempfile::tempdir().unwrap();
+    let tmux = TmuxServer::start();
+    let current = tmux.new_session("scratch", dir.path());
+    tmux.new_session("daemon-seat", dir.path());
+    let _daemon = tmux.attach_control_client("daemon-seat");
+
+    assert_eq!(labels(rows(&tmux, &current)), vec!["daemon-seat    1 win"]);
 }
 
 #[test]
