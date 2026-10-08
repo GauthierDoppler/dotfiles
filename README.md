@@ -136,7 +136,6 @@ Symlinked into `~/.local/bin` by `install.sh`:
 - `claude-settings-sync` — regenerates `~/.claude/settings.json` from base + local override
 - `tmux-sessions` — session picker behind `Prefix + Space`
 - `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
-- `tmux-pick` — URL/path picker behind `Prefix + u`
 - `tmux-status-left` — renders project · root/wt · branch in the status bar
 
 ## Dependencies

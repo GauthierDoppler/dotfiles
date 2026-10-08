@@ -731,10 +731,11 @@ chrome on top rather than a hole punched in the window.
 
 Two mechanisms, for two shapes of thing:
 
-- **`Prefix + u`** (`scripts/tmux-pick`) — fuzzy-pick a **token**: URL or file
-  path. `Enter` opens (URL → Chrome, file → the nvim in this session, or a new
-  `nvim` window at the session root if there is none), `Ctrl-y` copies,
-  `Ctrl-o` hands it to `open`.
+- **`Prefix + u`** (`atelier pick popup`, `atelier/src/pick.rs`) — fuzzy-pick a
+  **token**: URL or file path. `Enter` opens (URL → the browser, file → the nvim
+  in this session, or a new `nvim` window at the session root if there is none),
+  `Ctrl-y` copies, `Ctrl-o` hands it to the OS opener (`open` on macOS,
+  `xdg-open` elsewhere).
 - **`Prefix + v`** — copy-mode, then drag with the mouse. For a **region**.
 
 `Prefix + v` matters because tmux's default `MouseDrag1Pane` only starts a
@@ -746,12 +747,15 @@ mouse unconditionally, and it respects pane borders (the terminal's own
 selection — Shift+drag, Option+drag in iTerm2 — does not: it selects by screen
 column, so a vertical split gives you both panes on every line).
 
-`tmux-pick` checks path candidates against the filesystem and drops the ones
+The picker checks path candidates against the filesystem and drops the ones
 that do not exist. This is load-bearing: TUIs truncate long paths to fit their
-width, and a fragment is indistinguishable from a real path by shape. Each grep
-runs **once over the whole capture** — an earlier version grepped per line and
-spawned ~6000 processes, which hung the popup long enough that it echoed
-keystrokes as raw escape sequences.
+width, and a fragment is indistinguishable from a real path by shape. Extraction
+is one pass over the capture with no process per line (the bash version once
+spawned ~6000); `atelier/tests/pick.rs` covers both against captured fixtures.
+
+Copy is `set-buffer -w`, i.e. OSC 52 through tmux (`set-clipboard on`), so it
+reaches the local clipboard over SSH as well. Every action on the placeholder
+row is a no-op, as in the other pickers.
 
 ## Markdown preview
 

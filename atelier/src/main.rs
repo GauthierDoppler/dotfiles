@@ -33,6 +33,8 @@ macro_rules! features {
 features! {
     /// The tmux status bar
     Bar => bar,
+    /// Pick a URL or file path off a pane
+    Pick => pick,
 }
 
 #[derive(Parser)]

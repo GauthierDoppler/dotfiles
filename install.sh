@@ -229,7 +229,6 @@ link "scripts/tmux-tasks"            "$HOME/.local/bin/tmux-tasks"
 link "scripts/tmux-task-run"         "$HOME/.local/bin/tmux-task-run"
 link "scripts/tmux-status-left"      "$HOME/.local/bin/tmux-status-left"
 link "scripts/tmux-status-right"     "$HOME/.local/bin/tmux-status-right"
-link "scripts/tmux-pick"             "$HOME/.local/bin/tmux-pick"
 link "scripts/md-preview/md-preview" "$HOME/.local/bin/md-preview"
 link "scripts/cc-tap-service"        "$HOME/.local/bin/cc-tap-service"
 
