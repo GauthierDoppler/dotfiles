@@ -90,7 +90,11 @@ impl Right<'_> {
             out.push_str(&" ".repeat(segment.gap()));
             match segment {
                 Segment::Repo => out.push_str(&self.repo_segment()),
-                Segment::Battery => out.push_str(&self.battery_segment()),
+                Segment::Battery => {
+                    if let Some(battery) = self.battery {
+                        out.push_str(&battery_segment(battery));
+                    }
+                }
                 Segment::Date => {
                     out.push_str(DATE);
                     out.push_str(&self.now.format("%a %d %b").to_string());
@@ -128,19 +132,16 @@ impl Right<'_> {
         out.push_str(&body);
         out
     }
+}
 
-    fn battery_segment(&self) -> String {
-        let Some(battery) = self.battery else {
-            return String::new();
-        };
-        let style = if !battery.plugged && battery.percent < 20 {
-            LOW_BATTERY
-        } else {
-            BATTERY
-        };
-        let text = format!("{} {}%", battery.icon(), battery.percent);
-        format!("{style}{}", pad_right(&text, Segment::Battery.width()))
-    }
+fn battery_segment(battery: Battery) -> String {
+    let style = if !battery.plugged && battery.percent < 20 {
+        LOW_BATTERY
+    } else {
+        BATTERY
+    };
+    let text = format!("{} {}%", battery.icon(), battery.percent);
+    format!("{style}{}", pad_right(&text, Segment::Battery.width()))
 }
 
 fn pad_right(text: &str, cells: usize) -> String {

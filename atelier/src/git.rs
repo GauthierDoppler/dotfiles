@@ -25,10 +25,10 @@ pub struct RepoCounts {
 }
 
 pub fn repo_counts(dir: &Path) -> RepoCounts {
-    if dir.as_os_str().is_empty() || !dir.is_dir() {
+    if !dir.is_dir() {
         return RepoCounts::default();
     }
-    let Some(shortstat) = unlocked(dir, &["diff-index", "--shortstat", "HEAD"]) else {
+    let Some(shortstat) = read_only_git(dir, &["diff-index", "--shortstat", "HEAD"]) else {
         return RepoCounts::default();
     };
     let mut counts = RepoCounts::default();
@@ -45,7 +45,7 @@ pub fn repo_counts(dir: &Path) -> RepoCounts {
             counts.deletions = number;
         }
     }
-    if let Some(divergence) = unlocked(
+    if let Some(divergence) = read_only_git(
         dir,
         &["rev-list", "--left-right", "--count", "@{upstream}...HEAD"],
     ) {
@@ -58,7 +58,7 @@ pub fn repo_counts(dir: &Path) -> RepoCounts {
     counts
 }
 
-fn unlocked(dir: &Path, args: &[&str]) -> Option<String> {
+fn read_only_git(dir: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(dir)
