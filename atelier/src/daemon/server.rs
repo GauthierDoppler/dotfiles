@@ -36,19 +36,43 @@ async fn serve(tmux_socket: &Path, listener: std::os::unix::net::UnixListener) -
     let listener = UnixListener::from_std(listener)?;
     let state = Shared::default();
     let tmux = Tmux::new(Some(tmux_socket.to_path_buf()));
-    while follow(tmux_socket, &listener, &state).await?
-        && tmux
-            .run(&["list-sessions", "-F", "x"])
-            .is_ok_and(|sessions| !sessions.is_empty())
-    {}
+    while let Some(target) = first_in_picker_order(&tmux) {
+        if !follow(&tmux, &target, &listener, &state).await?
+            && tmux.run(&["has-session", "-t", &target]).is_ok()
+        {
+            break;
+        }
+    }
     Ok(())
 }
 
-async fn follow(tmux_socket: &Path, listener: &UnixListener, state: &Shared) -> Result<bool> {
-    let mut child = tokio::process::Command::new("tmux")
-        .arg("-S")
-        .arg(tmux_socket)
-        .args(["-C", "attach-session", "-f", "no-output,ignore-size"])
+fn first_in_picker_order(tmux: &Tmux) -> Option<String> {
+    let sessions = tmux
+        .run(&[
+            "list-sessions",
+            "-F",
+            "#{session_last_attached} #{session_id} #{session_name}",
+        ])
+        .ok()?;
+    sessions
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, ' ');
+            let last_attached = fields.next()?.parse::<u64>().unwrap_or(0);
+            Some((last_attached, fields.next()?, fields.next().unwrap_or("")))
+        })
+        .min_by(|a, b| b.0.cmp(&a.0).then_with(|| a.2.cmp(b.2)))
+        .map(|(_, id, _)| id.to_string())
+}
+
+async fn follow(
+    tmux: &Tmux,
+    target: &str,
+    listener: &UnixListener,
+    state: &Shared,
+) -> Result<bool> {
+    let mut child = tokio::process::Command::from(tmux.command())
+        .args(["-C", "attach-session", "-f", "no-output,ignore-size", "-t", target])
         .env_remove("TMUX")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
