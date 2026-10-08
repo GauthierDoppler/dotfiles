@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use clap::Subcommand;
 
 use crate::fzf;
+use crate::opener;
 use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
@@ -68,10 +69,10 @@ impl Command {
             Command::Open { target, token } => open(tmux, &resolve_pane(tmux, &target)?, &token),
             Command::System { target, token } => {
                 if is_url(&token) {
-                    return system_open(&token);
+                    return opener::open(&token);
                 }
                 let pane = resolve_pane(tmux, &target)?;
-                system_open(&absolute(tmux, &pane, &token)?)
+                opener::open(&absolute(tmux, &pane, &token)?)
             }
             Command::Preview { target, token } => {
                 if is_url(&token) || !crate::preview::is_markdown(Path::new(&token)) {
@@ -121,7 +122,7 @@ fn absolute(tmux: &Tmux, pane: &str, token: &str) -> Result<PathBuf> {
 
 fn open(tmux: &Tmux, pane: &str, token: &str) -> Result<()> {
     if is_url(token) {
-        return system_open(token);
+        return opener::open(token);
     }
     let path = absolute(tmux, pane, token)?;
     let session = tmux.display(pane, "#{session_id}")?;
@@ -154,7 +155,7 @@ fn open(tmux: &Tmux, pane: &str, token: &str) -> Result<()> {
         return Ok(());
     }
     if path.is_dir() {
-        return system_open(&path);
+        return opener::open(&path);
     }
     let root = tmux.display(pane, "#{session_path}")?;
     let root = if Path::new(&root).is_dir() {
@@ -189,23 +190,6 @@ fn vim_escape(path: &str) -> String {
     escaped
 }
 
-#[cfg(target_os = "macos")]
-const OPENER: &str = "open";
-#[cfg(not(target_os = "macos"))]
-const OPENER: &str = "xdg-open";
-
-fn system_open(target: impl AsRef<std::ffi::OsStr>) -> Result<()> {
-    let status = std::process::Command::new(OPENER)
-        .arg(target)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()?;
-    if !status.success() {
-        return Err(format!("{OPENER} exited with {status}").into());
-    }
-    Ok(())
-}
 
 fn resolve_pane(tmux: &Tmux, hint: &str) -> Result<String> {
     if hint.len() > 1 && hint.starts_with('%') && hint[1..].chars().all(|c| c.is_ascii_digit()) {

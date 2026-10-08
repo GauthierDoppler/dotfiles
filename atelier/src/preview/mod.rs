@@ -233,4 +233,6 @@ fn show(url: &str) {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn show(_url: &str) {}
+fn show(url: &str) {
+    let _ = crate::opener::open(url);
+}

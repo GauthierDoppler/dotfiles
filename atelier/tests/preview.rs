@@ -711,13 +711,34 @@ fn the_server_exits_when_its_binary_is_replaced() {
 }
 
 fn open(port: u16, home: &Path, file: &Path) -> Output {
+    open_with(&common::FakeOpener::new(), port, home, file)
+}
+
+fn open_with(opener: &common::FakeOpener, port: u16, home: &Path, file: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_atelier"))
         .arg("preview")
         .arg(file)
         .env("HOME", home)
         .env("MD_PREVIEW_PORT", port.to_string())
+        .env("PATH", opener.path())
         .output()
         .expect("atelier runs")
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn opening_a_file_hands_its_url_to_the_os_opener() {
+    let (_dir, root) = real_tempdir();
+    let doc = root.join("plan.md");
+    write(&doc, "hi");
+    let server = Preview::start();
+    let opener = common::FakeOpener::new();
+
+    let output = open_with(&opener, server.port, server.home.path(), &doc);
+
+    assert!(output.status.success());
+    wait_until("the opener to be called", || !opener.opened().is_empty());
+    assert_eq!(opener.opened(), format!("{}\n", server.url(&doc)));
 }
 
 #[cfg(not(target_os = "macos"))]

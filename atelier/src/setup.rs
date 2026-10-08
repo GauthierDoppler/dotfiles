@@ -341,15 +341,22 @@ fn plan_prune(actions: &mut Vec<Action>, repo: &Path, home: &Path) -> Result<()>
             let Ok(target) = fs::read_link(&path) else {
                 continue;
             };
+            let unlinked = actions
+                .iter()
+                .any(|action| matches!(action, Action::Unlink { path: planned } if *planned == path));
             if fs::metadata(&path).is_err()
                 && inside_repo(&lexically_normal(&dir.join(&target)))
-                && !actions.iter().any(|action| action.touches(&path))
+                && !unlinked
             {
-                dangling.push(Action::Prune { path, target });
+                dangling.push((path, target));
             }
         }
-        dangling.sort_by(|a, b| a.describe().cmp(&b.describe()));
-        actions.extend(dangling);
+        dangling.sort();
+        actions.extend(
+            dangling
+                .into_iter()
+                .map(|(path, target)| Action::Prune { path, target }),
+        );
     }
     Ok(())
 }
@@ -400,17 +407,6 @@ fn suffixed(path: &Path, suffix: &str) -> PathBuf {
 }
 
 impl Action {
-    fn touches(&self, target: &Path) -> bool {
-        match self {
-            Action::Backup { path, .. }
-            | Action::Unlink { path }
-            | Action::Prune { path, .. }
-            | Action::WriteStub { path, .. } => path == target,
-            Action::Symlink { dest, .. } => dest == target,
-            Action::Migrate { legacy, .. } => legacy == target,
-        }
-    }
-
     fn describe(&self) -> String {
         match self {
             Action::Backup { path, to } => {

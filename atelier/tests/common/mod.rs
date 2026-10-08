@@ -217,6 +217,44 @@ pub fn git_repo(dir: &Path) {
     git(dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
 }
 
+pub struct FakeOpener {
+    dir: tempfile::TempDir,
+}
+
+impl FakeOpener {
+    pub fn new() -> Self {
+        let dir = tempfile::tempdir().expect("opener dir created");
+        let log = dir.path().join("opened");
+        for opener in ["open", "xdg-open"] {
+            let script = dir.path().join(opener);
+            std::fs::write(
+                &script,
+                format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\n", log.display()),
+            )
+            .expect("opener written");
+            std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+                .expect("opener made executable");
+        }
+        FakeOpener { dir }
+    }
+
+    pub fn dir(&self) -> &Path {
+        self.dir.path()
+    }
+
+    pub fn path(&self) -> String {
+        format!(
+            "{}:{}",
+            self.dir.path().display(),
+            std::env::var("PATH").expect("PATH is set")
+        )
+    }
+
+    pub fn opened(&self) -> String {
+        std::fs::read_to_string(self.dir.path().join("opened")).unwrap_or_default()
+    }
+}
+
 pub fn fzf_available() -> bool {
     let version = Command::new("fzf")
         .arg("--version")
