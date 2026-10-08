@@ -737,8 +737,7 @@ fn opening_a_file_hands_its_url_to_the_os_opener() {
     let output = open_with(&opener, server.port, server.home.path(), &doc);
 
     assert!(output.status.success());
-    wait_until("the opener to be called", || !opener.opened().is_empty());
-    assert_eq!(opener.opened(), format!("{}\n", server.url(&doc)));
+    assert_eq!(opener.wait_opened(), format!("{}\n", server.url(&doc)));
 }
 
 #[cfg(not(target_os = "macos"))]

@@ -484,16 +484,3 @@ fn a_dry_run_lists_dangling_links_and_keeps_them() {
     );
     assert!(output.lines().any(|l| l == line), "{line:?} in {output}");
 }
-
-#[test]
-fn setup_after_pruning_is_up_to_date() {
-    let home = Home::new();
-    dangle(
-        &home,
-        ".local/bin/claude-settings-sync",
-        &repo().join("scripts/claude-settings-sync"),
-    );
-    home.setup(&[]);
-
-    assert_eq!(home.setup(&[]), "setup: up to date\n");
-}

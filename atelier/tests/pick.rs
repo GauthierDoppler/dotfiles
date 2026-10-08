@@ -250,7 +250,7 @@ fn opening_a_url_hands_it_to_the_browser() {
         &["pick", "open", "-t", &pane, "https://acme.dev/a"],
     );
 
-    assert_eq!(bin.opened(), "https://acme.dev/a\n");
+    assert_eq!(bin.opener.wait_opened(), "https://acme.dev/a\n");
 }
 
 #[test]
@@ -356,7 +356,7 @@ fn opening_a_directory_hands_it_to_the_os() {
     act(&tmux, &bin, &["pick", "open", "-t", &pane, "src/handlers"]);
 
     assert_eq!(
-        bin.opened(),
+        bin.opener.wait_opened(),
         format!("{}/src/handlers\n", dir.path().display())
     );
 }
@@ -376,7 +376,7 @@ fn handing_a_relative_path_to_the_os_resolves_it_from_the_pane() {
     );
 
     assert_eq!(
-        bin.opened(),
+        bin.opener.wait_opened(),
         format!("{}/docs/plan.md\n", dir.path().display())
     );
 }

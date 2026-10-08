@@ -190,7 +190,6 @@ fn vim_escape(path: &str) -> String {
     escaped
 }
 
-
 fn resolve_pane(tmux: &Tmux, hint: &str) -> Result<String> {
     if hint.len() > 1 && hint.starts_with('%') && hint[1..].chars().all(|c| c.is_ascii_digit()) {
         return Ok(hint.to_string());

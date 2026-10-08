@@ -253,6 +253,17 @@ impl FakeOpener {
     pub fn opened(&self) -> String {
         std::fs::read_to_string(self.dir.path().join("opened")).unwrap_or_default()
     }
+
+    pub fn wait_opened(&self) -> String {
+        for _ in 0..200 {
+            let opened = self.opened();
+            if opened.ends_with('\n') {
+                return opened;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        panic!("the opener was never called");
+    }
 }
 
 pub fn fzf_available() -> bool {

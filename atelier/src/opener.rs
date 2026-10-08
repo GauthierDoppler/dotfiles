@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
 use crate::Result;
@@ -9,15 +10,13 @@ const OPENER: &str = "open";
 const OPENER: &str = "xdg-open";
 
 pub fn open(target: impl AsRef<OsStr>) -> Result<()> {
-    let status = Command::new(OPENER)
+    Command::new(OPENER)
         .arg(target)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .status()
+        .process_group(0)
+        .spawn()
         .map_err(|error| format!("{OPENER}: {error}"))?;
-    if !status.success() {
-        return Err(format!("{OPENER} exited with {status}").into());
-    }
     Ok(())
 }
