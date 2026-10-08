@@ -159,7 +159,7 @@ the tmux bash scripts one ticket at a time — see `docs/atelier/spec.md` and
   `src/<feature>/`), exposes `pub enum Command` deriving `clap::Subcommand` with
   `pub fn run(self, tmux: &Tmux) -> Result<()>`, and is registered by one line in
   the `features!` list in `main.rs`, which declares the module and the
-  subcommand. Shared modules (`tmux`, `session`, `git`) are plain `mod` lines.
+  subcommand. Shared modules (`tmux`, `session`, `git`, `shell`) are plain `mod` lines.
   Keep `main.rs` and `Cargo.toml` small; they are the files every branch touches.
   A module whose commands sit at the top level (`atelier daemon`, `atelier
   status`) goes after `; top level:` in the same list and is flattened.
@@ -300,8 +300,7 @@ resize bindings, on purpose — resizing is done by dragging the pane border.
 
 ## Per-project tmux tasks
 
-`Prefix + e` opens a task picker (`atelier tasks pick`, or `scripts/tmux-tasks`
-when atelier is not installed) over `<project>/.tmux/`.
+`Prefix + e` opens a task picker (`atelier tasks pick`) over `<project>/.tmux/`.
 Build, run and debug loops live there rather than in Neovim, so they can be
 driven from any window of the session.
 
@@ -320,14 +319,20 @@ picker with no naming convention and no ignore list. Subfolders become groups
 # tmux: window    window | split-down | split-right | popup | detach
 ```
 
-Splits take an optional size (`split-right 40%`, default 30%). They are named by
-direction, not `-v`/`-h`, because those are inverted between tmux and vim.
-`popup` reuses the picker's own popup: tmux allows one popup per client, and a
-nested `display-popup` silently does nothing while still exiting 0.
+Splits take an optional size (`split-right 40%`, `split-down 15`, default 30%;
+`split` alone means `split-down`) and split the session's active pane. They are
+named by direction, not `-v`/`-h`, because those are inverted between tmux and
+vim. `popup` reuses the picker's own popup: tmux allows one popup per client,
+and a nested `display-popup` silently does nothing while still exiting 0. Run
+outside the picker (`atelier tasks run`), a popup task opens one with
+`display-popup`, which is spawned and not waited for: from the command line,
+`display-popup` only returns once the popup closes.
 
 Read from the first 20 lines only. `window` and `detach` reuse a window named
 after the task (`android/build` → `android-build`), respawning it rather than
-piling up duplicates. `detach` runs unselected.
+piling up duplicates. `detach` runs unselected, and is re-run with
+`respawn-pane`, not `respawn-window`: `respawn-window` has no `-d` and makes the
+window current.
 
 Every task runs with cwd at the project root and `TMUX_TASK_ROOT` /
 `TMUX_TASK_NAME` set, resolved from `#{session_path}` — the session's working
@@ -335,15 +340,13 @@ directory, **not** the pane's. That is what makes the picker behave identically
 from a pane three directories deep. Ordering is most-recently-run first, cached
 per project under `$TMPDIR`.
 
-A `window` task runs under `atelier tasks exec`, which tmux starts directly as
-the window's command (argv, no shell), so it publishes the marker, rings and
-waits for a key itself. The other placements are still handed to the bash pair
-until ticket 08: `split-*` and `detach` go to `tmux-tasks --run`, and `popup`
-execs `scripts/tmux-task-run` inside the picker's popup. That wrapper exists as a
-separate file, invoked with an explicit `bash` shebang, because tmux runs
-commands through `default-shell` (zsh) where `read -rsn1` would not parse.
-The picker, the rows and its fzf callbacks (`atelier tasks list|advance|prompt|header`)
-and the window runner are covered by `atelier/tests/tasks.rs`.
+Every placement runs the task under `atelier tasks exec`, which tmux starts
+directly as the pane's command (argv, no shell), so it publishes the marker,
+rings and waits for a key itself; a popup picked in the picker runs it in the
+picker's own process. The picker, the rows and its fzf callbacks (`atelier tasks
+list|advance|prompt|header`) and every placement are covered by
+`atelier/tests/tasks.rs`; the popup test drives the picker inside a real popup
+with a stub `fzf` that picks the first row.
 
 **Task completion is signalled by `@task_status`**, a per-window user option the
 wrapper sets to `running` / `ok` / `fail`; the `window-status-*` formats render
@@ -362,10 +365,8 @@ Those same two placements also **ring** on completion: a `\a` bell, picked up by
 means a dock bounce or a badge. It is skipped when the task's window is the
 active window of a session a non-control-mode client is attached to — ringing
 about output the user is staring at is noise, and a control-mode client (the
-daemon) looks at nothing. A `window` task rings and nothing else: the spec keeps
-desktop notifications for Claude's `waiting` only. A `detach` task, still run by
-the bash wrapper until ticket 08, also posts an informational `terminal-notifier`
-banner when that is installed.
+daemon) looks at nothing. Tasks ring and nothing else: the spec keeps desktop
+notifications for Claude's `waiting` only.
 
 `monitor-activity` is deliberately **off**. It flags a window on any output at
 all, so Neovim and Claude Code kept it permanently lit and it carried no
@@ -373,7 +374,7 @@ information. `monitor-bell` stays on: a BEL is rare enough to mean something.
 Claude Code's own state is a window marker instead — see below.
 
 **Both pickers always open, even with nothing to list.** `Prefix + e` used to
-gate on `tmux-tasks --check` via `if-shell` and `Prefix + Space` bailed out with
+gate on a `--check` of the task list via `if-shell` and `Prefix + Space` bailed out with
 `display-message` when there was no other session; both now render a placeholder
 row instead — `(no executable task in .tmux/)`, `(no other session)`. The answer
 is the same either way, and putting it in the popup puts it where the eye

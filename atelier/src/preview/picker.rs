@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
 use std::time::SystemTime;
 
+use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -98,7 +99,7 @@ fn walk(root: &Path, relative: &Path, depth: usize, files: &mut Vec<String>) {
 pub fn pick(tmux: &Tmux, target: Option<&str>) -> Result<()> {
     let root = session_root(tmux, target)?;
     let rows = rows(&root);
-    let atelier = shell_quote(&std::env::current_exe()?.to_string_lossy());
+    let atelier = shell::quote(&std::env::current_exe()?.to_string_lossy());
     let mut fzf = Process::new("fzf")
         .args([
             "--no-multi",
@@ -128,6 +129,3 @@ pub fn pick(tmux: &Tmux, target: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn shell_quote(word: &str) -> String {
-    format!("'{}'", word.replace('\'', r"'\''"))
-}

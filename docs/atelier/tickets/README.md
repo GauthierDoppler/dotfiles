@@ -12,7 +12,7 @@ dependency order. Work the frontier: any ticket whose blockers are all done.
 | [05](05-session-picker-list-scope-and-switch.md) | Session picker: list, scope and switch | 01, 02 | done |
 | [06](06-session-picker-preview-window-cycling-and-kill.md) | Session picker: preview, window cycling and kill | 05 | done |
 | [07](07-task-picker-and-window-tasks.md) | Task picker and window tasks | 02 | done |
-| [08](08-task-placements-split-popup-and-detach.md) | Task placements: split, popup and detach | 07 | ready-for-agent |
+| [08](08-task-placements-split-popup-and-detach.md) | Task placements: split, popup and detach | 07 | done |
 | [09](09-claude-code-marker-through-atelier.md) | Claude Code marker through atelier | 02 | done |
 | [10](10-token-picker.md) | Token picker | 02 | done |
 | [11](11-daemon-tracer-bullet-atelier-knows-the-live.md) | Daemon tracer bullet: atelier knows the live tmux state | 02 | done |

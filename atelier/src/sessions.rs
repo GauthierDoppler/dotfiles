@@ -5,6 +5,7 @@ use std::process::Stdio;
 use clap::Subcommand;
 
 use crate::session;
+use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -187,7 +188,7 @@ fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<(
     let atelier = picker.atelier_command()?;
     let mut switch = format!("{atelier} sessions switch");
     if !client.is_empty() {
-        switch.push_str(&format!(" -c {}", shell_quote(&client)));
+        switch.push_str(&format!(" -c {}", shell::quote(&client)));
     }
     let mut fzf = std::process::Command::new("fzf")
         .args([
@@ -394,10 +395,10 @@ impl<'a> Picker<'a> {
     }
 
     fn atelier_command(&self) -> Result<String> {
-        let mut command = shell_quote(&std::env::current_exe()?.to_string_lossy());
+        let mut command = shell::quote(&std::env::current_exe()?.to_string_lossy());
         if let Some(socket) = self.tmux.socket() {
             command.push_str(" --socket ");
-            command.push_str(&shell_quote(&socket.to_string_lossy()));
+            command.push_str(&shell::quote(&socket.to_string_lossy()));
         }
         Ok(command)
     }
@@ -406,13 +407,9 @@ impl<'a> Picker<'a> {
         Ok(format!(
             "{} sessions {subcommand} -t {}",
             self.atelier_command()?,
-            shell_quote(&self.session)
+            shell::quote(&self.session)
         ))
     }
-}
-
-fn shell_quote(word: &str) -> String {
-    format!("'{}'", word.replace('\'', r"'\''"))
 }
 
 fn in_project(tmux: &Tmux, id: &str, project: Option<&Path>) -> Result<bool> {

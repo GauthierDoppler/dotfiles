@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
 
+use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
@@ -88,11 +89,11 @@ impl Command {
 
 fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
     let input = rows(tmux, pane)?.join("\n") + "\n";
-    let mut atelier = shell_quote(&std::env::current_exe()?.to_string_lossy());
+    let mut atelier = shell::quote(&std::env::current_exe()?.to_string_lossy());
     if let Some(socket) = tmux.socket() {
-        atelier += &format!(" -S {}", shell_quote(&socket.to_string_lossy()));
+        atelier += &format!(" -S {}", shell::quote(&socket.to_string_lossy()));
     }
-    let pane = shell_quote(pane);
+    let pane = shell::quote(pane);
     let mut fzf = std::process::Command::new("fzf")
         .args([
             "--no-multi",
@@ -121,10 +122,6 @@ fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
     }
     fzf.wait()?;
     Ok(())
-}
-
-fn shell_quote(arg: &str) -> String {
-    format!("'{}'", arg.replace('\'', r"'\''"))
 }
 
 fn is_url(token: &str) -> bool {
