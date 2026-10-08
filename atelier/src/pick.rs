@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
 
+use crate::fzf;
 use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
@@ -88,39 +89,22 @@ impl Command {
 }
 
 fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
-    let input = rows(tmux, pane)?.join("\n") + "\n";
-    let mut atelier = shell::quote(&std::env::current_exe()?.to_string_lossy());
-    if let Some(socket) = tmux.socket() {
-        atelier += &format!(" -S {}", shell::quote(&socket.to_string_lossy()));
-    }
+    let rows = rows(tmux, pane)?;
+    let atelier = fzf::atelier(tmux)?;
     let pane = shell::quote(pane);
-    let mut fzf = std::process::Command::new("fzf")
-        .args([
-            "--no-multi",
-            "--disabled",
-            "--height=100%",
-            "--layout=reverse",
-            "--info=inline",
-            "--prompt=  pick  ",
-            "--header=j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   ctrl-v preview .md   esc close",
-            "--bind=j:down,k:up",
-            "--bind=q:abort",
-            "--bind=i:enable-search+unbind(j,k,q)+change-prompt(  search  )",
-            // fzf's unbind removes a key's behaviour rather than restoring its
-            // default: unbinding esc during search would leave no way out.
-            "--bind=esc:transform:[ \"$FZF_INPUT_STATE\" = enabled ] && echo 'disable-search+clear-query+rebind(j,k,q)+change-prompt(  pick  )' || echo abort",
-            &format!("--bind=enter:execute-silent({atelier} pick open -t {pane} {{}})+abort"),
-            &format!("--bind=ctrl-y:execute-silent({atelier} pick copy {{}})+abort"),
-            &format!("--bind=ctrl-o:execute-silent({atelier} pick system -t {pane} {{}})+abort"),
-            &format!("--bind=ctrl-v:execute-silent({atelier} pick preview -t {pane} {{}})+abort"),
-            "--color=fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee",
-        ])
-        .stdin(std::process::Stdio::piped())
-        .spawn()?;
-    if let Some(mut stdin) = fzf.stdin.take() {
-        std::io::Write::write_all(&mut stdin, input.as_bytes())?;
-    }
-    fzf.wait()?;
+    let mut picker = fzf::picker(
+        "  pick  ",
+        "j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   ctrl-v preview .md   esc close",
+        fzf::MODAL_KEYS,
+    );
+    picker.args([
+        &fzf::leave_search(fzf::MODAL_KEYS, "change-prompt(  pick  )"),
+        &format!("--bind=enter:execute-silent({atelier} pick open -t {pane} {{}})+abort"),
+        &format!("--bind=ctrl-y:execute-silent({atelier} pick copy {{}})+abort"),
+        &format!("--bind=ctrl-o:execute-silent({atelier} pick system -t {pane} {{}})+abort"),
+        &format!("--bind=ctrl-v:execute-silent({atelier} pick preview -t {pane} {{}})+abort"),
+    ]);
+    fzf::spawn(&mut picker, rows)?.wait()?;
     Ok(())
 }
 

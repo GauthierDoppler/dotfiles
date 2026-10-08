@@ -1,3 +1,4 @@
+mod fzf;
 mod git;
 mod session;
 mod shell;
