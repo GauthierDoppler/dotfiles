@@ -18,7 +18,7 @@ Personal development environment for macOS — managed with symlinks.
 | **Delta** | `delta/themes.gitconfig` | Custom themes for lazygit (side-by-side + inline) |
 | **Git ignore** | `git/ignore` | Global gitignore (`.claude/settings.local.json`) |
 | **Keyboard** | `keyboard/` | AZERTY layout with an unshifted number row — the tmux `Prefix → 1-9` bindings depend on it |
-| **cc-tap** | `launchd/`, `scripts/cc-tap-service` | Always-on Claude Code dashboard ([cc-tap.localhost:3000](http://cc-tap.localhost:3000)) and inspector proxy; `cl` uses the proxy when it is up, `cl --no-proxy` skips it |
+| **Services** | `services.toml`, `scripts/cc-tap-service` | launchd agents on macOS, systemd user units on Linux (`atelier service install\|list\|uninstall`): the markdown preview server, and cc-tap, the always-on Claude Code dashboard ([cc-tap.localhost:3000](http://cc-tap.localhost:3000)) and inspector proxy; `cl` uses the proxy when it is up, `cl --no-proxy` skips it |
 
 ## Install
 
@@ -28,7 +28,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh
 ```
 
-First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, symlinks, Node, Claude Code CLI).
+First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, atelier, symlinks, Node, Claude Code CLI). On a headless Linux machine, pass `--profile remote`: no casks, no GUI app configs, no keyboard layout. `atelier setup --dry-run` previews the links and stubs alone.
 
 All dependencies are auto-installed via `Brewfile`. Existing files are backed up as `*.bak`.
 
@@ -58,7 +58,7 @@ deliberately **not** symlinked — see below.
 ### Machine-specific config
 
 Every tracked config is portable. **`~/.zshrc`, `~/.zprofile` and `~/.gitconfig`
-are stubs, not symlinks**: `install.sh` writes a small real file that loads the
+are stubs, not symlinks**: `atelier setup` writes a small real file that loads the
 tracked config, and everything machine-local accumulates below that line.
 
 ```sh
@@ -88,7 +88,7 @@ win, so anything below the include overrides the shared config.
 | `dot_gitconfig`            | `~/.gitconfig`, below the include  |
 | `dot_claude/settings.json` | `dot_claude/settings.local.json`  |
 
-`local-diff` lists what has accumulated locally, so you can decide whether to
+`local-diff` (an alias for `atelier local-diff`) lists what has accumulated locally, so you can decide whether to
 promote it into the tracked config or leave it machine-specific. Some of what it
 reports is permanently local — project registrations below are the main case, and
 they stay flagged on every run rather than being filtered out, because a diff
@@ -122,22 +122,17 @@ and nothing else does.
 
 Claude Code is the awkward one: it has no user-scope local settings file, and it
 rewrites `~/.claude/settings.json` in place (reordering keys, absolutising
-paths). So that file is generated rather than linked. `claude-settings-sync`
-merges the tracked base with the local override, and before each regeneration it
-captures whatever the app changed into the local override — so app-side edits are
-never lost and the shared base still propagates. `--dry-run` previews it.
+paths). So that file is generated rather than linked. `atelier
+claude-settings-sync` merges the tracked base with the local override, and before
+each regeneration it captures whatever the app changed into the local override —
+so app-side edits are never lost and the shared base still propagates.
+`--dry-run` previews it.
 
 ### Helpers
 
-Symlinked into `~/.local/bin` by `install.sh`:
+Symlinked into `~/.local/bin` by `atelier setup`:
 
 - `ssh-setup [name]` — generates an ed25519 key, adds to agent, copies pubkey to clipboard
-- `local-diff` — shows what this machine's local config adds beyond the tracked dotfiles
-- `claude-settings-sync` — regenerates `~/.claude/settings.json` from base + local override
-- `tmux-sessions` — session picker behind `Prefix + Space`
-- `tmux-tasks` / `tmux-task-run` — task picker behind `Prefix + e`, and its runner
-- `tmux-pick` — URL/path picker behind `Prefix + u`
-- `tmux-status-left` — renders project · root/wt · branch in the status bar
 
 ## Dependencies
 
@@ -160,7 +155,8 @@ Prefix is `Ctrl+a`. Modes are displayed in the status bar.
 | `Prefix → t` | **Tab mode** — `n` new, `x` close, `,` rename, `hl` prev/next, `Tab` last used |
 | `Prefix → Space` | Session picker (`s` does the same) |
 | `Prefix → e` | Task picker — scripts from `<project>/.tmux/` |
-| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies |
+| `Prefix → u` | Pick a URL or path off the pane — `Enter` opens, `Ctrl-y` copies, `Ctrl-v` previews a `.md` |
+| `Prefix → m` | Pick a markdown file of the session, newest first, and preview it in the browser |
 | `Prefix → v` | Copy mode, then select with the mouse (`[` is an alias) |
 | `Prefix → L` | Next layout — the keyboard way to rebalance a split |
 | `Ctrl+hjkl` | Navigate panes (no prefix, Neovim-aware; also inside copy mode) |
@@ -190,8 +186,8 @@ shows a generic icon. Nothing else changes.
 **Copying:** `Prefix + u` for a token (URL, file path), `Prefix + v` for a
 region. Plain dragging is unreliable — tmux only selects when the pane's
 application has not grabbed the mouse, which Neovim always does and Claude Code
-does intermittently. Ghostty's `Shift`+drag also works but selects by screen
-column, so it ignores split boundaries.
+does intermittently. The terminal's own `Shift`+drag (`Option`+drag in iTerm2)
+also works but selects by screen column, so it ignores split boundaries.
 
 Status bar shows **project · root/wt · branch**, resolved with git rather than
 from the session name, plus per-window task markers: `●` running, `✓` ok,

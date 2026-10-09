@@ -1,0 +1,10 @@
+---
+source: src/bar/right.rs
+expression: "rendered.join(\"\\n\")"
+---
+ 80 |#[fg=#8caaee,bold]             #[fg=#c6d0f5,bold]09:05#[nobold]  |
+ 90 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+1k #[fg=#ea999c,nobold]−5k #[fg=#99d1db,nobold]↑12 #[fg=#99d1db,nobold]↓3   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+ 99 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+1k #[fg=#ea999c,nobold]−5k #[fg=#99d1db,nobold]↑12 #[fg=#99d1db,nobold]↓3   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+100 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+1k #[fg=#ea999c,nobold]−5k #[fg=#99d1db,nobold]↑12 #[fg=#99d1db,nobold]↓3    #[fg=#81c8be,nobold]󰂁 87%    #[fg=#c6d0f5,bold]09:05#[nobold]  |
+120 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+1k #[fg=#ea999c,nobold]−5k #[fg=#99d1db,nobold]↑12 #[fg=#99d1db,nobold]↓3    #[fg=#81c8be,nobold]󰂁 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+200 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+1k #[fg=#ea999c,nobold]−5k #[fg=#99d1db,nobold]↑12 #[fg=#99d1db,nobold]↓3    #[fg=#81c8be,nobold]󰂁 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  |

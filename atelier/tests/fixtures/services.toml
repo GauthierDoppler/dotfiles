@@ -1,0 +1,11 @@
+[[service]]
+label = "com.example.web"
+description = "Web server on 127.0.0.1:8080"
+run = [".local/bin/web", "serve", "--port=8080"]
+log = "web.log"
+
+[[service]]
+label = "com.example.backup"
+description = "Back up the notes once per weekday"
+run = [".local/bin/backup", "notes"]
+schedule = { days = ["mon", "tue", "wed", "thu", "fri"], at = "08:00", every = 1800 }

@@ -1,7 +1,10 @@
 # AGENTS.md
 
 This file provides guidance to AI coding agents (Claude Code, Codex) when working
-with code in this repository. `CLAUDE.md` is a symlink to this file.
+with code in this repository. `CLAUDE.md` is a symlink to this file. It records
+rules and the rationale that still decides things; longer reasoning lives in
+[`docs/atelier/design-notes.md`](docs/atelier/design-notes.md). A rule followed
+by a test name (`file.rs::test`, under `atelier/`) is enforced by that test.
 
 ## Comments
 
@@ -20,7 +23,11 @@ add a comment explaining the change.
 
 ## What This Is
 
-A macOS dotfiles repo managing configs for: zsh, tmux, git, neovim, ghostty, zed, lazygit, lazydocker, and delta, plus the launchd agents that keep cc-tap running. All configs are symlinked from this repo to their expected locations via `install.sh`.
+Dotfiles for macOS and Linux: zsh, tmux, git, neovim, ghostty, zed, lazygit,
+lazydocker and delta, plus the background services (cc-tap, the markdown
+preview) declared in `services.toml`. `atelier/` is a Rust binary that owns the
+behaviour (status bar, pickers, task runner, preview server, setup, services,
+doctor); configs stay plain files linked from the repo.
 
 ## Installation & Symlinks
 
@@ -30,9 +37,19 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh    # first run: SSH key setup, second run: full install
 ```
 
-The script is phased: SSH key → Xcode CLT → Homebrew → brew bundle (Brewfile) → Oh My Zsh → symlinks → Claude settings merge → bun → Node LTS → npm globals → app registration.
+`install.sh` is only the bootstrap (Homebrew, building atelier, the keyboard
+layout, Node, then `atelier setup`, `claude-settings-sync` and `service
+install`); it stops if the atelier build fails.
 
-The `link()` function creates symlinks and backs up existing files as `*.bak`. When adding a new config, use the `/add-config` skill.
+`atelier setup [--profile desktop|remote] [--dry-run] [--repo PATH]` links from
+the `LINKS` and `STUBS` tables in `atelier/src/setup/table.rs`, the one list of
+what goes where; use the `/add-config` skill to add one. It backs up as `*.bak`,
+`*.bak.1`, … and is idempotent (`tests/setup.rs`); it refuses a `--repo` that is
+not this repo (`setup.rs::a_repo_that_is_not_the_dotfiles_is_refused`) and
+prunes only dangling links into the repo
+(`setup.rs::only_dangling_links_into_the_repo_in_managed_folders_are_removed`).
+Profile `remote` (default off macOS) skips GUI app configs, casks and the
+keyboard layout.
 
 **Naming convention:**
 - `~/.config/*` folders → stored as-is (e.g., `ghostty/`, `lazygit/`)
@@ -44,34 +61,14 @@ The `link()` function creates symlinks and backs up existing files as `*.bak`. W
 Every tracked config must be portable — no `/Users/<name>` paths, no per-machine
 sockets, no work-specific tooling.
 
-**`~/.zshrc`, `~/.zprofile` and `~/.gitconfig` are stubs, not symlinks.**
-`install.sh` writes a small real file that loads the tracked config, and
-everything machine-local accumulates below that line:
-
-```sh
-# ~/.zshrc
-source "$HOME/dotfiles/dot_zshrc"
-```
-```sh
-# ~/.zprofile
-source "$HOME/dotfiles/dot_zprofile"
-```
-```gitconfig
-# ~/.gitconfig
-[include]
-	path = ~/dotfiles/dot_gitconfig
-```
-
-This exists because third-party installers append to `~/.zshrc` and
-`~/.gitconfig` directly — through a symlink, those appends land in tracked
-files, which is how a `/Users/<name>` socket path once ended up staged here.
-`git config --global` writes to the stub too, which is now correct. For git,
-later values win, so anything below the include overrides the shared config.
-
-`stub()` is idempotent by design: if the load line is already present it writes
-nothing, so re-running `install.sh` never touches accumulated local content.
-There are no paired `*.local` files any more — `migrate_local()` folds legacy
-ones into the stub on the next run and keeps them as `*.local.migrated`.
+**`~/.zshrc`, `~/.zprofile` and `~/.gitconfig` are stubs, not symlinks**: a
+small real file loads the tracked config (`source "$HOME/dotfiles/dot_zshrc"`,
+`[include] path = ~/dotfiles/dot_gitconfig`) and machine-local content
+accumulates below it. Installers and `git config --global` append to these files;
+through a symlink, the appends land in tracked files. For git, later values win.
+A stub is written only when its load line is missing
+(`setup.rs::local_content_below_an_existing_stub_is_left_alone`).
+`dot_tmux.conf` is a plain symlink: nothing appends to it.
 
 | Shared (tracked)              | Local (untracked)                     |
 | ----------------------------- | ------------------------------------- |
@@ -80,28 +77,19 @@ ones into the stub on the next run and keeps them as `*.local.migrated`.
 | `dot_gitconfig`               | `~/.gitconfig`, below the include      |
 | `dot_claude/settings.json`    | `dot_claude/settings.local.json`      |
 
-`dot_zprofile` holds login-shell **environment** — locale, `JAVA_HOME`, the
-Android SDK — while `dot_zshrc` holds interactive shell setup. Both files are
-loaded by a tmux pane, so the split is a convention, not a functional boundary.
-It exists because that env was living in an untracked `~/.zprofile` that
-`local-diff` did not watch: a config a new machine silently lacks, with nothing
-to surface the gap. Every block is guarded on the tool being present, so the file
-is inert on a machine with no JDK and no Android SDK.
+`dot_zprofile` holds login-shell **environment** (locale, `JAVA_HOME`, Android
+SDK), every block guarded on its tool; `dot_zshrc` holds interactive setup.
+`JAVA_HOME` follows the newest JDK (`java_home` with no `-v`); a project pins its
+own in its Gradle toolchain.
 
-`JAVA_HOME` comes from `/usr/libexec/java_home` with no `-v`, so it follows the
-newest installed JDK rather than hardcoding a path this repo cannot make
-portable. A project needing a specific JDK pins it in its own Gradle toolchain
-config, or in `~/.zprofile` below the load line.
-
-`dot_tmux.conf` is still a plain symlink: nothing appends to `~/.tmux.conf`.
-
-Run `local-diff` to list what has accumulated locally. Each finding is a
-decision: promote it into the tracked config, or leave it local.
+`atelier local-diff` lists what has accumulated locally; each finding is a
+decision: promote it, or leave it local. It walks setup's `STUBS` table, so a new
+stub needs no second list (`tests/local_diff.rs`).
 
 **Claude Code settings are a special case.** Claude Code has no user-scope
-`settings.local.json`, and it *rewrites* `~/.claude/settings.json` in place —
-reordering keys and absolutising paths. So that file is **not symlinked**; it is
-generated by `scripts/claude-settings-sync` as a 3-way merge:
+`settings.local.json` and *rewrites* `~/.claude/settings.json` in place
+(reordering keys, absolutising paths), so that file is **not symlinked**:
+`atelier claude-settings-sync` generates it as a 3-way merge.
 
 ```
 drift     = live - snapshot      what the app changed since we last wrote
@@ -110,65 +98,151 @@ live      = base * new local     base propagates where the app was silent
 snapshot  = live                 recorded for next run
 ```
 
-`dot_claude/settings.generated.json` is that snapshot. It exists solely to tell
-"the app changed this" apart from "the base changed under me" — without it, a
-base edit is indistinguishable from local drift, gets captured into the local
-override, and the shared base can never propagate again. Both the local override
-and the snapshot are gitignored.
+The snapshot, `dot_claude/settings.generated.json`, is what tells "the app
+changed this" from "the base changed under me"; without it a base edit is
+captured as local drift and can never propagate again
+(`claude_settings.rs::a_base_change_propagates_where_the_app_was_silent`). Both
+the override and the snapshot are gitignored. Preview with `--dry-run`.
 
-Run `claude-settings-sync --dry-run` to preview what would be captured.
+## Atelier
+
+`atelier/` is a Rust binary crate (edition 2021, clap derive); the plan is
+`docs/atelier/spec.md` and `docs/atelier/tickets/`.
+
+- **A feature is a module plus one line.** It lives in `src/<feature>.rs`, with
+  its parts in `src/<feature>/` when it has several; never a `mod.rs`
+  (`clippy::mod_module_files`, denied in `Cargo.toml`). It exposes `pub enum
+  Command` deriving `clap::Subcommand` with `pub fn run(self, tmux: &Tmux) ->
+  Result<()>`, and is registered by one line in the `features!` list in
+  `main.rs`. Top-level commands (`atelier daemon`,
+  `atelier status`) go after `; top level:`. A feature with flags and no
+  subcommands derives `clap::Args` and calls `crate::flags_only!(Command)`. Keep
+  `main.rs` and `Cargo.toml` small; every branch touches them.
+- **Shared modules** (`tmux`, `session`, `git`, `shell`, `fzf`, `opener`,
+  `process`, `dotfiles`, `fnv`): git only through `git`, `$HOME` and the
+  checkout through `dotfiles`. Every program starts from
+  `process::command`: `Command::new` is a disallowed method (`clippy.toml`)
+  everywhere else; integration tests allow it at their crate root.
+- **tmux only through `tmux::Tmux`**, always on an explicit socket (`--socket`,
+  else `$TMUX`). The binary is the first `tmux` on `PATH`, else the
+  Homebrew/Linuxbrew/system prefixes, because hooks run with a thin `PATH`
+  (`daemon.rs::the_daemon_runs_when_path_lacks_tmux`). `Tmux::resolve` is "the
+  given target, else the current one"; `Tmux::watched` is the one "is a terminal
+  showing this window" check.
+- **Control-mode clients never count as looking.** The daemon is one, so every
+  "is someone looking" check skips `#{client_control_mode}` = 1
+  (`hook_claude.rs::a_control_mode_client_does_not_count_as_watching` and its
+  twins in `tasks.rs`, `sessions.rs`, `bar_daemon.rs`).
+- **Every picker builds fzf through `fzf::picker`** (shared flags, colours,
+  `j`/`k`/`q` + `i` search mode) and calls back through `fzf::atelier`. The
+  pickers look alike on purpose; one that needs to differ adds flags after it.
+  Needs fzf ≥ 0.45 (`transform`).
+- **Session identity is `session::resolve`, for every consumer**: grove's
+  `@grove_*` options, else git from `#{session_path}` (main worktree as root),
+  else the session name. Session names are never parsed
+  (`sessions.rs::a_hand_named_session_that_looks_like_grove_belongs_to_no_project`).
+- **tmux 3.4 does not expand formats in `display-popup`'s command**, so every
+  popup picker resolves its own session, pane and client.
+- **`display-message -p` returns one field per call** (control characters come
+  out as octal, newlines as `_`; numeric fields before one free-text field can be
+  split with `splitn`). With an unknown `-t` it exits 0 with empty output, so
+  emptiness is not-found. `git -C ""` runs in the cwd — never pass an empty path.
+- **Tests drive the built binary against a private tmux server**
+  (`tests/common/mod.rs`, `TmuxServer::start()`: `tmux -L atelier-test-<pid>-<n>
+  -f /dev/null`, one per test). Assert on what tmux or the binary shows, never on
+  internals; pure render functions are the only other seam. A test never
+  waits on a child without a deadline (`common::BoundedOutput`, read timeouts
+  on sockets), and never reaches a real browser or service manager: the
+  opener, `osascript`, `launchctl` and `systemctl` are looked up on `PATH` so a
+  test can fake them.
+- **Tests describe behaviour, never the code they replaced**: no parity table
+  against a removed script, no name that says where a fixture came from.
+  Fixtures use made-up names (`my-app`, `com.example.web`), never a real project
+  or service; the service and doctor tests read `tests/fixtures/services.toml`,
+  and one test alone loads the repo's own
+  (`service.rs::the_repo_s_own_services_toml_is_valid`).
+- **The daemon (`src/daemon/`) is one per tmux socket**, started by `atelier
+  daemon --ensure` from `dot_tmux.conf`
+  (`daemon.rs::ensuring_the_daemon_again_keeps_a_single_one`); its files live in
+  `$XDG_RUNTIME_DIR/atelier/`. Its only link to tmux is one `tmux -C
+  attach-session`; it never creates a session
+  (`daemon.rs::the_daemon_creates_no_session_of_its_own`). It pushes the bar, and
+  repo counts follow a file watcher, never a timer
+  (`bar_daemon.rs::no_git_process_starts_while_the_repo_is_untouched`). Its tests
+  turn `automatic-rename` off (tmux applies it lazily). Mechanics: design notes.
+- **Async code never blocks.** The daemon's event loop only reads and writes
+  tmux and its socket; git, the file watcher and the battery run on the render
+  thread (`src/daemon/render.rs`), anything else through
+  `tokio::task::spawn_blocking`; the preview server's handlers touch the disk
+  only inside `off_thread`. Every git call has a 10 s limit
+  (`daemon.rs::a_git_that_hangs_does_not_stop_the_daemon_following_tmux`,
+  `preview.rs::requests_waiting_on_a_hung_git_leave_the_server_answering`).
+- **Installed into `~/.local/bin/atelier`**, called by that absolute path; every
+  caller must still work when it is absent.
+- **`atelier doctor` turns what this file asks you to remember into checks**
+  (listed in order in `src/doctor.rs`, grouped by what they inspect in
+  `src/doctor/`): `ok`, `FAIL` with a one-line `fix:`, `skip`, or `look`. **The
+  Nerd Font is `look`, never `ok`**: no terminal reports which font draws a glyph.
+- **CI** (`.github/workflows/atelier.yml`): fmt, clippy `-D warnings` and tests on
+  Linux and macOS, plus shellcheck. Tests run under cargo-nextest
+  (`atelier/.config/nextest.toml`, profile `ci`), which names and kills a hung
+  test; the job stops at 15 minutes. It ignores only `docs/`, top-level markdown
+  and `nvim/` (`ci.rs::ci_runs_on_every_trigger_for_the_files_the_tests_read`).
+  fzf-driven tests skip locally without fzf ≥ 0.45 but fail under `CI`. Run
+  `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test` in
+  `atelier/` before pushing.
 
 ## Tmux
 
 **There is no session persistence — no tmux-resurrect, no tmux-continuum, no
-tpm — and that is deliberate.** `grove` (the git-worktree manager at
-`~/Developer/perso/grove-ai`, see the `grove` skill) is the session factory: a
-session is derived from a worktree, so it is reproducible on demand from the
-repo plus `.grove/config.yaml`. Restoring a save-file would reconstruct whatever
-happened to be open at the last checkpoint; recreating from a worktree
-reconstructs what the project *is*. Do not add a persistence plugin.
+tpm — and that is deliberate.** `grove` (see the `grove` skill) is the session
+factory: a session is derived from a worktree plus `.grove/config.yaml`, so
+recreating it reconstructs what the project *is*, where a save-file restores
+whatever was open at the last checkpoint. Do not add a persistence plugin.
 
-**`terminal-features`, not `terminal-overrides`, and never with a bare `set -a`.**
-`set -a` on an array option appends, so a reload — `Prefix + r` — grows the array
-every time; the live server had accumulated 52 duplicated `terminal-overrides`
-entries this way. `set -gu` first resets the option to its default array (which
-carries the stock `xterm*:clipboard:ccolour:cstyle:focus:title`, needed for OSC 52
-and focus events), so the `set -gu` + `set -as` pair is idempotent. Ghostty gets
-`RGB:usstyle:sync` — `usstyle` is what makes nvim's LSP undercurl render as a
-curl rather than a plain underline. Its TERM outside tmux is `xterm-ghostty`;
-inside, `default-terminal` stays `tmux-256color`.
+**`terminal-features`, not `terminal-overrides`, and never with a bare `set -a`**:
+appending to an array option grows it on every `Prefix + r`. `set -gu` first
+(restoring the default, which carries the stock clipboard and focus entries),
+then `set -as` (`doctor.rs::terminal_features_grown_by_reloads_fail`).
 
-**`detach-on-destroy off`**: killing the last window of a session switches to
-another session instead of ejecting the client out of tmux.
+**No terminal app is assumed.** Entries are keyed on the client's TERM:
+`xterm-ghostty`, `xterm-kitty`, `wezterm` get `RGB:usstyle:sync` (`usstyle`
+makes nvim's undercurl a curl); `xterm-256color` gets `RGB` alone, since
+Terminal.app reports it too. iTerm2 needs no entry: tmux recognises it from
+XTVERSION. `default-terminal` stays `tmux-256color`.
 
-**`Prefix + 1..9` depends on a keyboard layout that macOS, not tmux, provides.**
-`keyboard/FR-AZERTY-num.bundle` is an AZERTY layout with an unshifted,
-QWERTY-order number row, **copied** to `~/Library/Keyboard Layouts/` by
-`install.sh` (`copy_bundle()`, not `link()` — macOS's input-source daemon does
-not reliably follow a symlink there). Without it the digit bindings need Shift
-and the muscle memory
-breaks silently. Installing is automated, *selecting* is not: see README. The
-bundle's 322 KB `.icns` is deliberately not tracked — it is only the menu-bar
-glyph, macOS falls back to a generic icon, and it was 87 % of the payload.
+- `detach-on-destroy off`: killing a session's last window switches session
+  instead of ejecting the client.
+- `Prefix + 1..9` needs `keyboard/FR-AZERTY-num.bundle` (AZERTY, unshifted
+  QWERTY-order digits), **copied** by `install.sh` — macOS's input-source daemon
+  does not reliably follow a symlink there. Selecting it stays manual (README).
+- No resize bindings, on purpose: drag the border; `Prefix + L` is `next-layout`.
+- `monitor-activity` **off** (Neovim and Claude Code kept every window lit);
+  `monitor-bell` on, since a BEL is rare enough to mean something.
 
-`next-layout` is on `Prefix + L` (tmux's own `Prefix + Space` went to the session
-picker). It is the only keyboard way to rebalance a split here: there are no
-resize bindings, on purpose — resizing is done by dragging the pane border.
+**Every picker always opens, even with nothing to list**, on a placeholder row
+where every action is a no-op (fzf has no non-selectable row), so the session
+picker's `Tab` stays reachable
+(`sessions.rs::a_project_with_no_other_session_says_so_and_tab_still_reaches_the_others`,
+`pick.rs::every_action_on_the_placeholder_row_does_nothing`).
+
+## Session picker
+
+`Prefix + Space` / `Prefix + s` run `atelier sessions pick`; every fzf bind calls
+back into `atelier sessions <subcommand>` (`tests/sessions.rs`). `Tab` toggles
+project/all. The preview tails the session's current window sized from
+`$FZF_PREVIEW_LINES`, since fzf clips the bottom, where the prompt or error is;
+previews cannot be focused, so `h`/`l` cycle that session's window
+(`sessions.rs::l_and_h_cycle_the_other_sessions_window_and_enter_lands_on_it`).
 
 ## Per-project tmux tasks
 
-`Prefix + e` opens a task picker (`scripts/tmux-tasks`) over `<project>/.tmux/`.
-Build, run and debug loops live there rather than in Neovim, so they can be
-driven from any window of the session.
-
-`.tmux/` is ignored globally via `git/ignore`, so tasks stay untracked in any
-repo — including ones we don't own — without editing that project's
-`.gitignore`.
-
-**A task is any executable file at depth 1 or 2 under `.tmux/`.** The executable
-bit is the only filter, which is what lets `.tmux/lib/common.sh` stay out of the
-picker with no naming convention and no ignore list. Subfolders become groups
-(`Tab` cycles them); depth-1 files are ungrouped.
+`Prefix + e` opens `atelier tasks pick` over `<project>/.tmux/`, so build and run
+loops are driven from any window, not from Neovim. `.tmux/` is ignored globally
+(`git/ignore`); the `tmux-tasks` skill covers writing tasks. **A task is any
+executable file at depth 1 or 2** — the executable bit is the only filter, so
+`.tmux/lib/common.sh` stays out. Subfolders are groups (`Tab`). Headers come from
+the first 20 lines:
 
 ```bash
 #!/usr/bin/env bash
@@ -176,258 +250,131 @@ picker with no naming convention and no ignore list. Subfolders become groups
 # tmux: window    window | split-down | split-right | popup | detach
 ```
 
-Splits take an optional size (`split-right 40%`, default 30%). They are named by
-direction, not `-v`/`-h`, because those are inverted between tmux and vim.
-`popup` reuses the picker's own popup: tmux allows one popup per client, and a
-nested `display-popup` silently does nothing while still exiting 0.
+- Splits (`split-right 40%`, `split-down 15`, default 30%) are named by direction
+  because `-v`/`-h` are inverted between tmux and vim.
+- `popup` reuses the picker's popup: tmux allows one popup per client and a
+  nested `display-popup` silently no-ops while exiting 0
+  (`tasks.rs::a_popup_task_picked_in_the_picker_runs_in_the_picker_s_popup`).
+- `window`/`detach` reuse a window named after the task (`android/build` →
+  `android-build`); `detach` re-runs with `respawn-pane`, since `respawn-window`
+  has no `-d` (`tasks.rs::rerunning_a_detached_task_reuses_its_window_without_selecting_it`).
+- Tasks run at the project root from `#{session_path}`, **not** the pane's cwd,
+  with `TMUX_TASK_ROOT`/`TMUX_TASK_NAME` set
+  (`tasks.rs::from_inside_a_pane_three_directories_deep_the_pane_s_session_is_used`),
+  under `atelier tasks exec`, most recently run first.
 
-Read from the first 20 lines only. `window` and `detach` reuse a window named
-after the task (`android/build` → `android-build`), respawning it rather than
-piling up duplicates. `detach` runs unselected.
-
-Every task runs with cwd at the project root and `TMUX_TASK_ROOT` /
-`TMUX_TASK_NAME` set, resolved from `#{session_path}` — the session's working
-directory, **not** the pane's. That is what makes the picker behave identically
-from a pane three directories deep. Ordering is most-recently-run first, cached
-per project under `$TMPDIR`.
-
-`scripts/tmux-task-run` is the wrapper that actually runs the task. It exists as
-a separate file, invoked with an explicit `bash` shebang, because tmux runs
-commands through `default-shell` (zsh) where `read -rsn1` would not parse — and
-because building it as a `printf %q` string stopped being readable once it had
-to publish state.
-
-**Task completion is signalled by `@task_status`**, a per-window user option the
-wrapper sets to `running` / `ok` / `fail`; the `window-status-*` formats render
-it as `●` / `✓` / `✗`. It is set on the *window*, so it survives
-`respawn-window`, which is why every run resets it to `running` first —
-otherwise the previous run's `✗` would sit over a task that is now succeeding.
-The window is resolved from `$TMUX_PANE`, not the session's active window, or a
-`detach` task would mark whichever tab you happen to be looking at.
-
-Only `window` and `detach` are marked. A split or popup shares the window you
-are working in, where a `✗` would be ambiguous — and the output is right in
-front of you anyway.
-
-Those same two placements also **notify** on completion: a `\a` bell (picked up by
-`monitor-bell on`, then by ghostty's `bell-features = title,attention` for the
-dock bounce and badge) plus a `terminal-notifier` banner, sent as
-`com.mitchellh.ghostty` so clicking it focuses the terminal. Both are skipped when
-the task's window is the active window of an attached client — notifying about
-output the user is staring at is noise — and `terminal-notifier` is probed with
-`command -v` so a machine without it degrades to the bell alone.
-
-`monitor-activity` is deliberately **off**. It flags a window on any output at
-all, so Neovim and Claude Code kept it permanently lit and it carried no
-information. `monitor-bell` stays on: a BEL is rare enough to mean something.
-Claude Code's own state is a window marker instead — see below.
-
-**Both pickers always open, even with nothing to list.** `Prefix + e` used to
-gate on `tmux-tasks --check` via `if-shell` and `Prefix + Space` bailed out with
-`display-message` when there was no other session; both now render a placeholder
-row instead — `(no executable task in .tmux/)`, `(no other session)`. The answer
-is the same either way, and putting it in the popup puts it where the eye
-already went. fzf has no non-selectable row, so the placeholder is a real entry
-and every action on it — Enter, the preview, `ctrl-e`, `ctrl-x` — is a no-op.
-The session picker needed this regardless: `Tab` is the only way out to the
-other projects, and it cannot be pressed in a popup that never opened.
+**`@task_status`** (`running`/`ok`/`fail` → `●`/`✓`/`✗`) goes on the window found
+from `$TMUX_PANE`, never the active one, and is reset to `running` each run since
+it survives a respawn
+(`tasks.rs::rerunning_reuses_the_window_and_resets_the_marker_to_running`). Only
+`window` and `detach` are marked and **ring** (`\a`); a split or popup shares the
+window you are in (`tasks.rs::a_split_task_neither_marks_nor_rings`), and no bell
+sounds in a window a terminal is watching
+(`tasks.rs::a_finished_task_stays_silent_in_the_window_being_watched`).
 
 ## Claude Code window marker
 
-`dot_claude/hooks/notify.sh` publishes `@claude_status` on the window Claude Code
-is running in — `waiting` on the `Notification` event, `done` on `Stop`, cleared
-on `UserPromptSubmit` — and the window list renders it as a yellow or green `✻`.
-All three hook entries are the same command; the event comes from
-`hook_event_name` in the payload rather than an argument.
+`atelier hook claude` sets `@claude_status` — `waiting` on `Notification`, `done`
+on `Stop`, cleared on `UserPromptSubmit` — rendered as a yellow or green `✻` in
+the `@task_status` slot. One command for all three hooks in
+`dot_claude/settings.json`; the event comes from `hook_event_name` on stdin, the
+window from `$TMUX_PANE`
+(`hook_claude.rs::the_pane_s_own_window_is_marked_not_the_session_s_current_one`).
 
-**It replaced a `terminal-notifier` banner, which failed for reasons no amount of
-fixing addressed**: with several sessions running there was no telling which
-instance had fired, so the first one visible got opened and corrected afterwards;
-the banner was not clickable back to the right window; and it was in the wrong
-place — a notification asks you to leave the terminal to learn something about
-the terminal.
+**The command always ends in `|| true`.** Claude Code treats exit 2 as blocking
+(on `UserPromptSubmit` it discards the prompt), and 2 is clap's exit on an
+unknown subcommand, so a stale atelier would eat every prompt.
 
-**The marker is the only signal: there is no bell.** The hook used to send one so
-that ghostty's `bell-features` gave a dock badge when the terminal was not
-frontmost, and Claude Code's own notification channel — unset, i.e. `auto`, which
-resolves to `terminal_bell` outside iTerm — sent a second one. Two
-indistinguishable beeps, neither of them locating anything, and only one of them
-gated on whether the window was already in front. A beep that cannot be
-attributed to a window is a beep that stops being trusted, and an untrusted
-signal is pure noise, so both are gone: the `printf '\a'` from the hook and
-`preferredNotifChannel: notifications_disabled` in `dot_claude/settings.json`.
-Nothing signals from outside the terminal any more — that is the accepted cost.
-`monitor-bell` stays on for tasks, which do still bell.
+A watched window is not marked, and `after-select-window` clears the marker:
+going to look dismisses it (`hook_claude.rs::selecting_the_window_clears_its_marker`).
 
-**It reuses the `@task_status` slot rather than adding a second marker.** That is
-the whole reason this was cheap: the slot is already 3 columns wide with its
-width parity solved across state and focus, and a second independent marker would
-have meant redoing that accounting over a much larger matrix. Task state takes
-precedence where both are set, which in practice does not happen — Claude runs in
-its own window. `✻` is U+273B, East Asian Width **N** like `✓` and `✗`, so it
-occupies the same single cell.
-
-The states reuse the task palette because they mean the same things — yellow is
-"needs you", green is "finished" — which keeps the rule that the window list
-carries exactly two signals, blue for focus and the marker for state. Only the
-glyph says which subsystem is talking.
-
-A marker is not set when its window is the active one of an attached client, and
-`after-select-window` clears it, so going to look is what dismisses it. Without
-that skip the marker would appear on the window being watched with nothing left
-to clear it, since selecting it has already happened.
+**Notifications policy: the marker is the only signal from Claude Code** — no
+bell, `preferredNotifChannel: notifications_disabled`. A beep or banner that
+cannot be attributed to a window stops being trusted. Tasks still ring. Ticket 26
+may bring back an optional, clickable notification for `waiting`; history in the
+design notes.
 
 ## One-shot command popup
 
-`Prefix + Enter` opens a popup that takes **one** command and then goes away.
-Rooted on `#{session_path}` like tasks are, never the pane, so `grove` or a
-`g sync` act on the right repo from any window — including one running Neovim,
-which is the case the shell alias cannot serve.
+`Prefix + Enter` opens a popup that takes **one** command, rooted on
+`#{session_path}`, so `grove` or `g sync` act on the right repo from any window.
+It is a real interactive zsh with a private `ZDOTDIR` at `tmux/oneshot/`:
+`preexec` marks that a command ran (a bare Enter does not spend the shot),
+`precmd` prints `✓` or `✗ exit N` and waits for one key whatever the outcome, so
+a successful `git log` stays readable. It is why the task picker has no
+free-form mode.
 
-It runs a real interactive zsh, not a `read` prompt: the point is to *type* a
-command, so aliases (`g`), completion and history all have to be there. The
-private `ZDOTDIR` at `tmux/oneshot/` sources `~/.zshrc` and adds two hooks.
-`preexec` marks that a command actually ran — so a bare Enter at the prompt does
-not spend the shot — and `precmd` then prints `✓` or `✗ exit N`, waits for a
-single keypress, and exits.
-
-Setting `ZDOTDIR` has a sharp edge worth knowing: macOS's `/etc/zshrc` assigns
-`HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` unconditionally, and oh-my-zsh derives
-`ZSH_COMPDUMP` the same way — so zsh writes its history and completion dump into
-*this tracked directory*, and a `.zsh_history` from the popup was staged for
-commit once before being caught. Both are pinned back to `$HOME` in the file
-(`ZSH_COMPDUMP` before the source, since oh-my-zsh only fills in a default;
-`HISTFILE` after, since `/etc/zshrc` would otherwise overwrite it), with a
-`.gitignore` as a backstop. Pinning also means the popup shares the real
-history, so up-arrow reaches what was typed in an ordinary shell.
-
-**Both outcomes wait for a key.** An earlier version closed itself on a zero
-exit status, which reads well until a successful `git log` or `git status`
-vanishes before it can be read. The keypress is what replaces `Ctrl-D`: any key
-rather than a chord, and no opportunity to type a second command into a popup
-meant for one.
-
-Being able to run an arbitrary command in a popup is why grove needs no entry in
-the task picker, and why the picker has no free-form mode. Note that tmux allows
-one popup per client, so this cannot be opened from inside the task picker.
+macOS's `/etc/zshrc` sets `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`
+unconditionally and oh-my-zsh derives `ZSH_COMPDUMP` the same way, so both would
+land in this tracked directory: they are pinned to `$HOME` (`ZSH_COMPDUMP` before
+the source, `HISTFILE` after), with a `.gitignore` as backstop.
 
 ## Project jump
 
-`project <name> <path> [tab]` in `dot_zshrc` defines a function named `<name>`
-that enters a project in its default state: `cd`, rename the ghostty tab, then
-`grove attach` on the main worktree's branch. Typing `biogroup` lands on the
-project's main session from anywhere.
-
-The registrations themselves are **machine-local** — they carry absolute paths
-this repo cannot ship — so they live in `~/.zshrc` below the load line:
-
-```sh
-project biogroup ~/Developer/theodo/biogroup "Biogroup"
-project grove    ~/Developer/perso/grove-ai  "Grove"
-```
-
-`local-diff` therefore reports every registration as a local addition, on every
-run, and that is accepted rather than filtered. Its premise is that each finding
-is a decision — and for a `project` line the decision is always "leave it local",
-so the lines are pure noise that grows one per project. Teaching it to skip them
-was rejected anyway: it is currently a plain line-set diff with no knowledge of
-zsh syntax, and a diff tool that silently drops lines stops being trustworthy
-about the ones it does report.
-
-Three fields, and nothing per-project anywhere else. A registration whose path
-does not exist is skipped silently, so the same block is safe to carry to a
-machine that has not cloned everything; one whose name already resolves to a
-command is skipped *loudly*, because a project called `make` or `ls` would
-otherwise shadow it with no clue as to why. Re-registering is allowed — the
-`_project_paths` membership test runs before the shadow check — so
-`source ~/.zshrc` does not start warning about the functions it just defined.
-
-**The branch is derived, never hardcoded to `main`.** `grove ls` names the root
-checkout after its branch, and not every repo here is on `main`. The main
-worktree is the first entry of `git worktree list --porcelain` (which is its
-definition, and unlike `awk '{print $2}'` on that line, `${root#worktree }`
-survives a path with a space in it); a detached HEAD there falls back to
-`origin/HEAD`. `grove attach` already creates the session if it is missing and
-switches the client instead of nesting when called from inside tmux, so both
-cold start and project switching are the same call. Everything after the `cd` is
-guarded on `grove` being on `PATH` and the directory being a git repo — without
-either, the `cd` still happens, which is the half that always works.
-
-**The tab name is set by the jump and never touched again.** tmux runs with
-`set-titles off` (its default; `dot_tmux.conf` never sets it), so tmux emits no
-title of its own and nothing overwrites what the function wrote — the same
-reason a manual ghostty rename sticks. Inside tmux the OSC 2 sequence has to go
-through tmux's passthrough wrapper, which requires every ESC of the inner
-sequence doubled and depends on `allow-passthrough on`, already set for other
-reasons.
-
-The alternative — `set-titles on` with a `set-titles-string` resolving the
-project from `#{session_path}` — was rejected as more machinery for a property
-that only has to be right at cold start. Its one advantage is that the title
-would follow the *attached session*: as it stands, jumping to `biogroup` and then
-switching to another session with `Prefix + Space` leaves the tab reading
-"Biogroup". That is already true of a hand-renamed tab, and the status bar's left
-block is the thing that stays truthful.
+`project <name> <path> [tab]` in `dot_zshrc` defines a function `<name>` that
+`cd`s, renames the terminal tab and `grove attach`es the main worktree's branch.
+Registrations (`project biogroup ~/Developer/theodo/biogroup "Biogroup"`) carry
+absolute paths, so they are **machine-local**, below the load line of
+`~/.zshrc`; `local-diff` reports each one every run, accepted, not filtered. A missing
+path is skipped silently, a name that shadows a command *loudly*. **The branch is
+derived, never hardcoded to `main`** (first `git worktree list --porcelain`
+entry, else `origin/HEAD`); everything after the `cd` is guarded on `grove` and a
+git repo. **The tab name is set once**: tmux keeps `set-titles off`, and inside
+tmux the OSC 2 goes through passthrough (inner ESCs doubled). Rejected
+alternatives are in the design notes.
 
 ## cc-tap (Claude Code dashboard + inspector proxy)
 
-[cc-tap](https://github.com/theodo-group/cc-tap) runs permanently as three
-launchd agents in `launchd/`, all driven by `scripts/cc-tap-service`:
+[cc-tap](https://github.com/theodo-group/cc-tap) runs as three services from
+`services.toml`, driven by `scripts/cc-tap-service`:
 
-| agent | runs | when |
+| service | runs | when |
 | ----- | ---- | ---- |
 | `com.theodo.cc-tap.dashboard` | dashboard on `127.0.0.1:3000` | login, kept alive |
 | `com.theodo.cc-tap.proxy`     | inspector proxy on `127.0.0.1:8089` | login, kept alive |
 | `com.theodo.cc-tap.update`    | `npm install cc-tap@latest` | see below |
 
-`cl` in `dot_zshrc` routes through the proxy when `:8089` accepts a connection
-and falls back to plain `claude` otherwise; `--no-proxy` anywhere in the
-arguments forces plain and is stripped before `claude` sees it. There is no
-separate proxy alias any more — one command, and the proxy being down never
-blocks a session.
+`cl` in `dot_zshrc` routes through the proxy when `:8089` accepts a connection,
+else plain `claude`; `--no-proxy` forces plain and is stripped.
 
-**launchd, not Docker.** `proxy/server.js` hardcodes `listen(PORT, '127.0.0.1')`,
-so inside a container it is unreachable through a published port without
-patching the package. It also reads `~/.claude` and writes `~/.cc-lens`, so a
-container would buy no isolation.
+- **A service manager, not Docker**: `proxy/server.js` hardcodes
+  `listen(PORT, '127.0.0.1')`, and reads `~/.claude` anyway.
+- **The services bypass the `cc-tap` CLI** (it opens a browser tab per start and
+  runs the proxy as the dashboard's child). The proxy writes
+  `~/.cc-lens/proxy.json` itself, or the dashboard spawns a second one on
+  `:8090`. The dashboard's Stop is undone in ten seconds; really stop with
+  `launchctl bootout gui/$(id -u)/com.theodo.cc-tap.proxy` or `systemctl --user
+  stop com.theodo.cc-tap.proxy`.
+- **Node is fnm's `default` alias**, not Homebrew's; cc-tap needs Node ≥ 24.
+- **Updates once per weekday from 08:00, restarting only on a new version** —
+  a restart drops every in-flight request through the proxy. The service fires
+  at load, every 30 min and at 08:00; the script gates on a stamp
+  (`~/.local/share/cc-tap/last-update`) written only on success.
 
-**The services bypass the `cc-tap` CLI** and run the standalone `server.js` and
-`proxy/server.js` directly: the CLI opens a browser tab on every start, and in
-the dashboard the proxy is a detached child spawned from the Live Capture
-button, which dies with every restart. The proxy agent writes
-`~/.cc-lens/proxy.json` itself because that file is the only way the dashboard
-knows a proxy exists; without it, Start spawns a second one on `:8090`. The
-flip side is that the dashboard's Stop button kills the proxy and launchd
-brings it back ten seconds later — to really stop capture, `launchctl bootout
-gui/$(id -u)/com.theodo.cc-tap.proxy`.
+## Services
 
-**Node is fnm's `default` alias**, not Homebrew's `node`: Homebrew's is only on
-a machine as a dependency of something else (it is not in the `Brewfile`),
-whereas fnm's default is provisioned by `install.sh` and lives at a stable path.
-cc-tap needs Node ≥ 24.
+`services.toml` declares every background service once (no `schedule` means
+keep-alive); `atelier service install|list|uninstall` turns it into launchd
+agents on macOS and systemd user units on Linux; `tests/service.rs` snapshots
+every generated file.
 
-**Updates: once per weekday, from 08:00, restarting only on a new version.** The
-update agent fires at load, every 30 minutes, and at 08:00 Mon–Fri; the script
-decides. It no-ops on weekends, before 08:00, and once today's stamp
-(`~/.local/share/cc-tap/last-update`) is written — the stamp is only written on
-a successful install, so being offline just means the next tick retries. That
-covers the three ways 08:00 gets missed: asleep (launchd runs a missed calendar
-event on wake), powered off (`RunAtLoad`), and no network. Restarting is skipped
-when the version did not change because restarting the proxy drops every
-in-flight request of every Claude session routed through it.
-
-**The plists are copied into `~/Library/LaunchAgents`, not linked**, the same
-treatment as the keyboard bundle. They are portable because launchd does not
-expand `~` or `$HOME`: each one runs `/bin/sh -c 'exec "$HOME/…"'`, and the
-script sets its own `PATH` and log redirection (`~/Library/Logs/cc-tap/`).
-`launch_agent()` only reloads an agent whose plist changed or which is not
-loaded, so re-running `install.sh` does not bounce the services. It does kickstart
-each one, which starts a stopped agent and is a no-op on a running one; for
-`update` that means one extra run of the script, which gates itself.
-
-`~/Library/LaunchAgents` can end up owned by root — the Pulse Secure installer
-did it on this machine — which makes every write fail with `EACCES`.
-`launch_agent()` warns with the `chown` to run rather than failing the install.
+- **launchd**: plists **copied, not linked**. launchd expands neither `~` nor
+  `$HOME`, so each runs `/bin/sh -c 'exec "$HOME/…"'`.
+- **systemd**: user units with `ExecStart=%h/…`; a schedule adds a `.timer`
+  (`Persistent=true`, `OnActiveSec=0`), which is what gets enabled.
+- **Files are written and services reloaded only on change**, so re-running
+  `install.sh` does not bounce the proxy
+  (`service.rs::launchd_install_reloads_only_the_agent_whose_plist_changed`).
+- **launchd gotchas**: a `bootstrap` while a booted-out agent lingers fails with
+  `5: Input/output error`, so wait for it; a fresh bootstrap can sit at `pended
+  nondemand spawn = speculative` for minutes, so always `kickstart` (no `-k`); a
+  crash-looping agent stays loaded, so "running" means `state = running`
+  (`doctor.rs::a_crash_looping_launchd_agent_fails_although_it_stays_loaded`).
+  `~/Library/LaunchAgents` can end up root-owned (Pulse Secure did it); `install`
+  fails with the `sudo chown` fix
+  (`service.rs::an_unwritable_launch_agents_folder_is_reported_with_the_fix`).
+- **systemd gotcha**: without linger, user services die at SSH logout
+  (`service.rs::systemd_install_enables_linger_only_when_it_is_off`).
 
 ## Skills
 
@@ -440,7 +387,24 @@ tooling, so they are versioned and portable rather than living loose in
 | `tmux-tasks` | writing `<project>/.tmux/` task scripts for the `Prefix + e` picker |
 | `grove`      | `.grove/config.yaml` and `.grove/setup.sh` for worktree setup |
 
-They are symlinked **one by one** in `install.sh`, never as a directory:
+`.claude/skills/` holds project-scope skills, active only when working inside
+this repo and never linked into `~/.claude`. Besides `add-config`, `to-spec`,
+`to-tickets`, `implement`, `code-review` and `tdd` are vendored unchanged from
+[mattpocock/skills](https://github.com/mattpocock/skills) (MIT, a copy of the
+licence sits in each folder). They expect an issue tracker to have been
+configured by that repo's setup skill; this section is that configuration:
+
+- **Issue tracker: local markdown under `docs/<feature>/`.** The spec is
+  `docs/<feature>/spec.md`; tickets are one file each at
+  `docs/<feature>/tickets/NN-<slug>.md`, numbered from `01` in dependency order,
+  with `docs/<feature>/tickets/README.md` as the index. Comments append under a
+  `## Comments` heading at the bottom of the ticket.
+- **Triage labels** are a `**Status:**` line in each ticket: `ready-for-agent`,
+  `needs-human`, `in-progress`, `done`, `wontfix`.
+- **Blocking edges** are the `**Blocked by:**` line. The frontier is every ticket
+  whose blockers are all `done`.
+
+They are symlinked **one by one** by `atelier setup`, never as a directory:
 `~/.claude/skills` also holds skills installed by Claude Code itself (several of
 them symlinks into `~/.agents/skills`), and linking the parent would hide them.
 
@@ -452,303 +416,128 @@ dependency points one way only.
 
 ## Neovim Config
 
-`nvim/` is a plain directory in this repo — commit changes to it like anything
-else. It was a git submodule pointing at a `kickstart.nvim` fork until that fork
-had diverged far enough that upstream merges were no longer realistic (the
-inherited stylua workflow was still gated on `github.repository ==
-'nvim-lua/kickstart.nvim'` and had never once run). The submodule was charging a
-commit-plus-bump dance per change and a clone that broke whenever it had not been
-pushed, so it was folded in with `git subtree`.
+`nvim/` is a plain directory (formerly a `kickstart.nvim` submodule, folded in
+with `git subtree`). Pre-fold history: `git log <merge>^2`. Upstream kickstart is
+not tracked; do not merge from it.
 
-The fork's 444 commits came across and are reachable, but pre-fold commits carry
-un-prefixed paths, so `git log -- nvim/<file>` stops at the merge. Use
-`git log <merge>^2` to walk the old history. Upstream kickstart is no longer
-tracked; do not merge from it.
+**Structure:** `nvim/init.lua` loads `config.options`, `config.keymaps`,
+`config.autocmds`, `config.lazy` in that order; plugins via lazy.nvim in
+`lua/config/lazy.lua`, custom ones in `lua/custom/plugins/`, kickstart extras in
+`lua/kickstart/plugins/`. **LSP keymaps** live in one `LspAttach` autocommand in
+the Telescope section of `lazy.lua`; `grn`/`gra` are Neovim 0.11+ defaults.
 
-Lua formatting is checked by `.github/workflows/stylua.yml` at the **repo root** —
-a workflow under `nvim/.github/` would silently never run.
-
-**Structure:** `nvim/init.lua` loads `config.options`, `config.keymaps`, `config.autocmds`, `config.lazy` (in that order). All plugins are managed by lazy.nvim in `lua/config/lazy.lua`. Custom plugins go in `lua/custom/plugins/`, kickstart extras in `lua/kickstart/plugins/`.
-
-**LSP keymaps** are consolidated in a single `LspAttach` autocommand inside the Telescope config section of `lazy.lua`. The lspconfig `LspAttach` handles only document highlight and inlay hints. `grn`/`gra` are Neovim 0.11+ built-in defaults (not explicitly mapped).
-
-**Formatting:** Stylua with 2-space indent, single quotes (see `nvim/.stylua.toml`).
-It is in the `Brewfile` so `stylua --check nvim/` can be run before pushing —
-without that the CI gate could only ever fail after the fact.
-
-**Smoke test:** `nvim/scripts/test-config.sh` runs headless Neovim validation.
+**Formatting:** Stylua (`nvim/.stylua.toml`), checked by
+`.github/workflows/stylua.yml` at the **repo root** (a workflow under
+`nvim/.github/` never runs); run `stylua --check nvim/` before pushing.
+**Smoke test:** `nvim/scripts/test-config.sh`.
 
 ## Kotlin and Swift (KMP + native mobile)
 
 **Kotlin gets no language server, on purpose.** `kotlin-language-server` is
-effectively unmaintained and does not model multiplatform source sets or
-`expect`/`actual`; JetBrains' `kotlin-lsp` is pre-alpha and JVM-only. Both
-produce diagnostics that are wrong often enough to be worse than none. Kotlin in
-Neovim is treesitter (highlight, indent, text objects, symbol picker), ripgrep
-and ktlint. Completion, type-aware rename and debugging happen in Android
-Studio; the same split puts iOS debugging in Xcode. **Do not add a Kotlin LSP,
-and do not add DAP for Kotlin or Swift.**
+unmaintained and does not model multiplatform source sets or `expect`/`actual`;
+JetBrains' `kotlin-lsp` is pre-alpha and JVM-only; both give diagnostics wrong
+often enough to be worse than none. Kotlin in Neovim is treesitter, ripgrep and
+ktlint; the rest happens in Android Studio and Xcode. **Do not add a Kotlin LSP,
+and do not add DAP for Kotlin or Swift.** Swift's `sourcekit-lsp` is the
+exception, added to `servers` in `lsp.lua` **after** `ensure_installed` (mason has
+no package) and guarded on `executable('sourcekit-lsp')`.
 
-Swift is the exception: `sourcekit-lsp` is Apple's own and already on disk. It is
-added to `servers` in `lsp.lua` **after** `ensure_installed` is computed, because
-mason has no package for it, and guarded on `executable('sourcekit-lsp')` so it
-stays inert without Xcode. It is accurate for SwiftPM packages and weaker on an
-`.xcodeproj` — that would need a `buildServer.json` from `xcode-build-server`,
-which is deliberately not installed.
-
-**Formatters are not in the `Brewfile`.** `ktlint` comes from mason (brew's
-formula depends on `openjdk`, i.e. a second JDK next to the one `JAVA_HOME`
-already points at) and doubles as the Kotlin linter — it is the only entry in
-`nvim-lint`'s `linters_by_ft`. `swift-format` ships inside Xcode's toolchain and,
-unlike `sourcekit-lsp`, is **not** shimmed into `/usr/bin`, so conform invokes it
-as `xcrun swift-format`. Net effect: nothing new is installed on a machine that
-does no mobile work.
-
-`detekt` is intentionally absent: it is a Gradle plugin driven by project-level
-config, so it belongs in the project's build, not here.
-
-Gradle and Xcode generate very large trees, so the snacks explorer — which runs
-with `hidden`+`ignored` on and therefore gets no `.gitignore` filtering — carries
-an explicit exclude list (`build`, `.gradle`, `.kotlin`, `DerivedData`, `Pods`,
-`xcuserdata`, …). Treesitter installs `kotlin`, `swift`, `java`, `groovy`, `xml`
-and `properties` (filetype `jproperties`, for `gradle.properties` and
-`local.properties`).
-
-Opening a whole project in Studio or Xcode is a shell/tmux concern, not an editor
-one: `studio` in `dot_zshrc` (`open -a`, so the IDE outlives the shell) and
-`xed`, which Xcode already provides. Per-project variants belong in that
-project's `.tmux/` tasks.
+**Formatters are not in the `Brewfile`**: `ktlint` comes from mason (brew's pulls
+a second JDK); `swift-format` runs as `xcrun swift-format` (not shimmed into
+`/usr/bin`). `detekt` belongs in the project's Gradle build. The snacks explorer
+shows ignored files, so it excludes Gradle/Xcode trees explicitly.
 
 ## Key Integrations
 
-- **Tmux ↔ Neovim**: `vim-tmux-navigator` for Ctrl+h/j/k/l pane navigation. Tmux has `focus-events on` for Neovim autoread and gitsigns refresh. The same four keys are re-bound in `copy-mode-vi`, where they otherwise fall through to tmux defaults — `C-h` was a duplicate `cursor-left` and `C-j` was `copy-pipe-and-cancel`, i.e. it yanked and exited the mode.
-- **Git ↔ Delta**: `dot_gitconfig` includes `delta/themes.gitconfig` for diff rendering. Lazygit also uses delta with custom side-by-side/inline pagers.
-- **Ghostty ↔ Tmux**: Extended key sequences for Shift+Enter compatibility.
-- **Tmux modes**: two one-shot modal tables, `Prefix → p` (pane) and `Prefix → t` (tab).
+- **Tmux ↔ Neovim**: `vim-tmux-navigator` for Ctrl+h/j/k/l, also re-bound in
+  `copy-mode-vi` (where `C-j` would otherwise yank and exit). `focus-events on`
+  for autoread and gitsigns.
+- **Git ↔ Delta**: `dot_gitconfig` includes `delta/themes.gitconfig`; lazygit uses
+  delta with side-by-side/inline pagers.
+- **Terminal ↔ Tmux**: `extended-keys on` and `S-Enter` re-sending `\x1b[13;2u`,
+  so Shift+Enter reaches Claude Code.
+- **Tmux modes**: two one-shot modal tables, `Prefix → p` (pane) and `Prefix → t`
+  (tab).
 
 ## Tmux status bar
 
-`scripts/tmux-status-left` renders the left segment as two adjacent capsules —
-**project** and **root/wt** — resolved from `#{session_path}` with git. They are
-separate blocks on purpose: which repo you are in and which checkout of it you
-are in are two different questions, and a flag glued onto the project name reads
-as part of the name.
+`src/bar/left.rs` (project + `root`/`wt`) and `src/bar/right.rs` (key table,
+counts, battery, date, clock) are pure, snapshot-tested render functions pushed
+by the daemon, with `#()` and then the session name as fallbacks
+(`bar_daemon.rs::without_atelier_the_bar_still_shows_the_session_name_and_the_clock`).
+The branch is deliberately not shown. Layout reasoning is in the design notes.
 
-It does not parse the session name. Grove builds names as
-`{prefix}{project}_{branch}_{key}` with a sanitizer that maps `/[.\s:/@]/` to
-`_` and leaves existing `_` alone, so `grove_my_repo_main_f2d1` cannot be split
-from the left — the same ambiguity that makes `tmux-sessions` group by the
-trailing key instead. That key is only trusted when it equals the one grove
-*would* derive from the session's own repo root (FNV-1a32 of the main worktree
-path, low 16 bits), because shape alone also matches a hand-named session like
-`api_perf_beef`, which used to scope the picker to a project that does not exist:
-empty list, `Tab` apparently broken. A name also freezes the branch at session creation, so it
-starts lying after the first `git checkout`. Nothing about the bar is
-grove-specific: any session in any repo gets the same treatment, and a session
-outside a repo falls back to its own name.
-
-**The branch is deliberately not shown.** It is already visible in lazygit, in
-the prompt and in nvim's own status line, and at 22 columns it was the single
-widest field on the bar.
-
-**The block pads out to match the right-hand one** so the window list starts in
-the same place whatever session is attached. The padding sits *outside* the
-capsules, not inside them: an internally padded pill leaves a visibly empty
-capsule for a short name, which is exactly what made the previous 48-column
-version read as a slab of dead space. The checkout segment stays `root`/`wt`
-rather than the worktree's name because that name is nearly always a sanitized
-copy of the branch, and it changed width on every switch.
-
-The project pill hugs its name up to `MAX_PROJECT` characters and then truncates
-with `…`. It never changes the block width — a longer name spends padding, not
-layout — so that cap is a purely visual choice and there is room to raise it.
-
-`scripts/tmux-status-right` renders the *entire* right block — key table, repo
-state, battery, date, clock. The date and clock are not left to `dot_tmux.conf`
-even though strftime is free there: the block has to know its own total width
-(see below), and a piece it does not render is a piece it cannot measure.
-
-Repo state is `+412 −89 ↑2 ↓1` — **lines** changed against HEAD, then divergence
-from the upstream. Two cheap calls, `diff --shortstat HEAD` and `rev-list
---left-right --count @{upstream}...HEAD`, rather than one `status --porcelain=v2
---branch`, which would cost a full worktree scan for the ahead/behind alone.
-Untracked files contribute nothing: `--shortstat` only walks tracked content.
-Both calls use `--no-optional-locks`, or git refreshes and rewrites the index on
-every tick and collides with an interactive git in the same repo.
-
-The counts are padded on the *left*, so they grow away from the clock instead of
-shoving it. Their width accounting charges the separator space where it is
-emitted, not a flat +2 per part: a flat charge makes a segment whose first part
-is `−` or `↑` come out one column narrow, which drifts the whole centred window
-list by one — visible only when switching to a session that has no local edits
-but is ahead or behind.
-
-Both scripts `export LANG` if it is unset. Without a UTF-8 locale bash counts
-`${#s}` in bytes and slices `${s:0:n}` the same way, so the ellipsis and every
-`± ↑ ↓` glyph would throw its padding out by two or three columns — and tmux
-runs `#()` commands with the *server's* environment, which is whatever the shell
-that started the server happened to export.
-
-Truncation happens inside the script, never via `status-left-length`: tmux
-truncates the *expanded* string, which by then contains `#[fg=...]` escapes, and
-will happily cut one in half and print the remainder as literal text.
-
-**Colour rule: the window list is greyscale; everything else gets one accent per
-concept.** The list itself must stay neutral so its two signals read — blue is
-"you are here" (active window pill, active pane border) and yellow/green/red are
-task state (`●` `✓` `✗`, see below). An earlier version had a green
-active-window block that made a green `✓` invisible. Outside the list, each
-segment owns a hue and no hue is reused: mauve `#ca9ee6` project, peach
-`#ef9f76` worktree (absent when at the root, where the chip is grey), flamingo
-`#eebebe` repo state, teal `#81c8be` battery, red `#e78284` battery under 20 %.
-None of them may be `#8caaee` or a task-state colour.
-
-**Centring is only true while the two blocks are the same width.**
-`status-justify centre` centres the list in the space *remaining* after
-`status-left` and `status-right`, not in the terminal: measured on a 120-column
-client, growing the right block by 36 columns moved the list 18 columns left —
-exactly half. So `tmux-status-left` pads out to match, and asks
-`tmux-status-right --width` for the number instead of hardcoding it. A copy of
-the tier table on the left would drift; `--width` returns before any `git` or
-`pmset` call, so the extra fork is cheap.
-
-Everything on the right is therefore fixed-width, including the key table slot,
-which stays reserved at rest — letting it collapse would change the block width
-every time a mode is entered and slide the list. For the same reason the date is
-`%a %d %b` and never `%-d`, which would lose a column from the 1st to the 9th.
-
-**Narrowing sheds whole segments** rather than crushing the list: date, then
-battery, then the repo counts, leaving the clock. Before that, an 80-column
-client rendered date and battery in full and dropped the *window list* entirely
-— the one thing on the bar worth keeping. Below the widest tier the left block
-also stops padding to match, so the list drifts off centre instead of
-overflowing. None of this engages above 120 columns.
-
-**A window occupies the same width whether or not it is active**: the active
-format's two `` capsules are replaced by two plain spaces in the inactive one.
-Without that, focusing a window widened it by a column and shoved every window
-to its right. The `@task_status` marker is worth +3 columns on *both* sides, so
-parity holds in all twelve combinations of state and focus.
-
-**The task marker belongs to a window, visibly.** On the active window it is the
-coloured *tail of the pill* — dark glyph on a yellow/green/red ground, with the
-closing cap taking that colour — rather than a glyph outside the capsule, which
-read as unattached. It cannot simply be drawn onto the blue pill: `#e5c890` on
-`#8caaee` is the same low-contrast trap that already cost a green active-window
-block. On inactive windows the marker sits one space after its own name and four
-before the next, because centred between two windows there was no telling which
-one it belonged to.
-
-**A comma inside a `#[...]` must be escaped as `#,` when the style sits inside a
-`#{?...}`** — otherwise it ends that branch of the conditional and the rest of
-the style is silently dropped, leaving the branch rendering as if empty. So
-`#[bg=#a6d189#,fg=#303446]`, not `#[bg=#a6d189,fg=#303446]`.
-
-The right-hand segments are separated by spacing alone. An earlier version used
-dim `·` bullets between them; at `#626880` they read as empty slots rather than
-as separators.
-
-**Shape carries as much as colour.** Only two things on the bar are filled
-capsules — the project, always leftmost, and the active window, which moves.
-Position tells them apart. The `` `` caps are U+E0B6 / U+E0B4; a Nerd Font is
-required, which `ghostty/config` already pins. Note that these live in the
-private-use area and some editors silently drop them on write — check with
-`grep -c` after touching either file.
-
-The palette is Catppuccin **Frappe**, matching ghostty. The bar background
-(`#414559`) is one step *lighter* than the terminal (`#303446`) so it reads as
-chrome on top rather than a hole punched in the window.
+- **The window list stays centred only while both blocks are the same width**:
+  the left pads to `right::width`, everything on the right is fixed-width (key
+  slot reserved at rest, `%a %d %b` never `%-d`, counts padded left)
+  (`src/bar/right.rs::the_rendered_block_is_as_wide_as_it_says_in_every_combination`).
+  Narrowing sheds whole segments — date, battery, counts — never the window list
+  (`src/bar/left.rs::below_the_widest_tier_the_padding_gives_way_to_the_list`).
+- **Repo state** (`+412 −89 ↑2 ↓1`) uses plumbing `diff-index`, never `git
+  diff`, which rewrites a stat-dirty index even under `--no-optional-locks`
+  (`bar_right.rs::reading_the_counts_never_rewrites_the_index`). Counts never
+  outgrow 15 cells (`src/bar/right.rs::counts_of_a_thousand_and_more_are_abbreviated`).
+- **Widths are terminal cells, never `LANG`-dependent**: tmux runs `#()` with the
+  server's environment
+  (`bar_right.rs::the_block_is_as_wide_whatever_the_locale_and_the_repo_state`).
+- **Truncate inside atelier, never via `status-left-length`**: tmux truncates the
+  *expanded* string and will cut a `#[fg=...]` in half.
+- **Escape a comma in `#[...]` as `#,` inside a `#{?...}`**, or it ends the branch
+  and the rest of the style is silently dropped: `#[bg=#a6d189#,fg=#303446]`.
+- **A window has one width active or not**: the inactive format replaces the
+  capsules with spaces, and the marker slot is +3 on both.
+- **Colour: the window list is greyscale** — blue `#8caaee` is focus,
+  yellow/green/red are state. Elsewhere one hue per concept, never reused: mauve
+  `#ca9ee6` project, peach `#ef9f76` worktree, flamingo `#eebebe` repo state,
+  teal `#81c8be` battery, red `#e78284` low battery. The marker is never drawn on
+  the blue. Catppuccin **Frappe**; bar `#414559` on terminal `#303446`.
+- **The `` `` caps are U+E0B6 / U+E0B4** (Nerd Font, private-use area):
+  some editors silently drop them on write — check with `grep -c` after touching
+  a file that holds them.
 
 ## Copying out of a pane
 
-Two mechanisms, for two shapes of thing:
-
-- **`Prefix + u`** (`scripts/tmux-pick`) — fuzzy-pick a **token**: URL or file
-  path. `Enter` opens (URL → Chrome, file → the nvim in this session, or a new
-  `nvim` window at the session root if there is none), `Ctrl-y` copies,
-  `Ctrl-o` hands it to `open`.
-- **`Prefix + v`** — copy-mode, then drag with the mouse. For a **region**.
-
-`Prefix + v` matters because tmux's default `MouseDrag1Pane` only starts a
-selection when `#{mouse_any_flag}` is unset — i.e. when the pane's application
-has not asked for mouse events. Neovim holds it permanently and Claude Code
-toggles it while rendering interactive UI, which is why dragging works
-sometimes and not others. Inside copy-mode the `copy-mode-vi` table owns the
-mouse unconditionally, and it respects pane borders (Ghostty's own
-Shift+drag does not — it selects by screen column, so a vertical split gives you
-both panes on every line).
-
-`tmux-pick` checks path candidates against the filesystem and drops the ones
-that do not exist. This is load-bearing: TUIs truncate long paths to fit their
-width, and a fragment is indistinguishable from a real path by shape. Each grep
-runs **once over the whole capture** — an earlier version grepped per line and
-spawned ~6000 processes, which hung the popup long enough that it echoed
-keystrokes as raw escape sequences.
+- **`Prefix + u`** (`atelier pick popup`) — fuzzy-pick a URL or file path:
+  `Enter` opens (file → this session's nvim), `Ctrl-y` copies via OSC 52 (works
+  over SSH), `Ctrl-o` hands it to the OS opener, `Ctrl-v` previews markdown.
+  Paths that do not exist are dropped, since TUIs truncate long paths
+  (`pick.rs::a_claude_code_capture_yields_its_urls_then_the_paths_that_exist`);
+  no process per line (`pick.rs::a_full_scrollback_is_listed_without_a_process_per_line`).
+- **`Prefix + v`** — copy-mode, then drag, for a **region**. tmux's default
+  `MouseDrag1Pane` only selects when the app has not grabbed the mouse (Neovim
+  always has); copy-mode owns the mouse and respects pane borders.
 
 ## Markdown preview
 
-`<leader>mr` in a markdown buffer runs `md-preview <file>`, which focuses that
-file's Chrome tab or opens one. Rendering is client-side (markdown-it,
-highlight.js, mermaid) in `scripts/md-preview/`; the page re-renders on every
-save and follows the nvim cursor. Its real purpose is **annotation**: comment on
-line ranges in the margin, then "copy all" yields `path` + `L12-L14: comment`
-lines to paste into an agent.
+`<leader>mr` runs `atelier preview <file>` (focus or open its browser tab — tab
+reuse is JXA, macOS only); the page re-renders on save and follows the nvim
+cursor. Its purpose is **annotation**: "copy all" yields `path` + `L12-L14:
+comment` lines for an agent. `Prefix + m` picks a markdown file of the session's
+checkout (`tests/markdown_picker.rs`).
 
-**One permanent server, run by launchd** (`com.github.gauthierdoppler.md-preview`,
-`127.0.0.1:33440`), not one per file. The URL path *is* the file's absolute path,
-so the origin never changes, relative images resolve natively, and a link to
-another `.md` renders instead of downloading. It used to be a server per file on
-a port hashed from the path, bumped on collision and killed after 10 minutes
-without a client: Chrome suspends background tabs, which drops SSE, so the
-server died under any tab left in the background, and a bumped port changed the
-origin — which is what notes were keyed on.
-
-**Notes live in `~/.local/share/md-preview/notes/<sha1 of path>.json`**, through
-`GET`/`PUT /__notes/<path>`, never in `localStorage`. Moving or renaming a file
-loses its notes; that is accepted.
-
-**The server restarts itself when `server.js` or `config.js` changes**, via
-`launchctl kickstart -k`. Exiting and relying on `KeepAlive` does not work: launchd
-marks the respawn `pended nondemand spawn = inefficient` and defers it for
-minutes, whatever the exit code. `index.html` and `app.js` are read per request,
-so they need no restart at all. The same deferral hits a fresh `bootstrap`
-(`pended nondemand spawn = speculative`), so `launch_agent()` in `install.sh`
-kickstarts every agent it manages — without `-k`, which leaves a running one
-alone — and `md-preview` kickstarts its agent itself when `/__meta` does not
-answer.
-
-**The page renders untrusted markdown on an origin that can read local files**,
-so it is fenced on four sides:
-
-- `DOMPurify` over markdown-it's output (`html: true` stays, so `<details>` and
-  sized `<img>` from GitHub READMEs still work) and mermaid in `strict`;
-- a CSP with `script-src 'self'` — every script is a file, nothing is inline;
-- the `Host` header must be `127.0.0.1` or `localhost`, against DNS rebinding;
-- a non-markdown file is only served to a page whose `Referer` is a markdown
-  file in the same git repo (or the same directory outside git). Markdown files
-  themselves are served from anywhere: they are what you ask to open.
-
-Writes require `content-type: application/json`, which a cross-origin page
-cannot send without a preflight this server never answers.
-
-**Dependencies are vendored through `bun install`** (`package.json` +
-`bun.lock`, `node_modules` ignored) and served from `/__lib/`, so the preview
-works offline. `install.sh` runs it after the bun phase.
-
-Tab reuse is JXA against Google Chrome (`w.tabs.url()` per window, matched
-without the fragment); the first run triggers macOS's automation prompt. If
-Chrome is not running or the script fails, it falls back to `open -a`.
-
-The cursor sync is a `CursorHold` autocmd, registered once `<leader>mr` has run
-in that buffer, that `POST`s the line to `/__cursor/<path>`; the URL comes from
-the CLI's stdout, so the port is defined in `config.js` alone. The page only
-scrolls when the line's block is outside the middle of the viewport, so it does
-not twitch on every cursor move.
+- **One permanent server**, `atelier preview serve`, run as a service on
+  `127.0.0.1:33440`; the URL path *is* the file's absolute path, so the origin
+  never changes. `atelier preview` starts it when `/__meta` does not answer.
+- **The page is compiled into the binary** (`atelier/assets/preview/`), so
+  **editing it means rebuilding atelier**; the server restarts itself when its
+  binary changes (`preview.rs::the_server_restarts_from_its_binary_when_it_is_replaced`)
+  via `launchctl kickstart -k`, since a `KeepAlive` respawn is deferred for
+  minutes (`pended nondemand spawn = inefficient`).
+- **Notes live in `~/.local/share/md-preview/notes/<sha1 of path>.json`**, never
+  `localStorage` (`preview.rs::a_notes_file_on_disk_is_read_back_unchanged`).
+- **Untrusted markdown on an origin that can read local files** is fenced on
+  four sides (`tests/preview.rs`): DOMPurify and mermaid `strict`; a
+  `script-src 'self'` CSP with `nosniff`; a `Host` check against DNS rebinding;
+  non-markdown files only for a markdown `Referer` in the repo the page's URL
+  sits in (not where a symlinked page points), never a hidden file or folder.
+  Writes require `content-type: application/json` (no preflight is ever
+  answered). These fences stop web pages, not local processes: the server has
+  no authentication, so keep it off a machine other users can log into.
 
 ## Theming
 
 Catppuccin across the stack: **Frappe** for ghostty, tmux and neovim; Mocha for
 lazygit. `ghostty/config` pins `font-family = JetBrainsMono Nerd Font Mono` —
-without it `font-family` is empty, ghostty falls back to a font with no Nerd
-Font coverage, and every powerline separator and icon renders as a blank cell.
-`have_nerd_font = true` in neovim depends on that pin.
+without it ghostty falls back to a font with no Nerd Font coverage and every
+powerline separator and icon renders blank. `have_nerd_font = true` in neovim
+depends on that pin.

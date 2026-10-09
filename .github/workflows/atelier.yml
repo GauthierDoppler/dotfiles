@@ -1,0 +1,71 @@
+name: atelier
+
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'nvim/**'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'nvim/**'
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: atelier
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tmux (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install fzf (Linux)
+        if: runner.os == 'Linux'
+        env:
+          FZF_VERSION: 0.65.2
+        run: |
+          curl -fsSL "https://github.com/junegunn/fzf/releases/download/v${FZF_VERSION}/fzf-${FZF_VERSION}-linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin fzf
+          fzf --version
+      - name: Install tmux and fzf (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install tmux fzf
+          fzf --version
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: atelier
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo nextest run --locked --profile ci
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck install.sh, the Claude statusline and shell scripts under scripts/
+        run: |
+          files=(install.sh dot_claude/statusline-custom.sh)
+          while IFS= read -r -d '' f; do
+            if head -n1 "$f" | grep -qE '^#!.*[/ ](ba)?sh$'; then
+              files+=("$f")
+            fi
+          done < <(find scripts -type f -perm -u+x -print0)
+          shellcheck "${files[@]}"

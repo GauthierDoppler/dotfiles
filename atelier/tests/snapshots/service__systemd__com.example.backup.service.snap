@@ -1,0 +1,10 @@
+---
+source: tests/service.rs
+expression: content
+---
+[Unit]
+Description=Back up the notes once per weekday
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/backup notes
