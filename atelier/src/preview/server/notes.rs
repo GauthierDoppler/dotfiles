@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use axum::extract::Request;
 use axum::http::StatusCode;
@@ -24,13 +25,17 @@ pub(super) fn get(server: &Server, file: &Path) -> Response {
     json_response(json!({ "notes": notes }))
 }
 
-pub(super) async fn put(server: &Server, file: &Path, request: Request) -> Response {
+pub(super) async fn put(server: Arc<Server>, file: PathBuf, request: Request) -> Response {
     let Some(Value::Array(notes)) = json_body(request)
         .await
         .and_then(|mut body| body.get_mut("notes").map(Value::take))
     else {
         return status(StatusCode::BAD_REQUEST, "bad request");
     };
+    super::off_thread(move || save(&server, &file, notes)).await
+}
+
+fn save(server: &Server, file: &Path, notes: Vec<Value>) -> Response {
     let dest = notes_file(server, file);
     let written = if notes.is_empty() {
         match std::fs::remove_file(&dest) {

@@ -173,8 +173,10 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
 - **Async code never blocks.** The daemon's event loop only reads and writes
   tmux and its socket; git, the file watcher and the battery run on the render
   thread (`src/daemon/render.rs`), anything else through
-  `tokio::task::spawn_blocking`. Every git call has a 10 s limit
-  (`daemon.rs::a_git_that_hangs_does_not_stop_the_daemon_following_tmux`).
+  `tokio::task::spawn_blocking`; the preview server's handlers touch the disk
+  only inside `off_thread`. Every git call has a 10 s limit
+  (`daemon.rs::a_git_that_hangs_does_not_stop_the_daemon_following_tmux`,
+  `preview.rs::requests_waiting_on_a_hung_git_leave_the_server_answering`).
 - **Installed into `~/.local/bin/atelier`**, called by that absolute path; every
   caller must still work when it is absent.
 - **`atelier doctor` turns what this file asks you to remember into checks**

@@ -46,12 +46,17 @@ impl Preview {
     }
 
     fn start_with(binary: &Path) -> Self {
+        Self::start_with_path(binary, &std::env::var_os("PATH").unwrap_or_default())
+    }
+
+    fn start_with_path(binary: &Path, path: &std::ffi::OsStr) -> Self {
         let port = common::free_port();
         let home = tempfile::tempdir().unwrap();
         let spawn = || {
             Command::new(binary)
                 .args(["preview", "serve"])
                 .env("HOME", home.path())
+                .env("PATH", path)
                 .env("MD_PREVIEW_PORT", port.to_string())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -916,4 +921,45 @@ fn concurrent_saves_of_the_same_notes_all_succeed() {
     });
 
     assert_eq!(statuses, vec![204; 20]);
+}
+
+#[test]
+fn requests_waiting_on_a_hung_git_leave_the_server_answering() {
+    let (_dir, root) = common::real_tempdir();
+    write(&root.join("docs/plan.md"), "hi");
+    write(&root.join("docs/a.png"), "PNG");
+    let bin = root.join("bin");
+    write(&bin.join("git"), "#!/bin/sh\nexec /bin/sleep 30\n");
+    std::fs::set_permissions(bin.join("git"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let server =
+        Preview::start_with_path(Path::new(env!("CARGO_BIN_EXE_atelier")), bin.as_os_str());
+    let image = encode(&root.join("docs/a.png"));
+    let referer = server.url(&root.join("docs/plan.md"));
+
+    let waiting: Vec<_> = (0..32)
+        .map(|_| {
+            let (port, image, referer) = (server.port, image.clone(), referer.clone());
+            std::thread::spawn(move || {
+                let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+                let _ = write!(
+                    stream,
+                    "GET {image} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nReferer: {referer}\r\n\r\n"
+                );
+                std::thread::sleep(Duration::from_secs(3));
+            })
+        })
+        .collect();
+    std::thread::sleep(Duration::from_millis(500));
+    let started = std::time::Instant::now();
+    let meta = server.get("/__meta");
+
+    assert_eq!(meta.status, 200);
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "answered after {:?}",
+        started.elapsed()
+    );
+    for request in waiting {
+        request.join().unwrap();
+    }
 }

@@ -65,13 +65,28 @@ async fn poll(server: Arc<Server>, exe: PathBuf) {
     let mut tick = tokio::time::interval(POLL);
     loop {
         tick.tick().await;
-        events::announce_changes(&server);
-        binary.restart_if_replaced();
+        let server = server.clone();
+        binary = match tokio::task::spawn_blocking(move || {
+            events::announce_changes(&server);
+            binary.restart_if_replaced();
+            binary
+        })
+        .await
+        {
+            Ok(binary) => binary,
+            Err(_) => return,
+        };
     }
 }
 
+async fn off_thread(work: impl FnOnce() -> Response + Send + 'static) -> Response {
+    tokio::task::spawn_blocking(work)
+        .await
+        .unwrap_or_else(|_| status(StatusCode::INTERNAL_SERVER_ERROR, "failed"))
+}
+
 async fn handle(State(server): State<Arc<Server>>, request: Request) -> Response {
-    let mut response = route(&server, request).await;
+    let mut response = route(server, request).await;
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
@@ -84,7 +99,7 @@ async fn handle(State(server): State<Arc<Server>>, request: Request) -> Response
     response
 }
 
-async fn route(server: &Server, request: Request) -> Response {
+async fn route(server: Arc<Server>, request: Request) -> Response {
     let host = request
         .headers()
         .get(header::HOST)
@@ -109,21 +124,26 @@ async fn route(server: &Server, request: Request) -> Response {
         };
     }
     if path.starts_with("/__raw/") {
-        return files::raw(under("/__raw"));
+        let file = under("/__raw");
+        return off_thread(move || files::raw(file)).await;
     }
     if path.starts_with("/__events/") {
-        return match under("/__events").filter(|file| is_markdown(file) && file.is_file()) {
-            Some(file) => events::events(server, file),
-            None => status(StatusCode::NOT_FOUND, "not found"),
-        };
+        let file = under("/__events");
+        return off_thread(move || {
+            match file.filter(|file| is_markdown(file) && file.is_file()) {
+                Some(file) => events::events(&server, file),
+                None => status(StatusCode::NOT_FOUND, "not found"),
+            }
+        })
+        .await;
     }
     if path.starts_with("/__notes/") {
         let Some(file) = under("/__notes").filter(|file| is_markdown(file)) else {
             return status(StatusCode::BAD_REQUEST, "bad request");
         };
         return match *request.method() {
-            Method::GET => notes::get(server, &file),
-            Method::PUT => notes::put(server, &file, request).await,
+            Method::GET => off_thread(move || notes::get(&server, &file)).await,
+            Method::PUT => notes::put(server, file, request).await,
             _ => status(StatusCode::METHOD_NOT_ALLOWED, "method not allowed"),
         };
     }
@@ -134,7 +154,7 @@ async fn route(server: &Server, request: Request) -> Response {
         let Some(file) = under("/__cursor").filter(|file| is_markdown(file)) else {
             return status(StatusCode::BAD_REQUEST, "bad request");
         };
-        return events::cursor(server, file, request).await;
+        return events::cursor(&server, file, request).await;
     }
     if path == "/" {
         return typed(
@@ -149,5 +169,6 @@ async fn route(server: &Server, request: Request) -> Response {
     if is_markdown(&file) {
         return no_store("text/html; charset=utf-8", assets::PAGE);
     }
-    files::asset(server, request.headers(), &file)
+    let headers = request.headers().clone();
+    off_thread(move || files::asset(&server, &headers, &file)).await
 }
