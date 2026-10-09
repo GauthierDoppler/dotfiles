@@ -42,8 +42,8 @@ layout, Node, then `atelier setup`, `claude-settings-sync` and `service
 install`); it stops if the atelier build fails.
 
 `atelier setup [--profile desktop|remote] [--dry-run] [--repo PATH]` links from
-the `LINKS` and `STUBS` tables in `atelier/src/setup.rs`, the one list of what
-goes where; use the `/add-config` skill to add one. It backs up as `*.bak`,
+the `LINKS` and `STUBS` tables in `atelier/src/setup/table.rs`, the one list of
+what goes where; use the `/add-config` skill to add one. It backs up as `*.bak`,
 `*.bak.1`, … and is idempotent (`tests/setup.rs`); it refuses a `--repo` that is
 not this repo (`setup.rs::a_repo_that_is_not_the_dotfiles_is_refused`) and
 prunes only dangling links into the repo

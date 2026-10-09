@@ -19,7 +19,7 @@ Add the config at `$ARGUMENTS` to the dotfiles repo.
    - Remove the original
    - Create a symlink from the original location to the dotfiles copy
    - If it's a folder with auto-generated files, add a `.gitignore` inside it
-   - Add the entry to the `LINKS` table in `atelier/src/setup.rs`, and the
+   - Add the entry to the `LINKS` table in `atelier/src/setup/table.rs`, and the
      expected pair to `DESKTOP_LINKS` in `atelier/tests/setup.rs`
    - Stage and show the result, but do NOT commit
 
