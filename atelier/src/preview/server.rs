@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::os::unix::process::CommandExt;
 use std::process::Command as Process;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -114,6 +115,7 @@ async fn poll(server: Arc<Server>, exe: PathBuf) {
         tick.tick().await;
         {
             let mut watched = server.watched.lock().unwrap();
+            watched.retain(|_, watch| watch.tx.receiver_count() > 0 || watch.cursor.is_some());
             for (file, watch) in watched.iter_mut() {
                 if watch.tx.receiver_count() == 0 {
                     continue;
@@ -225,9 +227,9 @@ async fn route(server: &Server, request: Request) -> Response {
         return raw(under("/__raw"));
     }
     if path.starts_with("/__events/") {
-        return match under("/__events") {
+        return match under("/__events").filter(|file| is_markdown(file) && file.is_file()) {
             Some(file) => events(server, file),
-            None => status(StatusCode::BAD_REQUEST, "bad request"),
+            None => status(StatusCode::NOT_FOUND, "not found"),
         };
     }
     if path.starts_with("/__notes/") {
@@ -244,7 +246,7 @@ async fn route(server: &Server, request: Request) -> Response {
         if request.method() != Method::POST {
             return status(StatusCode::METHOD_NOT_ALLOWED, "method not allowed");
         }
-        let Some(file) = under("/__cursor") else {
+        let Some(file) = under("/__cursor").filter(|file| is_markdown(file)) else {
             return status(StatusCode::BAD_REQUEST, "bad request");
         };
         return cursor(server, file, request).await;
@@ -266,10 +268,13 @@ async fn route(server: &Server, request: Request) -> Response {
 }
 
 fn raw(file: Option<PathBuf>) -> Response {
-    let Some(file) = file.filter(|file| is_markdown(file) && file.is_file()) else {
+    let Some(target) = file
+        .and_then(|file| file.canonicalize().ok())
+        .filter(|target| is_markdown(target) && target.is_file())
+    else {
         return status(StatusCode::NOT_FOUND, "gone");
     };
-    match std::fs::read(&file) {
+    match std::fs::read(&target) {
         Ok(bytes) => no_store("text/plain; charset=utf-8", bytes),
         Err(_) => status(StatusCode::NOT_FOUND, "gone"),
     }
@@ -312,7 +317,7 @@ async fn json_body(request: Request) -> Option<Value> {
         .get(header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
-    if !content_type.starts_with("application/json") {
+    if content_type.split(';').next().map(str::trim) != Some("application/json") {
         return None;
     }
     let bytes = axum::body::to_bytes(request.into_body(), MAX_BODY)
@@ -365,7 +370,9 @@ fn write_notes(dir: &Path, dest: &Path, file: &Path, notes: Vec<Value>) -> std::
         "notes": notes,
     }))?;
     text.push('\n');
-    let tmp = dest.with_extension(format!("json.{}.tmp", std::process::id()));
+    static SAVES: AtomicU64 = AtomicU64::new(0);
+    let save = SAVES.fetch_add(1, Ordering::Relaxed);
+    let tmp = dest.with_extension(format!("json.{}.{save}.tmp", std::process::id()));
     std::fs::write(&tmp, text)?;
     std::fs::rename(&tmp, dest)
 }
@@ -396,10 +403,7 @@ fn referrer_doc(server: &Server, headers: &HeaderMap) -> Option<PathBuf> {
     }
     let path = path.split(['?', '#']).next()?;
     let doc = path_from_url(path)?;
-    if !is_markdown(&doc) {
-        return None;
-    }
-    doc.canonicalize().ok()
+    (is_markdown(&doc) && doc.is_file()).then_some(doc)
 }
 
 fn root_of(server: &Server, doc: &Path) -> PathBuf {
@@ -421,7 +425,13 @@ fn asset(server: &Server, headers: &HeaderMap, path: &Path) -> Response {
     let Some(target) = path.canonicalize().ok().filter(|target| target.is_file()) else {
         return status(StatusCode::NOT_FOUND, "not found");
     };
-    if !target.starts_with(root_of(server, &doc)) {
+    let root = root_of(server, &doc);
+    let hidden = target.strip_prefix(&root).map(|inside| {
+        inside
+            .components()
+            .any(|part| part.as_os_str().to_string_lossy().starts_with('.'))
+    });
+    if hidden != Ok(false) {
         return status(StatusCode::FORBIDDEN, "forbidden");
     }
     match std::fs::read(&target) {

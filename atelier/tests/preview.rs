@@ -808,3 +808,110 @@ fn opening_refuses_what_is_not_an_existing_markdown_file() {
     assert!(String::from_utf8_lossy(&missing.stderr).contains("no such file"));
     assert!(!alive(port));
 }
+
+#[test]
+fn a_symlinked_markdown_page_reaches_only_the_repo_it_sits_in() {
+    let (_dir, root) = common::real_tempdir();
+    let repo = root.join("repo");
+    common::git_repo(&repo);
+    write(&root.join("keys/notes.md"), "hi");
+    write(&root.join("keys/id_rsa"), "PRIVATE");
+    std::os::unix::fs::symlink(root.join("keys/notes.md"), repo.join("notes.md")).unwrap();
+    let server = Preview::start();
+
+    let response = server.request(
+        "GET",
+        &encode(&root.join("keys/id_rsa")),
+        &[("Referer", &server.url(&repo.join("notes.md")))],
+        None,
+    );
+
+    assert_eq!(response.status, 403);
+}
+
+#[test]
+fn a_hidden_file_or_folder_is_never_served_to_a_page() {
+    let (_dir, root) = common::real_tempdir();
+    let repo = root.join("repo");
+    common::git_repo(&repo);
+    write(&repo.join("README.md"), "hi");
+    write(&repo.join(".env"), "TOKEN=1");
+    write(&repo.join(".git/config"), "[core]");
+    write(&root.join("README.md"), "hi");
+    write(&root.join(".netrc"), "machine x password y");
+    let server = Preview::start();
+    let get = |file: &Path, page: &Path| {
+        server
+            .request(
+                "GET",
+                &encode(file),
+                &[("Referer", &server.url(page))],
+                None,
+            )
+            .status
+    };
+
+    assert_eq!(
+        [
+            get(&repo.join(".env"), &repo.join("README.md")),
+            get(&repo.join(".git/config"), &repo.join("README.md")),
+            get(&root.join(".netrc"), &root.join("README.md")),
+        ],
+        [403, 403, 403]
+    );
+}
+
+#[test]
+fn raw_refuses_a_markdown_name_that_links_to_another_kind_of_file() {
+    let (_dir, root) = common::real_tempdir();
+    write(&root.join("credentials"), "SECRET");
+    std::os::unix::fs::symlink(root.join("credentials"), root.join("notes.md")).unwrap();
+    let server = Preview::start();
+
+    let response = server.get(&format!("/__raw{}", encode(&root.join("notes.md"))));
+
+    assert_eq!(response.status, 404);
+}
+
+#[test]
+fn events_are_only_streamed_for_an_existing_markdown_file() {
+    let (_dir, root) = common::real_tempdir();
+    write(&root.join("data.json"), "{}");
+    let server = Preview::start();
+
+    let other = server.get(&format!("/__events{}", encode(&root.join("data.json"))));
+    let missing = server.get(&format!("/__events{}", encode(&root.join("gone.md"))));
+
+    assert_eq!((other.status, missing.status), (404, 404));
+}
+
+#[test]
+fn concurrent_saves_of_the_same_notes_all_succeed() {
+    let (_dir, root) = common::real_tempdir();
+    let doc = root.join("plan.md");
+    write(&doc, "hi");
+    let server = Preview::start();
+    let path = format!("/__notes{}", encode(&doc));
+
+    let statuses: Vec<u16> = std::thread::scope(|scope| {
+        let saves: Vec<_> = (0..20)
+            .map(|n| {
+                let (server, path) = (&server, &path);
+                scope.spawn(move || {
+                    let body = format!(r#"{{"notes":[{{"id":"n{n}"}}]}}"#);
+                    server
+                        .request(
+                            "PUT",
+                            path,
+                            &[("Content-Type", "application/json")],
+                            Some(&body),
+                        )
+                        .status
+                })
+            })
+            .collect();
+        saves.into_iter().map(|save| save.join().unwrap()).collect()
+    });
+
+    assert_eq!(statuses, vec![204; 20]);
+}

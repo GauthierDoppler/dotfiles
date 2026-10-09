@@ -516,8 +516,11 @@ checkout (`tests/markdown_picker.rs`).
 - **Untrusted markdown on an origin that can read local files** is fenced on
   four sides (`tests/preview.rs`): DOMPurify and mermaid `strict`; a
   `script-src 'self'` CSP with `nosniff`; a `Host` check against DNS rebinding;
-  non-markdown files only for a markdown `Referer` in the same repo. Writes
-  require `content-type: application/json` (no preflight is ever answered).
+  non-markdown files only for a markdown `Referer` in the repo the page's URL
+  sits in (not where a symlinked page points), never a hidden file or folder.
+  Writes require `content-type: application/json` (no preflight is ever
+  answered). These fences stop web pages, not local processes: the server has
+  no authentication, so keep it off a machine other users can log into.
 
 ## Theming
 
