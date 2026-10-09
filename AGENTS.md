@@ -178,7 +178,8 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
 - **Installed into `~/.local/bin/atelier`**, called by that absolute path; every
   caller must still work when it is absent.
 - **`atelier doctor` turns what this file asks you to remember into checks**
-  (`src/doctor.rs`): `ok`, `FAIL` with a one-line `fix:`, `skip`, or `look`. **The
+  (listed in order in `src/doctor.rs`, grouped by what they inspect in
+  `src/doctor/`): `ok`, `FAIL` with a one-line `fix:`, `skip`, or `look`. **The
   Nerd Font is `look`, never `ok`**: no terminal reports which font draws a glyph.
 - **CI** (`.github/workflows/atelier.yml`): fmt, clippy `-D warnings` and tests on
   Linux and macOS, plus shellcheck. Tests run under cargo-nextest
