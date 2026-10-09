@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command as Process, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 
 use clap::Subcommand;
@@ -161,7 +161,7 @@ fn start_server(port: u16) -> Result<()> {
         }
         return Err(format!("server down and service {LABEL} did not start -- see atelier service list").into());
     }
-    Process::new(std::env::current_exe()?)
+    crate::process::command(std::env::current_exe()?)
         .args(["preview", "serve"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -189,7 +189,7 @@ function run([url]) {
 
 #[cfg(target_os = "macos")]
 fn show(url: &str) {
-    let focused = Process::new("osascript")
+    let focused = crate::process::command("osascript")
         .args(["-l", "JavaScript", "-e", FOCUS, url])
         .stdin(Stdio::null())
         .stderr(Stdio::null())
@@ -198,7 +198,7 @@ fn show(url: &str) {
     if focused {
         return;
     }
-    let opened = Process::new("open")
+    let opened = crate::process::command("open")
         .args(["-a", "Google Chrome", url])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn the_label_names_the_service_that_runs_the_preview_server() {
         let label = format!("label = \"{}\"", super::LABEL);
-        let service = include_str!("../../../services.toml")
+        let service = include_str!("../../services.toml")
             .split("[[service]]")
             .find(|block| block.contains(&label))
             .expect("services.toml declares the preview's label");

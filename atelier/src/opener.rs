@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
 use std::os::unix::process::CommandExt;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use crate::Result;
 
@@ -10,7 +10,7 @@ const OPENER: &str = "open";
 const OPENER: &str = "xdg-open";
 
 pub fn open(target: impl AsRef<OsStr>) -> Result<()> {
-    Command::new(OPENER)
+    crate::process::command(OPENER)
         .arg(target)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

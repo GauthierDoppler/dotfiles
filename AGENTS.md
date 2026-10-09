@@ -109,16 +109,20 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
 `atelier/` is a Rust binary crate (edition 2021, clap derive); the plan is
 `docs/atelier/spec.md` and `docs/atelier/tickets/`.
 
-- **A feature is a module plus one line.** It lives in `src/<feature>.rs` (or
-  `src/<feature>/`), exposes `pub enum Command` deriving `clap::Subcommand` with
-  `pub fn run(self, tmux: &Tmux) -> Result<()>`, and is registered by one line in
-  the `features!` list in `main.rs`. Top-level commands (`atelier daemon`,
+- **A feature is a module plus one line.** It lives in `src/<feature>.rs`, with
+  its parts in `src/<feature>/` when it has several; never a `mod.rs`
+  (`clippy::mod_module_files`, denied in `Cargo.toml`). It exposes `pub enum
+  Command` deriving `clap::Subcommand` with `pub fn run(self, tmux: &Tmux) ->
+  Result<()>`, and is registered by one line in the `features!` list in
+  `main.rs`. Top-level commands (`atelier daemon`,
   `atelier status`) go after `; top level:`. A feature with flags and no
   subcommands derives `clap::Args` and calls `crate::flags_only!(Command)`. Keep
   `main.rs` and `Cargo.toml` small; every branch touches them.
 - **Shared modules** (`tmux`, `session`, `git`, `shell`, `fzf`, `opener`,
-  `process`, `dotfiles`, `fnv`): git only through `git`, other programs through
-  `process`, `$HOME` and the checkout through `dotfiles`.
+  `process`, `dotfiles`, `fnv`): git only through `git`, `$HOME` and the
+  checkout through `dotfiles`. Every program starts from
+  `process::command`: `Command::new` is a disallowed method (`clippy.toml`)
+  everywhere else; integration tests allow it at their crate root.
 - **tmux only through `tmux::Tmux`**, always on an explicit socket (`--socket`,
   else `$TMUX`). The binary is the first `tmux` on `PATH`, else the
   Homebrew/Linuxbrew/system prefixes, because hooks run with a thin `PATH`

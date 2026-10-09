@@ -29,7 +29,7 @@ impl Tmux {
     }
 
     pub fn command(&self) -> Command {
-        let mut command = Command::new(&self.program);
+        let mut command = crate::process::command(&self.program);
         if let Some(socket) = &self.socket {
             command.arg("-S").arg(socket);
         }

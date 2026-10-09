@@ -1,8 +1,13 @@
 use std::ffi::OsStr;
 use std::process::{Command, Output, Stdio};
 
-pub fn output<S: AsRef<OsStr>>(program: impl AsRef<OsStr>, args: &[S]) -> Option<Output> {
+#[allow(clippy::disallowed_methods)]
+pub fn command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
+}
+
+pub fn output<S: AsRef<OsStr>>(program: impl AsRef<OsStr>, args: &[S]) -> Option<Output> {
+    command(program)
         .args(args)
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
@@ -19,7 +24,7 @@ pub fn stdout_of<S: AsRef<OsStr>>(program: impl AsRef<OsStr>, args: &[S]) -> Opt
 }
 
 pub fn succeeds<S: AsRef<OsStr>>(program: impl AsRef<OsStr>, args: &[S]) -> bool {
-    Command::new(program)
+    command(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

@@ -115,7 +115,7 @@ fn ensure(tmux: &Tmux) -> Result<()> {
         return Ok(());
     }
     let log = File::create(&paths.log)?;
-    std::process::Command::new(std::env::current_exe()?)
+    crate::process::command(std::env::current_exe()?)
         .arg("--socket")
         .arg(&socket)
         .arg("daemon")

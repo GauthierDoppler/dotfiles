@@ -28,7 +28,7 @@ pub fn atelier(tmux: &Tmux) -> Result<String> {
 }
 
 pub fn picker(prompt: &str, header: &str, modal_keys: &str) -> Command {
-    let mut fzf = Command::new("fzf");
+    let mut fzf = crate::process::command("fzf");
     fzf.args([
         "--no-multi",
         "--disabled",

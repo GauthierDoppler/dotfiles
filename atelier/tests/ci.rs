@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 mod common;
 
 const WORKFLOW: &str = include_str!("../../.github/workflows/atelier.yml");

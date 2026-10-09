@@ -23,3 +23,7 @@ unicode-width = "0.2.2"
 [dev-dependencies]
 insta = "1.49.0"
 tempfile = "3"
+
+[lints.clippy]
+disallowed_methods = "deny"
+mod_module_files = "deny"

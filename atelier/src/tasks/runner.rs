@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use crate::fzf;
 use crate::shell;
@@ -162,7 +162,7 @@ pub fn execute(tmux: &Tmux, root: &Path, name: &str, mark: bool) -> Result<()> {
 
     let script = root.join(".tmux").join(name);
     let outcome = if root.is_dir() {
-        Command::new(&script)
+        crate::process::command(&script)
             .current_dir(root)
             .env("TMUX_TASK_ROOT", root)
             .env("TMUX_TASK_NAME", name)
@@ -204,7 +204,7 @@ pub fn execute(tmux: &Tmux, root: &Path, name: &str, mark: bool) -> Result<()> {
 
 fn wait_for_key() {
     let stty = |args: &[&str]| {
-        Command::new("stty")
+        crate::process::command("stty")
             .args(args)
             .stdin(Stdio::inherit())
             .stderr(Stdio::null())

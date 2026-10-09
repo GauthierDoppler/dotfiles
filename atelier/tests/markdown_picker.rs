@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 mod common;
 
 use std::io::{Read, Write};

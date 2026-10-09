@@ -1,7 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::os::unix::process::CommandExt;
-use std::process::Command as Process;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -143,7 +142,7 @@ fn restart(exe: &Path) -> bool {
     if cfg!(target_os = "macos") && std::env::var("XPC_SERVICE_NAME").as_deref() == Ok(super::LABEL) {
         return crate::service::restart(super::LABEL);
     }
-    let error = Process::new(exe).args(["preview", "serve"]).exec();
+    let error = crate::process::command(exe).args(["preview", "serve"]).exec();
     eprintln!("md-preview: cannot restart from {}: {error}", exe.display());
     false
 }
