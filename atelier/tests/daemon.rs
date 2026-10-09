@@ -248,3 +248,26 @@ fn the_daemon_attaching_keeps_the_last_attached_session_first() {
     assert!(before.starts_with("$1\talpha"), "{before}");
     assert_eq!(after, before);
 }
+
+#[test]
+fn a_git_that_hangs_does_not_stop_the_daemon_following_tmux() {
+    let repo = tempfile::tempdir().unwrap();
+    common::git_repo(repo.path());
+    let bin = tempfile::tempdir().unwrap();
+    let git = bin.path().join("git");
+    std::fs::write(&git, "#!/bin/sh\nexec /bin/sleep 30\n").unwrap();
+    std::fs::set_permissions(&git, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let tmux = server();
+    tmux.new_session("work", repo.path());
+    let mut daemon = tmux
+        .atelier_command(&["daemon"])
+        .env("PATH", bin.path())
+        .spawn()
+        .unwrap();
+
+    eventually(&tmux, "daemon: running\nwork\n  0 sh");
+    tmux.tmux(&["new-window", "-d", "-t", "work:1"]);
+    eventually(&tmux, "daemon: running\nwork\n  0 sh\n  1 sh");
+    let _ = daemon.kill();
+    daemon.wait().unwrap();
+}

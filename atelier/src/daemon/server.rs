@@ -2,14 +2,13 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
-use super::bar::{adopt, Pusher, RESIZED};
+use super::bar::{adopt, RESIZED};
 use super::control::{Event, Notification, Parser};
-use super::repos::Repos;
+use super::render::{self, Input};
 use super::state::{Query, State};
 use super::{Paths, Request, StatusReply};
 use crate::tmux::Tmux;
@@ -36,14 +35,28 @@ async fn serve(tmux_socket: &Path, listener: std::os::unix::net::UnixListener) -
     let listener = UnixListener::from_std(listener)?;
     let state = Shared::default();
     let tmux = Tmux::new(Some(tmux_socket.to_path_buf()));
-    while let Some(target) = first_in_picker_order(&tmux) {
-        if !follow(&tmux, &target, &listener, &state).await?
-            && tmux.run(&["has-session", "-t", &target]).is_ok()
-        {
+    while let Some(target) = blocking(tmux_socket, first_in_picker_order).await? {
+        let attached = follow(&tmux, &target, &listener, &state).await?;
+        let gone = {
+            let target = target.clone();
+            blocking(tmux_socket, move |tmux| {
+                tmux.run(&["has-session", "-t", &target]).is_err()
+            })
+            .await?
+        };
+        if !attached && !gone {
             break;
         }
     }
     Ok(())
+}
+
+async fn blocking<T: Send + 'static>(
+    tmux_socket: &Path,
+    work: impl FnOnce(&Tmux) -> T + Send + 'static,
+) -> Result<T> {
+    let socket = tmux_socket.to_path_buf();
+    Ok(tokio::task::spawn_blocking(move || work(&Tmux::new(Some(socket)))).await?)
 }
 
 fn first_in_picker_order(tmux: &Tmux) -> Option<String> {
@@ -84,12 +97,11 @@ async fn follow(
     let mut parser = Parser::default();
     let mut pending = VecDeque::from([Pending::Me]);
     let mut out = "display-message -p '#{client_name}'\n".to_string();
-    let mut pusher = Pusher::default();
-    let (mut repos, mut changes) = Repos::new();
+    let (rendered, mut commands) = tokio::sync::mpsc::unbounded_channel();
+    let render = render::spawn(rendered);
     let mut push_due = false;
     let mut stale = true;
     let mut attached = false;
-    let mut battery = tokio::time::interval(Duration::from_secs(60));
     loop {
         if stale && pending.is_empty() {
             out.extend(Query::ALL.iter().map(|q| q.control_line()));
@@ -102,18 +114,14 @@ async fn follow(
                 let state = lock(state);
                 (state.watched(), state.fields())
             };
-            repos.follow(&sessions);
-            for command in pusher.commands(watched, &mut repos) {
-                out.push_str(&command);
-                out.push('\n');
-                pending.push_back(Pending::Ignored);
+            if render.send(Input::Push { watched, sessions }).is_err() {
+                break;
             }
             push_due = false;
         }
         if !out.is_empty() && input.write_all(std::mem::take(&mut out).as_bytes()).await.is_err() {
             break;
         }
-        let settle = repos.due();
         tokio::select! {
             line = lines.next_line() => {
                 let Ok(Some(line)) = line else { break };
@@ -143,12 +151,12 @@ async fn follow(
                     None => {}
                 }
             }
-            Some(change) = changes.recv() => repos.note(change),
-            _ = tokio::time::sleep_until(settle.unwrap_or_else(std::time::Instant::now).into()), if settle.is_some() => {
-                push_due |= repos.settle();
-            }
-            _ = battery.tick() => {
-                push_due |= pusher.battery_changed();
+            Some(pushed) = commands.recv() => {
+                for command in pushed {
+                    out.push_str(&command);
+                    out.push('\n');
+                    pending.push_back(Pending::Ignored);
+                }
             }
             connection = listener.accept() => {
                 tokio::spawn(answer(connection?.0, state.clone()));

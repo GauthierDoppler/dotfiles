@@ -1,5 +1,6 @@
 mod bar;
 mod control;
+mod render;
 mod repos;
 mod server;
 mod state;

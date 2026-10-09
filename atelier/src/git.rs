@@ -2,16 +2,18 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
+
+const LIMIT: Duration = Duration::from_secs(10);
 
 fn git_bytes(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let output = crate::process::command("git")
-        .arg("-C")
+    let mut git = crate::process::command("git");
+    git.arg("-C")
         .arg(dir)
         .args(args)
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
+        .stderr(Stdio::null());
+    let output = crate::process::output_within(&mut git, LIMIT)?;
     output.status.success().then_some(output.stdout)
 }
 

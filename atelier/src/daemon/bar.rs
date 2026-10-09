@@ -33,7 +33,7 @@ impl Pusher {
         changed
     }
 
-    pub fn commands(&mut self, watched: Vec<Watched>, repos: &mut Repos) -> Vec<String> {
+    pub fn commands(&mut self, watched: &[Watched], repos: &mut Repos) -> Vec<String> {
         self.battery = Battery::read();
         let mut commands = Vec::new();
         for session in watched {
@@ -54,7 +54,7 @@ impl Pusher {
                 "set-option -t {target} @bar_right {}",
                 quote(&blocks.right)
             ));
-            self.shown.insert(session.session, blocks);
+            self.shown.insert(session.session.clone(), blocks);
         }
         commands
     }

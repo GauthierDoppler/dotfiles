@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, WatcherKind};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use crate::git::{self, RepoCounts};
 use crate::session::{self, Field, Identity};
@@ -11,7 +10,6 @@ use crate::session::{self, Field, Identity};
 const SETTLE: Duration = Duration::from_millis(200);
 
 pub type Fields = [String; Field::ALL.len()];
-pub type Changes = UnboundedReceiver<notify::Result<Event>>;
 
 #[derive(PartialEq)]
 struct Layout {
@@ -131,22 +129,18 @@ pub struct Repos {
 }
 
 impl Repos {
-    pub fn new() -> (Repos, Changes) {
-        let (sender, changes) = unbounded_channel();
-        let watcher = notify::recommended_watcher(move |event| {
-            let _ = sender.send(event);
-        })
+    pub fn new(on_change: impl Fn(notify::Result<Event>) + Send + 'static) -> Repos {
+        let watcher = notify::recommended_watcher(on_change)
         .inspect_err(|error| eprintln!("atelier: no repo watcher: {error}"))
         .ok();
-        let repos = Repos {
+        Repos {
             watcher,
             repos: HashMap::new(),
             located: HashMap::new(),
             watching: HashMap::new(),
             unwatchable: HashSet::new(),
             identities: HashMap::new(),
-        };
-        (repos, changes)
+        }
     }
 
     pub fn follow(&mut self, sessions: &[Fields]) {

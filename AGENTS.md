@@ -170,6 +170,11 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
   repo counts follow a file watcher, never a timer
   (`bar_daemon.rs::no_git_process_starts_while_the_repo_is_untouched`). Its tests
   turn `automatic-rename` off (tmux applies it lazily). Mechanics: design notes.
+- **Async code never blocks.** The daemon's event loop only reads and writes
+  tmux and its socket; git, the file watcher and the battery run on the render
+  thread (`src/daemon/render.rs`), anything else through
+  `tokio::task::spawn_blocking`. Every git call has a 10 s limit
+  (`daemon.rs::a_git_that_hangs_does_not_stop_the_daemon_following_tmux`).
 - **Installed into `~/.local/bin/atelier`**, called by that absolute path; every
   caller must still work when it is absent.
 - **`atelier doctor` turns what this file asks you to remember into checks**
