@@ -1,12 +1,12 @@
 ---
 source: tests/service.rs
-expression: unit
+expression: content
 ---
 [Unit]
-Description=cc-tap inspector proxy on 127.0.0.1:8089
+Description=Web server on 127.0.0.1:8080
 
 [Service]
-ExecStart=%h/.local/bin/cc-tap-service proxy
+ExecStart=%h/.local/bin/web serve --port=8080
 Restart=always
 RestartSec=10
 

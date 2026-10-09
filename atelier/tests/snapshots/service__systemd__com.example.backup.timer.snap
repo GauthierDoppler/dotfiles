@@ -1,9 +1,9 @@
 ---
 source: tests/service.rs
-expression: unit
+expression: content
 ---
 [Unit]
-Description=Install cc-tap@latest once per weekday
+Description=Back up the notes once per weekday
 
 [Timer]
 OnActiveSec=0

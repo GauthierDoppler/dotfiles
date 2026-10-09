@@ -403,9 +403,9 @@ fn dangle(home: &Home, relative: &str, target: &Path) {
 }
 
 #[test]
-fn links_left_dangling_into_the_repo_by_an_older_install_are_removed() {
+fn links_left_dangling_into_the_repo_are_removed() {
     let home = Home::new();
-    for name in ["tmux-pick", "tmux-status-right", "md-preview"] {
+    for name in ["removed-tool", "renamed-tool"] {
         dangle(
             &home,
             &format!(".local/bin/{name}"),
@@ -418,7 +418,7 @@ fn links_left_dangling_into_the_repo_by_an_older_install_are_removed() {
 
     let h = home.path().display();
     let r = common::repo().display().to_string();
-    for name in ["tmux-pick", "tmux-status-right", "md-preview"] {
+    for name in ["removed-tool", "renamed-tool"] {
         assert!(fs::symlink_metadata(home.join(&format!(".local/bin/{name}"))).is_err());
         let line = format!("pruned: {h}/.local/bin/{name} -> {r}/scripts/{name}");
         assert!(output.lines().any(|l| l == line), "{line:?} in {output}");

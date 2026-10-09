@@ -503,15 +503,14 @@ fn sha1_hex(text: &str) -> String {
     sha1_smol::Sha1::from(text).digest().to_string()
 }
 
-fn written_by_bun(doc: &Path) -> String {
-    include_str!("fixtures/preview/notes-written-by-bun.json")
-        .replace("{{PATH}}", doc.to_str().unwrap())
+fn notes_file(doc: &Path) -> String {
+    include_str!("fixtures/preview/notes-file.json").replace("{{PATH}}", doc.to_str().unwrap())
 }
 
 const NOTES_AS_SENT: &str = r###"{"notes":[{"id":"1759912345678-k3x9a","l0":3,"l1":3,"snip0":"## Rollout","snip1":"## Rollout","text":"say \"when\", not \"soon\"","orphan":false},{"id":"1759912399001-p0q2z","l0":12,"l1":14,"snip0":"- migrate the é/ü table","snip1":"```","text":"two lines?\nsplit — or ✓ merge\tthem","orphan":true}]}"###;
 
 #[test]
-fn notes_written_by_the_old_server_are_read_back_unchanged() {
+fn a_notes_file_on_disk_is_read_back_unchanged() {
     let (_dir, root) = common::real_tempdir();
     let doc = root.join("my plans/é plan.md");
     write(&doc, "# Plan\n");
@@ -520,7 +519,7 @@ fn notes_written_by_the_old_server_are_read_back_unchanged() {
         &server
             .notes_dir()
             .join(format!("{}.json", sha1_hex(doc.to_str().unwrap()))),
-        &written_by_bun(&doc),
+        &notes_file(&doc),
     );
 
     let notes = server.get(&format!("/__notes{}", encode(&doc)));
@@ -530,7 +529,7 @@ fn notes_written_by_the_old_server_are_read_back_unchanged() {
 }
 
 #[test]
-fn notes_are_saved_byte_for_byte_where_the_old_server_kept_them() {
+fn notes_are_saved_byte_for_byte_in_the_on_disk_format() {
     let (_dir, root) = common::real_tempdir();
     let doc = root.join("my plans/é plan.md");
     let server = Preview::start();
@@ -547,10 +546,7 @@ fn notes_are_saved_byte_for_byte_where_the_old_server_kept_them() {
     let file = server
         .notes_dir()
         .join(format!("{}.json", sha1_hex(doc.to_str().unwrap())));
-    assert_eq!(
-        std::fs::read_to_string(&file).unwrap(),
-        written_by_bun(&doc)
-    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), notes_file(&doc));
     assert_eq!(server.get(&path).text(), NOTES_AS_SENT);
 
     let cleared = server.request(

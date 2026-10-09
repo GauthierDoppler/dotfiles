@@ -151,6 +151,12 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
   on sockets), and never reaches a real browser or service manager: the
   opener, `osascript`, `launchctl` and `systemctl` are looked up on `PATH` so a
   test can fake them.
+- **Tests describe behaviour, never the code they replaced**: no parity table
+  against a removed script, no name that says where a fixture came from.
+  Fixtures use made-up names (`my-app`, `com.example.web`), never a real project
+  or service; the service and doctor tests read `tests/fixtures/services.toml`,
+  and one test alone loads the repo's own
+  (`service.rs::the_repo_s_own_services_toml_is_valid`).
 - **The daemon (`src/daemon/`) is one per tmux socket**, started by `atelier
   daemon --ensure` from `dot_tmux.conf`
   (`daemon.rs::ensuring_the_daemon_again_keeps_a_single_one`); its files live in
@@ -506,7 +512,7 @@ checkout (`tests/markdown_picker.rs`).
   via `launchctl kickstart -k`, since a `KeepAlive` respawn is deferred for
   minutes (`pended nondemand spawn = inefficient`).
 - **Notes live in `~/.local/share/md-preview/notes/<sha1 of path>.json`**, never
-  `localStorage` (`preview.rs::notes_written_by_the_old_server_are_read_back_unchanged`).
+  `localStorage` (`preview.rs::a_notes_file_on_disk_is_read_back_unchanged`).
 - **Untrusted markdown on an origin that can read local files** is fenced on
   four sides (`tests/preview.rs`): DOMPurify and mermaid `strict`; a
   `script-src 'self'` CSP with `nosniff`; a `Host` check against DNS rebinding;

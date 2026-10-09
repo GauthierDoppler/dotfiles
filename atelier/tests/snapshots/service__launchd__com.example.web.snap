@@ -6,12 +6,12 @@ expression: plist
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.github.gauthierdoppler.md-preview</string>
+  <key>Label</key><string>com.example.web</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>exec "$HOME/.local/bin/atelier" preview serve >>"$HOME/Library/Logs/md-preview.log" 2>&amp;1</string>
+    <string>exec "$HOME/.local/bin/web" serve --port=8080 >>"$HOME/Library/Logs/web.log" 2>&amp;1</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

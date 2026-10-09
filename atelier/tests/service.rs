@@ -2,17 +2,14 @@ mod common;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use common::BoundedOutput;
 
-const LABELS: &[&str] = &[
-    "com.theodo.cc-tap.dashboard",
-    "com.theodo.cc-tap.proxy",
-    "com.theodo.cc-tap.update",
-    "com.github.gauthierdoppler.md-preview",
-];
+const WEB: &str = "com.example.web";
+const BACKUP: &str = "com.example.backup";
+const LABELS: &[&str] = &[WEB, BACKUP];
 
 const FAKE_LAUNCHCTL: &str = r#"#!/bin/sh
 echo "launchctl $*" >>"$FAKE_LOG"
@@ -47,6 +44,7 @@ esac
 struct Machine {
     home: tempfile::TempDir,
     fakes: tempfile::TempDir,
+    repo: tempfile::TempDir,
 }
 
 impl Machine {
@@ -54,6 +52,7 @@ impl Machine {
         let machine = Machine {
             home: tempfile::tempdir().unwrap(),
             fakes: tempfile::tempdir().unwrap(),
+            repo: common::repo_with_fixture_services(),
         };
         fs::create_dir(machine.fakes.path().join("bin")).unwrap();
         fs::create_dir(machine.fakes.path().join("state")).unwrap();
@@ -82,6 +81,10 @@ impl Machine {
     }
 
     fn command(&self, args: &[&str]) -> Command {
+        self.command_in(self.repo.path(), args)
+    }
+
+    fn command_in(&self, repo: &Path, args: &[&str]) -> Command {
         let path = format!(
             "{}:{}",
             self.fakes.path().join("bin").display(),
@@ -92,7 +95,7 @@ impl Machine {
             .arg("service")
             .args(args)
             .arg("--repo")
-            .arg(common::repo())
+            .arg(repo)
             .env("HOME", self.home.path())
             .env_remove("XDG_CONFIG_HOME")
             .env("USER", "alice")
@@ -153,8 +156,8 @@ fn launchd_agents_are_generated_from_the_description() {
 fn launchd_install_bootstraps_every_agent_then_only_kickstarts_on_a_rerun() {
     let machine = Machine::new();
     let uid = uid();
-    let dashboard = format!("gui/{uid}/com.theodo.cc-tap.dashboard");
-    let plist = machine.agents().join("com.theodo.cc-tap.dashboard.plist");
+    let web = format!("gui/{uid}/{WEB}");
+    let plist = machine.agents().join(format!("{WEB}.plist"));
 
     machine.ok(&["install", "--system", "launchd"]);
     let first = machine.calls();
@@ -162,7 +165,7 @@ fn launchd_install_bootstraps_every_agent_then_only_kickstarts_on_a_rerun() {
         "launchctl bootstrap gui/{uid} {}",
         plist.display()
     )));
-    assert!(first.contains(&format!("launchctl kickstart {dashboard}")));
+    assert!(first.contains(&format!("launchctl kickstart {web}")));
     let written = fs::metadata(&plist).unwrap().modified().unwrap();
 
     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -171,9 +174,9 @@ fn launchd_install_bootstraps_every_agent_then_only_kickstarts_on_a_rerun() {
     assert!(!second
         .iter()
         .any(|call| call.contains("bootstrap") || call.contains("bootout")));
-    assert!(second.contains(&format!("launchctl kickstart {dashboard}")));
+    assert!(second.contains(&format!("launchctl kickstart {web}")));
     assert_eq!(fs::metadata(&plist).unwrap().modified().unwrap(), written);
-    assert!(output.contains("agent ok: com.theodo.cc-tap.dashboard"));
+    assert!(output.contains(&format!("agent ok: {WEB}")));
 }
 
 #[test]
@@ -182,7 +185,7 @@ fn launchd_install_reloads_only_the_agent_whose_plist_changed() {
     let uid = uid();
     machine.ok(&["install", "--system", "launchd"]);
     machine.calls();
-    let plist = machine.agents().join("com.theodo.cc-tap.proxy.plist");
+    let plist = machine.agents().join(format!("{WEB}.plist"));
     fs::write(&plist, "stale").unwrap();
 
     machine.ok(&["install", "--system", "launchd"]);
@@ -194,13 +197,13 @@ fn launchd_install_reloads_only_the_agent_whose_plist_changed() {
     assert_eq!(
         reloads,
         [
-            format!("launchctl bootout gui/{uid}/com.theodo.cc-tap.proxy"),
+            format!("launchctl bootout gui/{uid}/{WEB}"),
             format!("launchctl bootstrap gui/{uid} {}", plist.display()),
         ]
     );
     assert!(fs::read_to_string(&plist)
         .unwrap()
-        .contains("cc-tap-service\" proxy"));
+        .contains("/web\" serve --port=8080"));
 }
 
 #[test]
@@ -212,9 +215,7 @@ fn launchd_install_loads_an_unchanged_agent_that_is_not_loaded() {
     machine.calls();
 
     machine.ok(&["install", "--system", "launchd"]);
-    let plist = machine
-        .agents()
-        .join("com.github.gauthierdoppler.md-preview.plist");
+    let plist = machine.agents().join(format!("{BACKUP}.plist"));
     assert!(machine.calls().contains(&format!(
         "launchctl bootstrap gui/{uid} {}",
         plist.display()
@@ -263,48 +264,27 @@ fn launchd_uninstall_boots_out_and_removes_every_agent() {
 fn launchd_list_shows_each_agent_file_and_state() {
     let machine = Machine::new();
     machine.ok(&["install", "--system", "launchd"]);
+    fs::write(machine.agents().join(format!("{WEB}.plist")), "stale").unwrap();
     fs::write(
-        machine.agents().join("com.theodo.cc-tap.proxy.plist"),
-        "stale",
-    )
-    .unwrap();
-    fs::remove_file(
-        machine
-            .fakes
-            .path()
-            .join("state/launchd/com.theodo.cc-tap.update"),
-    )
-    .unwrap();
-    fs::write(
-        machine
-            .fakes
-            .path()
-            .join("state/launchd/com.theodo.cc-tap.proxy"),
+        machine.fakes.path().join("state/launchd").join(WEB),
         "spawn scheduled\n",
     )
     .unwrap();
+    fs::remove_file(machine.fakes.path().join("state/launchd").join(BACKUP)).unwrap();
 
     assert_eq!(
         rows(&machine.ok(&["list", "--system", "launchd"])),
         [
-            ["com.theodo.cc-tap.dashboard", "up to date", "running"],
-            ["com.theodo.cc-tap.proxy", "outdated", "spawn scheduled"],
-            ["com.theodo.cc-tap.update", "up to date", "not loaded"],
-            [
-                "com.github.gauthierdoppler.md-preview",
-                "up to date",
-                "running"
-            ],
+            [WEB, "outdated", "spawn scheduled"],
+            [BACKUP, "up to date", "not loaded"],
         ]
     );
 }
 
 const UNITS: &[&str] = &[
-    "com.theodo.cc-tap.dashboard.service",
-    "com.theodo.cc-tap.proxy.service",
-    "com.theodo.cc-tap.update.service",
-    "com.theodo.cc-tap.update.timer",
-    "com.github.gauthierdoppler.md-preview.service",
+    "com.example.web.service",
+    "com.example.backup.service",
+    "com.example.backup.timer",
 ];
 
 #[test]
@@ -326,21 +306,14 @@ fn systemd_install_reloads_and_restarts_what_changed_and_starts_the_rest() {
     machine.ok(&["install", "--system", "systemd"]);
     let first = machine.calls();
     assert!(first.contains(&"systemctl --user daemon-reload".to_owned()));
-    for unit in [
-        "com.theodo.cc-tap.dashboard.service",
-        "com.theodo.cc-tap.update.timer",
-    ] {
+    for unit in ["com.example.web.service", "com.example.backup.timer"] {
         assert!(first.contains(&format!("systemctl --user enable {unit}")));
         assert!(first.contains(&format!("systemctl --user restart {unit}")));
     }
-    assert!(!first.iter().any(|call| call.contains("update.service")));
+    assert!(!first.iter().any(|call| call.contains("backup.service")));
 
-    fs::write(
-        machine.units().join("com.theodo.cc-tap.update.service"),
-        "stale",
-    )
-    .unwrap();
-    let written = fs::metadata(machine.units().join("com.theodo.cc-tap.proxy.service"))
+    fs::write(machine.units().join("com.example.backup.service"), "stale").unwrap();
+    let written = fs::metadata(machine.units().join("com.example.web.service"))
         .unwrap()
         .modified()
         .unwrap();
@@ -354,15 +327,13 @@ fn systemd_install_reloads_and_restarts_what_changed_and_starts_the_rest() {
             .collect::<Vec<_>>(),
         [
             "systemctl --user daemon-reload",
-            "systemctl --user enable --now com.theodo.cc-tap.dashboard.service",
-            "systemctl --user enable --now com.theodo.cc-tap.proxy.service",
-            "systemctl --user enable com.theodo.cc-tap.update.timer",
-            "systemctl --user restart com.theodo.cc-tap.update.timer",
-            "systemctl --user enable --now com.github.gauthierdoppler.md-preview.service",
+            "systemctl --user enable --now com.example.web.service",
+            "systemctl --user enable com.example.backup.timer",
+            "systemctl --user restart com.example.backup.timer",
         ]
     );
     assert_eq!(
-        fs::metadata(machine.units().join("com.theodo.cc-tap.proxy.service"))
+        fs::metadata(machine.units().join("com.example.web.service"))
             .unwrap()
             .modified()
             .unwrap(),
@@ -397,7 +368,7 @@ fn systemd_install_honours_xdg_config_home() {
         .unwrap();
     assert!(output.status.success());
     assert!(machine
-        .home("xdg/systemd/user/com.theodo.cc-tap.update.timer")
+        .home("xdg/systemd/user/com.example.backup.timer")
         .is_file());
 }
 
@@ -412,12 +383,8 @@ fn systemd_uninstall_disables_and_removes_every_unit() {
     for unit in UNITS {
         assert!(!machine.units().join(unit).exists(), "{unit} left behind");
     }
-    assert!(
-        calls.contains(&"systemctl --user disable --now com.theodo.cc-tap.update.timer".to_owned())
-    );
-    assert!(calls.contains(
-        &"systemctl --user disable --now com.theodo.cc-tap.dashboard.service".to_owned()
-    ));
+    assert!(calls.contains(&"systemctl --user disable --now com.example.backup.timer".to_owned()));
+    assert!(calls.contains(&"systemctl --user disable --now com.example.web.service".to_owned()));
     assert_eq!(calls.last().unwrap(), "systemctl --user daemon-reload");
 }
 
@@ -425,21 +392,30 @@ fn systemd_uninstall_disables_and_removes_every_unit() {
 fn systemd_list_shows_each_unit_file_and_activity() {
     let machine = Machine::new();
     machine.ok(&["install", "--system", "systemd"]);
-    fs::remove_file(machine.units().join("com.theodo.cc-tap.update.timer")).unwrap();
+    fs::remove_file(machine.units().join("com.example.backup.timer")).unwrap();
 
     assert_eq!(
         rows(&machine.ok(&["list", "--system", "systemd"])),
         [
-            ["com.theodo.cc-tap.dashboard", "up to date", "active"],
-            ["com.theodo.cc-tap.proxy", "up to date", "active"],
-            ["com.theodo.cc-tap.update", "not installed", "active"],
-            [
-                "com.github.gauthierdoppler.md-preview",
-                "up to date",
-                "active"
-            ],
+            [WEB, "up to date", "active"],
+            [BACKUP, "not installed", "active"],
         ]
     );
+}
+
+#[test]
+fn the_repo_s_own_services_toml_is_valid() {
+    let machine = Machine::new();
+    let output = machine
+        .command_in(&common::repo(), &["list", "--system", "systemd"])
+        .bounded_output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!rows(&String::from_utf8(output.stdout).unwrap()).is_empty());
 }
 
 fn rows(listing: &str) -> Vec<Vec<String>> {

@@ -79,56 +79,6 @@ mod tests {
 
     const LONG: &str = "a-really-long-project-name-that-overflows";
 
-    type BashRow = (&'static str, Option<Checkout>, u16, usize, &'static str);
-
-    #[rustfmt::skip]
-    const BASH: &[BashRow] = &[
-        ("scratch", None, 60, 20, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        ("scratch", None, 80, 20, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]         "),
-        ("scratch", None, 90, 35, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]        "),
-        ("scratch", None, 99, 35, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                 "),
-        ("scratch", None, 100, 35, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                  "),
-        ("scratch", None, 119, 35, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                        "),
-        ("scratch", None, 120, 49, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                        "),
-        ("scratch", None, 200, 49, "#[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#c6d0f5,bold] scratch #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                                      "),
-        ("bp-api", Some(Checkout::Root), 60, 20, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        ("bp-api", Some(Checkout::Root), 80, 20, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold] "),
-        ("bp-api", Some(Checkout::Root), 90, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        ("bp-api", Some(Checkout::Root), 99, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]         "),
-        ("bp-api", Some(Checkout::Root), 100, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]          "),
-        ("bp-api", Some(Checkout::Root), 119, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                "),
-        ("bp-api", Some(Checkout::Root), 120, 49, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                "),
-        ("bp-api", Some(Checkout::Root), 200, 49, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                              "),
-        ("bp-api", Some(Checkout::Worktree), 60, 20, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        ("bp-api", Some(Checkout::Worktree), 80, 20, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]   "),
-        ("bp-api", Some(Checkout::Worktree), 90, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]  "),
-        ("bp-api", Some(Checkout::Worktree), 99, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]           "),
-        ("bp-api", Some(Checkout::Worktree), 100, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]            "),
-        ("bp-api", Some(Checkout::Worktree), 119, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                  "),
-        ("bp-api", Some(Checkout::Worktree), 120, 49, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                  "),
-        ("bp-api", Some(Checkout::Worktree), 200, 49, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] bp-api #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#ef9f76,bold] wt #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]                                "),
-        (LONG, Some(Checkout::Root), 60, 20, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 80, 20, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 90, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 99, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 100, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 119, 35, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 120, 49, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]"),
-        (LONG, Some(Checkout::Root), 200, 49, "#[fg=#ca9ee6,bg=#414559]\u{e0b6}#[bg=#ca9ee6,fg=#303446,bold] a-really-long-project-n… #[fg=#ca9ee6,bg=#414559,nobold]\u{e0b4}#[bg=#414559] #[fg=#51576d,bg=#414559]\u{e0b6}#[bg=#51576d,fg=#949cbb,bold] root #[fg=#51576d,bg=#414559,nobold]\u{e0b4}#[bg=#414559,fg=#949cbb,nobold]            "),
-    ];
-
-    #[test]
-    fn renders_exactly_what_the_bash_script_it_replaced_rendered() {
-        for &(project, checkout, client_width, right_width, bash) in BASH {
-            let left = Left { project, checkout };
-            assert_eq!(
-                left.render(client_width, right_width),
-                bash,
-                "{project} at {client_width} columns"
-            );
-        }
-    }
-
     const TIERS: [u16; 7] = [60, 80, 90, 100, 120, 160, 200];
 
     fn cells(rendered: &str) -> usize {
@@ -165,7 +115,7 @@ mod tests {
         snapshot_tiers(
             "short_root",
             &Left {
-                project: "bp-api",
+                project: "my-app",
                 checkout: Some(Checkout::Root),
             },
         );
@@ -176,7 +126,7 @@ mod tests {
         snapshot_tiers(
             "short_worktree",
             &Left {
-                project: "bp-api",
+                project: "my-app",
                 checkout: Some(Checkout::Worktree),
             },
         );
@@ -210,7 +160,7 @@ mod tests {
             for client_width in [200, 160] {
                 let right_width = right::width(client_width, battery);
                 for checkout in [None, Some(Checkout::Root), Some(Checkout::Worktree)] {
-                    for project in ["x", "bp-api", LONG] {
+                    for project in ["x", "my-app", LONG] {
                         let block = Left { project, checkout }.render(client_width, right_width);
                         assert_eq!(cells(&block), right_width, "{block}");
                     }
@@ -222,7 +172,7 @@ mod tests {
     #[test]
     fn below_the_widest_tier_the_padding_gives_way_to_the_list() {
         let left = Left {
-            project: "bp-api",
+            project: "my-app",
             checkout: Some(Checkout::Root),
         };
         assert_eq!(cells(&left.render(120, 59)), 25);

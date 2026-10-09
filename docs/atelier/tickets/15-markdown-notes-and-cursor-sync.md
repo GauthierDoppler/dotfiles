@@ -16,9 +16,9 @@
 - The notes and cursor routes were already ported in ticket 14. This ticket
   verified them against the Bun server before deleting it: both servers were run
   side by side and sent the same `PUT` the page sends; the notes file (name and
-  bytes) and the `GET` response were identical. That Bun-written file is now
-  `atelier/tests/fixtures/preview/notes-written-by-bun.json`, and
-  `tests/preview.rs` checks the Rust server reads it back and writes it byte for
+  bytes) and the `GET` response were identical. That file is now
+  `atelier/tests/fixtures/preview/notes-file.json`, the on-disk notes format, and
+  `tests/preview.rs` checks the server reads it back and writes it byte for
   byte.
 - Known divergence, not reachable from the page: numbers the page would never
   send (`2.0`, `-0`, integers above 2^53, `0.000001`) are re-spelled by

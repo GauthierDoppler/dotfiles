@@ -423,6 +423,24 @@ pub fn repo() -> PathBuf {
         .to_path_buf()
 }
 
+pub fn repo_with_fixture_services() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("temp dir created");
+    for entry in std::fs::read_dir(repo()).expect("the repo is readable") {
+        let entry = entry.expect("a repo entry");
+        let name = entry.file_name();
+        if name != "services.toml" && name != ".git" {
+            std::os::unix::fs::symlink(entry.path(), dir.path().join(&name))
+                .expect("repo entry linked");
+        }
+    }
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/services.toml"),
+        dir.path().join("services.toml"),
+    )
+    .expect("fixture services.toml copied");
+    dir
+}
+
 pub fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .expect("a free port")

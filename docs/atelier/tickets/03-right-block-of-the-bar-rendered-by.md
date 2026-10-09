@@ -28,9 +28,10 @@ states, with `date` and `pmset` stubbed for the bash:
 
 - Render level: 20 bash outputs at 80/100/120/200 columns (clean, edits only,
   ahead only, edits + ahead + behind; battery 87 %, 15 %, charging; `root` and
-  `prefix` key tables) are kept verbatim as the expected values of
-  `renders_exactly_what_the_bash_script_it_replaced_rendered`. They are equal
-  byte for byte, widths included.
+  `prefix` key tables) were the expected values of a parity test,
+  `renders_exactly_what_the_bash_script_it_replaced_rendered`. They were equal
+  byte for byte, widths included. That test was later deleted: the `insta`
+  snapshots and named behaviour tests in `right.rs` cover the rendering.
 - Binary level: a harness ran both commands over 4 repo states × 4 widths × 2
   key tables in this container (no battery). All 32 rows are identical once the
   bash's empty 10-column battery slot is removed and the real date and time are

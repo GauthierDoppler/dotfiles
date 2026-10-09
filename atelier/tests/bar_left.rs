@@ -42,22 +42,22 @@ fn a_session_outside_any_repo_is_a_single_pill_named_after_itself() {
 #[test]
 fn a_session_in_a_git_repo_is_named_after_the_repo_at_its_root() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().join("bp-api");
+    let repo = dir.path().join("my-app");
     common::git_repo(&repo);
     let deep = repo.join("src/handlers");
     std::fs::create_dir_all(&deep).unwrap();
     let tmux = TmuxServer::start();
     let session = tmux.new_session("hand-named", &deep);
 
-    assert_eq!(pills(&left(&tmux, &session)), checkout("bp-api", "root"));
+    assert_eq!(pills(&left(&tmux, &session)), checkout("my-app", "root"));
 }
 
 #[test]
 fn a_linked_worktree_is_named_after_the_main_checkout_and_marked_wt() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().join("bp-api");
+    let repo = dir.path().join("my-app");
     common::git_repo(&repo);
-    let linked = dir.path().join("bp-api-feature");
+    let linked = dir.path().join("my-app-feature");
     common::git(
         &repo,
         &[
@@ -72,7 +72,7 @@ fn a_linked_worktree_is_named_after_the_main_checkout_and_marked_wt() {
     let tmux = TmuxServer::start();
     let session = tmux.new_session("feature", &linked);
 
-    assert_eq!(pills(&left(&tmux, &session)), checkout("bp-api", "wt"));
+    assert_eq!(pills(&left(&tmux, &session)), checkout("my-app", "wt"));
 }
 
 #[test]
@@ -96,11 +96,11 @@ fn a_grove_tagged_session_is_named_after_its_grove_project() {
     common::git_repo(&repo);
     let tmux = TmuxServer::start();
     let session = tmux.new_session("grove_bp_api_main_f2d1", &repo);
-    tmux.set_session_option(&session, "@grove_project", "bp-api");
+    tmux.set_session_option(&session, "@grove_project", "my-app");
     tmux.set_session_option(&session, "@grove_root", repo.to_str().unwrap());
     tmux.set_session_option(&session, "@grove_worktree", "");
 
-    assert_eq!(pills(&left(&tmux, &session)), checkout("bp-api", "root"));
+    assert_eq!(pills(&left(&tmux, &session)), checkout("my-app", "root"));
 }
 
 #[test]
@@ -108,11 +108,11 @@ fn a_grove_worktree_session_is_marked_wt_from_its_tag_alone() {
     let dir = tempfile::tempdir().unwrap();
     let tmux = TmuxServer::start();
     let session = tmux.new_session("grove_bp_api_feature_f2d1", dir.path());
-    tmux.set_session_option(&session, "@grove_project", "bp-api");
-    tmux.set_session_option(&session, "@grove_root", "/nowhere/bp-api");
+    tmux.set_session_option(&session, "@grove_project", "my-app");
+    tmux.set_session_option(&session, "@grove_root", "/nowhere/my-app");
     tmux.set_session_option(&session, "@grove_worktree", "feature");
 
-    assert_eq!(pills(&left(&tmux, &session)), checkout("bp-api", "wt"));
+    assert_eq!(pills(&left(&tmux, &session)), checkout("my-app", "wt"));
 }
 
 #[test]

@@ -27,7 +27,8 @@ checks the rendered width against itself across locales instead.
 sessions (outside a repo, root, linked worktree, 41-character name) at 60, 80,
 90, 99, 100, 119, 120 and 200 columns; atelier's output is byte-identical in all
 32 cases, both through the binary on a private tmux server and as the
-`renders_exactly_what_the_bash_script_it_replaced_rendered` unit table. As in
+`renders_exactly_what_the_bash_script_it_replaced_rendered` unit table (later
+deleted; the `insta` snapshots in `left.rs` cover the rendering). As in
 ticket 03, the first capture was wrong: `en_US.UTF-8` does not exist in the
 container, so bash counted the ellipsis as 3 columns and under-padded a long
 name by 2. The golden values come from a run under `C.UTF-8`. The bash no longer

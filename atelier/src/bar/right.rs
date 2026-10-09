@@ -275,41 +275,6 @@ mod tests {
         visible.chars().count()
     }
 
-    type BashRow = (RepoCounts, Option<Battery>, u16, &'static str, usize, &'static str);
-
-    #[rustfmt::skip]
-    const BASH: &[BashRow] = &[
-        (CLEAN, Some(discharging(87)), 80, "root", 20, "#[fg=#8caaee,bold]             #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (CLEAN, Some(discharging(87)), 100, "root", 45, "#[fg=#8caaee,bold]                             #[fg=#81c8be,nobold]\u{f0081} 87%    #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (CLEAN, Some(discharging(87)), 120, "root", 59, "#[fg=#8caaee,bold]                             #[fg=#81c8be,nobold]\u{f0081} 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (CLEAN, Some(discharging(87)), 120, "prefix", 59, "#[fg=#8caaee,bold]prefix                       #[fg=#81c8be,nobold]\u{f0081} 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (CLEAN, Some(discharging(87)), 200, "root", 59, "#[fg=#8caaee,bold]                             #[fg=#81c8be,nobold]\u{f0081} 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (EDITS, Some(plugged(64)), 80, "root", 20, "#[fg=#8caaee,bold]             #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (EDITS, Some(plugged(64)), 100, "root", 45, "#[fg=#8caaee,bold]                #[fg=#eebebe,nobold]+141 #[fg=#ea999c,nobold]−111    #[fg=#81c8be,nobold]\u{f0084} 64%    #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (EDITS, Some(plugged(64)), 120, "root", 59, "#[fg=#8caaee,bold]                #[fg=#eebebe,nobold]+141 #[fg=#ea999c,nobold]−111    #[fg=#81c8be,nobold]\u{f0084} 64%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (EDITS, Some(plugged(64)), 120, "prefix", 59, "#[fg=#8caaee,bold]prefix          #[fg=#eebebe,nobold]+141 #[fg=#ea999c,nobold]−111    #[fg=#81c8be,nobold]\u{f0084} 64%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (EDITS, Some(plugged(64)), 200, "root", 59, "#[fg=#8caaee,bold]                #[fg=#eebebe,nobold]+141 #[fg=#ea999c,nobold]−111    #[fg=#81c8be,nobold]\u{f0084} 64%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (AHEAD, Some(discharging(15)), 80, "root", 20, "#[fg=#8caaee,bold]             #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (AHEAD, Some(discharging(15)), 100, "root", 45, "#[fg=#8caaee,bold]                       #[fg=#99d1db,nobold]↑2    #[fg=#e78284,bold]\u{f007a} 15%    #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (AHEAD, Some(discharging(15)), 120, "root", 59, "#[fg=#8caaee,bold]                       #[fg=#99d1db,nobold]↑2    #[fg=#e78284,bold]\u{f007a} 15%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (AHEAD, Some(discharging(15)), 120, "prefix", 59, "#[fg=#8caaee,bold]prefix                 #[fg=#99d1db,nobold]↑2    #[fg=#e78284,bold]\u{f007a} 15%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (AHEAD, Some(discharging(15)), 200, "root", 59, "#[fg=#8caaee,bold]                       #[fg=#99d1db,nobold]↑2    #[fg=#e78284,bold]\u{f007a} 15%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (BOTH, Some(discharging(87)), 80, "root", 20, "#[fg=#8caaee,bold]             #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (BOTH, Some(discharging(87)), 100, "root", 45, "#[fg=#8caaee,bold]          #[fg=#eebebe,nobold]+111 #[fg=#ea999c,nobold]−113 #[fg=#99d1db,nobold]↑2 #[fg=#99d1db,nobold]↓1    #[fg=#81c8be,nobold]\u{f0081} 87%    #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (BOTH, Some(discharging(87)), 120, "root", 59, "#[fg=#8caaee,bold]          #[fg=#eebebe,nobold]+111 #[fg=#ea999c,nobold]−113 #[fg=#99d1db,nobold]↑2 #[fg=#99d1db,nobold]↓1    #[fg=#81c8be,nobold]\u{f0081} 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (BOTH, Some(discharging(87)), 120, "prefix", 59, "#[fg=#8caaee,bold]prefix    #[fg=#eebebe,nobold]+111 #[fg=#ea999c,nobold]−113 #[fg=#99d1db,nobold]↑2 #[fg=#99d1db,nobold]↓1    #[fg=#81c8be,nobold]\u{f0081} 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-        (BOTH, Some(discharging(87)), 200, "root", 59, "#[fg=#8caaee,bold]          #[fg=#eebebe,nobold]+111 #[fg=#ea999c,nobold]−113 #[fg=#99d1db,nobold]↑2 #[fg=#99d1db,nobold]↓1    #[fg=#81c8be,nobold]\u{f0081} 87%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "),
-    ];
-
-    #[test]
-    fn renders_exactly_what_the_bash_script_it_replaced_rendered() {
-        for &(repo, battery, client_width, key_table, bash_width, bash) in BASH {
-            let right = right(key_table, repo, battery);
-            assert_eq!(right.render(client_width), bash, "at {client_width} columns");
-            assert_eq!(width(client_width, true), bash_width, "at {client_width} columns");
-        }
-    }
-
     const TIERS: [u16; 6] = [80, 90, 99, 100, 120, 200];
 
     fn snapshot_tiers(name: &str, right: &Right) {
@@ -359,9 +324,24 @@ mod tests {
             visible.push_str(rest);
             visible.trim_start().to_string()
         };
+        assert_eq!(segment(CLEAN), "");
+        assert_eq!(segment(EDITS), "+141 −111");
+        assert_eq!(segment(AHEAD), "↑2");
         assert_eq!(segment(BOTH), "+111 −113 ↑2 ↓1");
         assert_eq!(segment(LARGE), "+1k −5k ↑12 ↓3");
         assert_eq!(segment(HUGE), "+2M −98k ↑1k …");
+    }
+
+    #[test]
+    fn each_tier_reserves_a_fixed_width_whatever_it_shows() {
+        assert_eq!(width(200, true), 59);
+        assert_eq!(width(120, true), 59);
+        assert_eq!(width(119, true), 45);
+        assert_eq!(width(100, true), 45);
+        assert_eq!(width(99, true), 35);
+        assert_eq!(width(90, true), 35);
+        assert_eq!(width(89, true), 20);
+        assert_eq!(width(80, true), 20);
     }
 
     #[test]
@@ -412,6 +392,14 @@ mod tests {
         assert_eq!(
             icons,
             "\u{f007a}\u{f007a}\u{f007b}\u{f007c}\u{f007d}\u{f007e}\u{f007f}\u{f0080}\u{f0081}\u{f0082}\u{f0079}"
+        );
+    }
+
+    #[test]
+    fn a_low_battery_off_the_charger_is_shown_as_a_warning() {
+        assert_eq!(
+            right("root", CLEAN, Some(discharging(15))).render(120),
+            "#[fg=#8caaee,bold]                             #[fg=#e78284,bold]\u{f007a} 15%     #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  "
         );
     }
 

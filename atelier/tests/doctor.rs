@@ -59,6 +59,7 @@ struct Machine {
     tmux: TmuxServer,
     home: tempfile::TempDir,
     fakes: tempfile::TempDir,
+    repo: tempfile::TempDir,
 }
 
 impl Machine {
@@ -67,6 +68,7 @@ impl Machine {
             tmux: TmuxServer::start(),
             home: tempfile::tempdir().unwrap(),
             fakes: tempfile::tempdir().unwrap(),
+            repo: common::repo_with_fixture_services(),
         };
         for dir in ["bin", "state/terminfo", "state/inactive", "state/launchd"] {
             fs::create_dir_all(machine.fakes.path().join(dir)).unwrap();
@@ -97,7 +99,7 @@ impl Machine {
         .unwrap();
         let setup = Command::new(env!("CARGO_BIN_EXE_atelier"))
             .args(["setup", "--repo"])
-            .arg(common::repo())
+            .arg(machine.repo.path())
             .env("HOME", machine.home.path())
             .bounded_output()
             .unwrap();
@@ -144,7 +146,7 @@ impl Machine {
             .arg("doctor")
             .args(args)
             .arg("--repo")
-            .arg(common::repo())
+            .arg(self.repo.path())
             .env("HOME", self.home.path())
             .env_remove("XDG_CONFIG_HOME")
             .env("USER", "alice")
@@ -337,32 +339,32 @@ fn setup_drift_fails_with_what_setup_would_change() {
 #[test]
 fn a_stopped_systemd_service_fails_naming_it() {
     let machine = Machine::healthy();
-    machine.state("inactive/com.theodo.cc-tap.proxy.service", "");
+    machine.state("inactive/com.example.web.service", "");
     let report = assert_fails(&machine, &["--system", "systemd"], "services");
     let line = check(&report, "services");
-    assert!(line.contains("com.theodo.cc-tap.proxy"), "{report}");
-    assert!(!line.contains("dashboard"), "{report}");
+    assert!(line.contains("com.example.web"), "{report}");
+    assert!(!line.contains("backup"), "{report}");
     assert!(fix(&report, "services").contains("atelier service install"));
 }
 
 #[test]
 fn a_stopped_launchd_agent_fails_naming_it() {
     let machine = Machine::healthy();
-    machine.state("inactive/com.theodo.cc-tap.dashboard", "");
+    machine.state("inactive/com.example.web", "");
     let report = assert_fails(&machine, &["--system", "launchd"], "services");
-    assert!(check(&report, "services").contains("com.theodo.cc-tap.dashboard"));
+    assert!(check(&report, "services").contains("com.example.web"));
     assert!(check(&report, "linger").starts_with("skip"), "{report}");
 }
 
 #[test]
 fn a_crash_looping_launchd_agent_fails_although_it_stays_loaded() {
     let machine = Machine::healthy();
-    machine.state("launchd/com.theodo.cc-tap.proxy", "spawn scheduled\n");
-    machine.state("launchd/com.theodo.cc-tap.update", "not running\n");
+    machine.state("launchd/com.example.web", "spawn scheduled\n");
+    machine.state("launchd/com.example.backup", "not running\n");
     let report = assert_fails(&machine, &["--system", "launchd"], "services");
     let line = check(&report, "services");
-    assert!(line.contains("com.theodo.cc-tap.proxy"), "{report}");
-    assert!(!line.contains("update"), "{report}");
+    assert!(line.contains("com.example.web"), "{report}");
+    assert!(!line.contains("backup"), "{report}");
 }
 
 #[test]
