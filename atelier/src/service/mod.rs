@@ -178,13 +178,25 @@ fn statuses(system: System, services: &[Service], home: &Path) -> Result<Vec<Sta
     }
 }
 
-pub(crate) fn stopped(target: &Target) -> Result<Vec<String>> {
+pub(crate) struct Health {
+    pub stopped: Vec<String>,
+    pub outdated: Vec<String>,
+}
+
+pub(crate) fn health(target: &Target) -> Result<Health> {
     let (services, home) = target.load()?;
-    Ok(statuses(target.system(), &services, &home)?
-        .into_iter()
-        .filter(|status| !status.running)
-        .map(|status| status.label)
-        .collect())
+    let statuses = statuses(target.system(), &services, &home)?;
+    let labels = |keep: fn(&Status) -> bool| {
+        statuses
+            .iter()
+            .filter(|status| keep(status))
+            .map(|status| status.label.clone())
+            .collect()
+    };
+    Ok(Health {
+        stopped: labels(|status| !status.running),
+        outdated: labels(|status| status.file == FileState::Outdated),
+    })
 }
 
 pub(crate) fn agents_dir_problem(target: &Target) -> Option<(String, String)> {

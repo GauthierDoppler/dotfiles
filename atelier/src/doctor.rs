@@ -269,24 +269,51 @@ fn repo(context: &Context) -> Result<PathBuf> {
 
 fn installed(context: &Context) -> Outcome {
     let binary = context.home.join(".local/bin/atelier");
-    let executable = std::fs::metadata(&binary)
-        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0);
-    if executable {
-        return Outcome::Ok(binary.display().to_string());
-    }
     let crate_dir = repo(context)
         .map(|repo| repo.join("atelier"))
         .unwrap_or_else(|_| context.home.join("dotfiles/atelier"));
-    fail(
-        format!(
-            "{} is missing, and tmux calls atelier by that path",
-            binary.display()
+    let install = format!(
+        "cargo install --locked --root ~/.local --path {}",
+        crate_dir.display()
+    );
+    let meta = std::fs::metadata(&binary)
+        .ok()
+        .filter(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0);
+    let Some(meta) = meta else {
+        return fail(
+            format!(
+                "{} is missing, and tmux calls atelier by that path",
+                binary.display()
+            ),
+            install,
+        );
+    };
+    let sources = ["src", "assets", "Cargo.toml", "Cargo.lock"]
+        .iter()
+        .filter_map(|part| newest(&crate_dir.join(part)))
+        .max();
+    match (meta.modified().ok(), sources) {
+        (Some(built), Some(edited)) if built < edited => fail(
+            format!(
+                "{} is older than its sources in {}",
+                tilde(&binary, &context.home),
+                tilde(&crate_dir, &context.home)
+            ),
+            install,
         ),
-        format!(
-            "cargo install --locked --root ~/.local --path {}",
-            crate_dir.display()
-        ),
-    )
+        _ => Outcome::Ok(binary.display().to_string()),
+    }
+}
+
+fn newest(path: &Path) -> Option<std::time::SystemTime> {
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_dir() {
+        return meta.modified().ok();
+    }
+    std::fs::read_dir(path)
+        .ok()?
+        .filter_map(|entry| newest(&entry.ok()?.path()))
+        .max()
 }
 
 fn setup(context: &Context) -> Outcome {
@@ -356,14 +383,19 @@ fn services(context: &Context) -> Outcome {
     if let Some((problem, fix)) = service::agents_dir_problem(context.target) {
         return fail(problem, fix);
     }
-    match service::stopped(context.target) {
-        Err(error) => fail(error.to_string(), "atelier service install"),
-        Ok(stopped) if stopped.is_empty() => Outcome::Ok("all running".into()),
-        Ok(stopped) => fail(
-            format!("not running: {}", stopped.join(", ")),
-            "atelier service install",
-        ),
+    let health = match service::health(context.target) {
+        Ok(health) => health,
+        Err(error) => return fail(error.to_string(), "atelier service install"),
+    };
+    let problems: Vec<String> = [("not running", health.stopped), ("outdated", health.outdated)]
+        .into_iter()
+        .filter(|(_, labels)| !labels.is_empty())
+        .map(|(problem, labels)| format!("{problem}: {}", labels.join(", ")))
+        .collect();
+    if problems.is_empty() {
+        return Outcome::Ok("all running".into());
     }
+    fail(problems.join("; "), "atelier service install")
 }
 
 fn linger(context: &Context) -> Outcome {

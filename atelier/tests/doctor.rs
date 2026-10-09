@@ -425,3 +425,36 @@ fn the_keyboard_layout_is_only_checked_on_macos() {
         "{report}"
     );
 }
+
+#[test]
+fn a_service_file_that_differs_from_services_toml_fails_naming_it() {
+    let machine = Machine::healthy();
+    let units = machine.home.path().join(".config/systemd/user");
+    fs::create_dir_all(&units).unwrap();
+    fs::write(units.join("com.example.web.service"), "[Service]\n").unwrap();
+    let report = assert_fails(&machine, &["--system", "systemd"], "services");
+    let line = check(&report, "services");
+    assert!(line.contains("outdated: com.example.web"), "{report}");
+    assert!(fix(&report, "services").contains("atelier service install"));
+}
+
+#[test]
+fn an_installed_atelier_older_than_its_sources_fails() {
+    let machine = Machine::healthy();
+    let installed = machine.home.path().join(".local/bin/atelier");
+    fs::File::options()
+        .write(true)
+        .open(&installed)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(86_400))
+        .unwrap();
+    let report = assert_fails(&machine, &["--system", "systemd"], "atelier installed");
+    assert!(
+        check(&report, "atelier installed").contains("older than"),
+        "{report}"
+    );
+    assert!(
+        fix(&report, "atelier installed").starts_with("cargo install"),
+        "{report}"
+    );
+}
