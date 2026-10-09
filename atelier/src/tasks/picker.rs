@@ -29,12 +29,16 @@ pub fn pick(tmux: &Tmux, catalog: &Catalog) -> Result<()> {
     let preview = format!(
         "f={{1}}; d={dir}; [ -f \"$d/$f\" ] || exit 0; if command -v bat >/dev/null 2>&1; then bat --color=always --style=plain --line-range=:200 \"$d/$f\"; else cat \"$d/$f\"; fi"
     );
-    let tab = format!(
-        "--bind=tab:transform:{}; echo \"reload({})+transform-prompt({})+transform-header({})+first\"",
-        callback("advance"),
+    let reload = format!(
+        "reload({})+transform-prompt({})+transform-header({})+first",
         callback("list"),
         callback("prompt"),
         callback("header")
+    );
+    let tab = format!(
+        "--bind=tab:transform:{}; echo {}",
+        callback("advance"),
+        shell::quote(&reload)
     );
     let edit = format!(
         "--bind=ctrl-e:execute(f={{1}}; d={dir}; [ -f \"$d/$f\" ] && ${{EDITOR:-vi}} \"$d/$f\")"

@@ -256,6 +256,78 @@ fn tab_cycles_through_the_groups_and_back_to_all() {
     );
 }
 
+fn picker_binds(tmux: &TmuxServer, project: &Project, session: &str) -> Vec<String> {
+    let bin = project.tmpdir.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let args = project.out("fzf-args");
+    let fzf = bin.join("fzf");
+    std::fs::write(
+        &fzf,
+        format!(
+            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\0' \"$a\"; done > '{}'\ncat >/dev/null\n",
+            args.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fzf, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    tmux.atelier_command(&["tasks", "pick", "-t", session])
+        .current_dir(&project.root)
+        .env("TMPDIR", &project.tmpdir)
+        .env("PATH", path)
+        .bounded_output()
+        .expect("atelier runs");
+    std::fs::read_to_string(&args)
+        .unwrap()
+        .split('\0')
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn tab_in_the_picker_reloads_the_rows_of_a_session_whose_id_has_two_digits() {
+    let project = Project::new();
+    project
+        .task("doctor", "#!/bin/sh\n")
+        .task("android/build", "#!/bin/sh\n");
+    let tmux = TmuxServer::start();
+    let mut session = String::new();
+    for n in 0..12 {
+        session = tmux.new_session(&format!("app{n}"), &project.root);
+    }
+    assert_eq!(session, "$11");
+
+    let binds = picker_binds(&tmux, &project, &session);
+    let transform = binds
+        .iter()
+        .find_map(|arg| arg.strip_prefix("--bind=tab:transform:"))
+        .expect("tab is bound");
+    let actions = Command::new("sh")
+        .args(["-c", transform])
+        .env("TMPDIR", &project.tmpdir)
+        .bounded_output()
+        .expect("sh runs");
+    let actions = String::from_utf8_lossy(&actions.stdout);
+    let reload = actions
+        .strip_prefix("reload(")
+        .and_then(|rest| rest.split(")+transform-prompt(").next())
+        .expect("the transform reloads");
+    let reloaded = Command::new("sh")
+        .args(["-c", reload])
+        .env("TMPDIR", &project.tmpdir)
+        .bounded_output()
+        .expect("sh runs");
+
+    assert_eq!(
+        String::from_utf8_lossy(&reloaded.stdout).trim(),
+        "android/build"
+    );
+}
+
 #[test]
 fn the_header_offers_tab_only_when_there_are_groups() {
     let flat = Project::new();
