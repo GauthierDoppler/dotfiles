@@ -43,11 +43,13 @@ if [[ -n "${HOMEBREW_PREFIX:-}" && -d "${HOMEBREW_PREFIX}/opt/libpq" ]]; then
 fi
 
 # ─── PATH ──────────────────────────────────────────────────
+[[ -d "$HOME/.cargo/bin" ]] && export PATH="$HOME/.cargo/bin:$PATH"
 [[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
 
 # ─── Aliases ───────────────────────────────────────────────
 n() { if [ "$#" -eq 0 ]; then command nvim .; else command nvim "$@"; fi; }
 alias c="clear"
+alias local-diff="atelier local-diff"
 cl() {
   local -a args=("${@:#--no-proxy}")
   if (( ${#args} == $# )) && nc -z 127.0.0.1 8089 2>/dev/null; then

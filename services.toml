@@ -1,0 +1,21 @@
+[[service]]
+label = "com.theodo.cc-tap.dashboard"
+description = "cc-tap dashboard on 127.0.0.1:3000"
+run = [".local/bin/cc-tap-service", "dashboard"]
+
+[[service]]
+label = "com.theodo.cc-tap.proxy"
+description = "cc-tap inspector proxy on 127.0.0.1:8089"
+run = [".local/bin/cc-tap-service", "proxy"]
+
+[[service]]
+label = "com.theodo.cc-tap.update"
+description = "Install cc-tap@latest once per weekday"
+run = [".local/bin/cc-tap-service", "update"]
+schedule = { days = ["mon", "tue", "wed", "thu", "fri"], at = "08:00", every = 1800 }
+
+[[service]]
+label = "com.github.gauthierdoppler.md-preview"
+description = "Markdown preview server on 127.0.0.1:33440"
+run = [".local/bin/atelier", "preview", "serve"]
+log = "md-preview.log"

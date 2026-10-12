@@ -17,7 +17,7 @@ disable-model-invocation: true
 run and debug loops live — deliberately **not** in Neovim, so they can be driven from any
 window of the session.
 
-Implementation: `~/dotfiles/scripts/tmux-tasks`. Read it if behaviour here is unclear.
+Implementation: `atelier tasks` (`~/dotfiles/atelier/src/tasks/`). Read it if behaviour here is unclear.
 
 ## Where tasks live
 
@@ -63,7 +63,7 @@ Three optional header keys, read from the **first 20 lines only**:
 | --- | --- |
 | `# task:` | one-line description shown in the picker |
 | `# tmux:` | placement — `window` (default) \| `split-down` \| `split-right` \| `popup` \| `detach` |
-| `# close:` | `ok` — on exit 0, close the window/pane/popup immediately: no keypress, no bell, no notification. A failure still waits, so its error stays readable |
+| `# close:` | `ok` — on exit 0, close the window/pane/popup immediately: no keypress, no bell. A failure still waits, so its error stays readable |
 
 Both splits take an optional size after the placement, defaulting to 30%:
 
@@ -86,9 +86,9 @@ This is the decision that makes a task pleasant or annoying. Pick by lifetime, n
 | placement | use for | behaviour |
 | --- | --- | --- |
 | `window` | anything slow or interactive — builds, test runs, REPLs | reuses a window named after the task (`android/build` → `android-build`), respawning it. Re-running never piles up duplicates. Gets selected. |
-| `detach` | long-lived streams and fire-and-forget — `logcat`, watchers, deploys | same window reuse, but **not** selected. The status bar shows `●` while it runs and `✓`/`✗` when it ends, and the runner fires a bell plus a macOS notification when you are not looking at that window — do not call `terminal-notifier` from the task itself. |
-| `popup` | quick checks under ~2s where only the exit code matters — `doctor`, a lint, a version probe | floats over the current window, no window created. Reuses the picker's own popup — tmux allows only one popup per client, so a second one would silently do nothing. |
-| `split-down` / `split-right` | something you want beside the current work | splits the current window, 30% by default |
+| `detach` | long-lived streams and fire-and-forget — `logcat`, watchers, deploys | same window reuse, but **not** selected. The status bar shows `●` while it runs and `✓`/`✗` when it ends, and the runner rings the bell when you are not looking at that window. |
+| `popup` | quick checks under ~2s where only the exit code matters — `doctor`, a lint, a version probe | floats over the current window, no window created, no marker, no bell. Reuses the picker's own popup — tmux allows only one popup per client, so a second one would silently do nothing. |
+| `split-down` / `split-right` | something you want beside the current work | splits the session's active pane, 30% by default. No marker, no bell. |
 
 When unsure, use `window`. It is the default for a reason.
 
@@ -124,7 +124,7 @@ deep. Never write a task that depends on the pane's cwd.
 2. Create `<root>/.tmux/<group>/<name>` (or `<root>/.tmux/<name>` if ungrouped).
 3. Shebang, `# task:` description, `# tmux:` placement, `set -euo pipefail`.
 4. `chmod +x` it.
-5. Verify it is discovered: `~/.local/bin/tmux-tasks --list`.
+5. Verify it is discovered: `~/.local/bin/atelier tasks list` (from inside the session).
 6. Only then tell the user it is ready.
 
 Shared logic goes in `.tmux/lib/*.sh`, sourced via `"$TMUX_TASK_ROOT/.tmux/lib/common.sh"`, and
@@ -184,9 +184,9 @@ adb devices
 | symptom | cause |
 | --- | --- |
 | task missing from picker | not executable, or nested deeper than 2 levels |
-| `Prefix + e` flashes a message instead of opening | the project has no tasks; the binding gates on `tmux-tasks --check` so the popup never opens empty |
+| `Prefix + e` lists only a `(no …)` placeholder row | nothing executable at depth 1–2, or `#{session_path}` is not inside the project |
 | duplicate windows on re-run | the task name changed, so the derived window name changed |
 | task runs in the wrong directory | it `cd`s relative to itself instead of trusting the root |
 | helper file shows up as a task | it is `chmod +x`; remove the executable bit |
 
-Do not hand-edit the MRU cache in `$TMPDIR/tmux-tasks.<hash>` — it is rewritten on every run.
+Do not hand-edit the MRU cache in `$TMPDIR/atelier-tasks.<hash>.recent` — it is rewritten on every run.
