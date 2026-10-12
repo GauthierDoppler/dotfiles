@@ -1,0 +1,10 @@
+---
+source: src/bar/right.rs
+expression: "rendered.join(\"\\n\")"
+---
+ 80 |#[fg=#8caaee,bold]             #[fg=#c6d0f5,bold]09:05#[nobold]  |
+ 90 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+2M #[fg=#ea999c,nobold]−98k #[fg=#99d1db,nobold]↑1k #[fg=#99d1db,nobold]…   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+ 99 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+2M #[fg=#ea999c,nobold]−98k #[fg=#99d1db,nobold]↑1k #[fg=#99d1db,nobold]…   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+100 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+2M #[fg=#ea999c,nobold]−98k #[fg=#99d1db,nobold]↑1k #[fg=#99d1db,nobold]…   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+120 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+2M #[fg=#ea999c,nobold]−98k #[fg=#99d1db,nobold]↑1k #[fg=#99d1db,nobold]…    #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  |
+200 |#[fg=#8caaee,bold]           #[fg=#eebebe,nobold]+2M #[fg=#ea999c,nobold]−98k #[fg=#99d1db,nobold]↑1k #[fg=#99d1db,nobold]…    #[fg=#949cbb,nobold]Tue 04 Aug   #[fg=#c6d0f5,bold]09:05#[nobold]  |

@@ -28,7 +28,7 @@
       {
         "hooks": [
           {
-            "command": "~/.claude/hooks/notify.sh",
+            "command": "\"$HOME/.local/bin/atelier\" hook claude 2>/dev/null || true",
             "type": "command"
           }
         ],
@@ -39,7 +39,7 @@
       {
         "hooks": [
           {
-            "command": "~/.claude/hooks/notify.sh",
+            "command": "\"$HOME/.local/bin/atelier\" hook claude 2>/dev/null || true",
             "type": "command"
           }
         ],
@@ -50,7 +50,7 @@
       {
         "hooks": [
           {
-            "command": "~/.claude/hooks/notify.sh",
+            "command": "\"$HOME/.local/bin/atelier\" hook claude 2>/dev/null || true",
             "type": "command"
           }
         ],

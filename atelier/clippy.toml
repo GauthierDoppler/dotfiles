@@ -1,0 +1,4 @@
+disallowed-methods = [
+    { path = "std::process::Command::new", reason = "start programs through crate::process::command" },
+    { path = "tokio::process::Command::new", reason = "start programs through crate::process::command" },
+]

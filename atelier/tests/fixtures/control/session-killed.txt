@@ -1,0 +1,8 @@
+%begin 1791481936 269 0
+%end 1791481936 269 0
+%session-changed $0 work
+%window-renamed @0 sh
+%unlinked-window-add @1
+%sessions-changed
+%sessions-changed
+%exit

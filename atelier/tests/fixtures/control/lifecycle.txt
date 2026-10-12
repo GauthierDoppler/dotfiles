@@ -1,0 +1,37 @@
+%begin 1791481928 270 0
+%end 1791481928 270 0
+%session-changed $0 work
+%window-renamed @0 sh
+%window-renamed @0 %end 1 1 1
+%begin 1791481929 279 1
+$0 work
+%end 1791481929 279 1
+%begin 1791481929 280 1
+$0 @0 0 %end 1 1 1
+%end 1791481929 280 1
+%begin 1791481930 281 1
+can't find session: nosuch
+%error 1791481930 281 1
+%unlinked-window-add @1
+%sessions-changed
+%client-session-changed client-7653 $0 work
+%client-session-changed client-7653 $1 api
+%client-detached client-7653
+%session-window-changed $0 @2
+%window-add @2
+%session-window-changed $1 @3
+%unlinked-window-add @3
+%window-renamed @2 tail
+%unlinked-window-renamed @3 make
+%session-renamed $1 backend
+%session-window-changed $0 @0
+%unlinked-window-close @2
+%sessions-changed
+%unlinked-window-close @1
+%unlinked-window-close @3
+%unlinked-window-add @4
+%sessions-changed
+%session-changed $2 viewer
+%sessions-changed
+%sessions-changed
+%exit

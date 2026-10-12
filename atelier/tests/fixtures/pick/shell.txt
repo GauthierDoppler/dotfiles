@@ -1,0 +1,14 @@
+$ git status
+On branch main
+Changes not staged for commit:
+	modified:   src/main.rs
+	modified:   docs/missing.md
+$ cargo build
+error[E0425]: cannot find value `x` in this scope
+ --> src/main.rs:12:5
+$ git remote -v
+origin	git@github.com:acme/missions.git (fetch)
+origin	git@github.com:acme/missions.git (push)
+$ cat ~/notes/todo.md ./README.md ../outside/ref.txt
+see https://github.com/acme/missions/pull/42, then ftp://mirror.acme.dev/pub/archive.tgz.
+$ ls src/

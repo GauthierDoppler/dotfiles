@@ -1,0 +1,12 @@
+> fix the progress test
+
+⏺ Read(core/use-cases/get-mission-progress.ts)
+  ⎿  Read 84 lines
+
+⏺ Update(core/use-cases/get-mission-progress.tes
+  ⎿  Updated core/use-cases/get-mission-progress.test.ts with 3 additions
+
+⏺ The fix is in core/use-cases/get-mission-progress.ts, see
+  https://github.com/acme/missions/pull/42. Docs: (https://docs.acme.dev/progress).
+  Also see https://example.com/very/long/path/that/got/trunc…
+  Truncated in the sidebar: …/use-cases/get-mission-progress.ts

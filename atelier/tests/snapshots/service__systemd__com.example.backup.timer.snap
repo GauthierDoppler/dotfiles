@@ -1,0 +1,15 @@
+---
+source: tests/service.rs
+expression: content
+---
+[Unit]
+Description=Back up the notes once per weekday
+
+[Timer]
+OnActiveSec=0
+OnCalendar=Mon..Fri 08:00
+Persistent=true
+OnUnitActiveSec=1800s
+
+[Install]
+WantedBy=timers.target
