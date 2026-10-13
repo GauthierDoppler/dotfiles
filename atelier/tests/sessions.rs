@@ -152,7 +152,7 @@ fn a_hand_named_session_that_looks_like_grove_belongs_to_no_project() {
     );
     assert_eq!(
         tmux.atelier_stdout(&["sessions", "header", "-t", &current]),
-        "j/k move   h/l window   i search   (no project)\nenter switch   ctrl-x kill"
+        "j/k move   h/l window   (no project)   i search\nenter switch   ctrl-x kill   esc close"
     );
 }
 
@@ -229,33 +229,20 @@ fn enter_on_the_placeholder_leaves_the_client_where_it_is() {
 }
 
 #[test]
-fn esc_while_searching_goes_back_to_navigation_with_the_scope_prompt() {
+fn the_prompt_names_the_scope_search_goes_back_to() {
     let dir = tempfile::tempdir().unwrap();
     let api = dir_in(dir.path(), "api");
     let tmux = TmuxServer::start();
     let current = grove_session(&tmux, "grove_api_main_0a1b", "api", &api);
 
     assert_eq!(
-        tmux.atelier_stdout_with_env(
-            &["sessions", "escape", "-t", &current],
-            &[("FZF_INPUT_STATE", "enabled")]
-        ),
-        "disable-search+clear-query+rebind(j,k,q,h,l)+change-prompt(  project  )"
+        tmux.atelier_stdout(&["sessions", "prompt", "-t", &current]),
+        "  project  "
     );
-}
-
-#[test]
-fn esc_while_navigating_closes_the_picker() {
-    let dir = tempfile::tempdir().unwrap();
-    let tmux = TmuxServer::start();
-    let current = tmux.new_session("scratch", dir.path());
-
+    tmux.atelier_stdout(&["sessions", "toggle", "-t", &current]);
     assert_eq!(
-        tmux.atelier_stdout_with_env(
-            &["sessions", "escape", "-t", &current],
-            &[("FZF_INPUT_STATE", "disabled")]
-        ),
-        "abort"
+        tmux.atelier_stdout(&["sessions", "prompt", "-t", &current]),
+        "  all  "
     );
 }
 

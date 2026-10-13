@@ -346,8 +346,8 @@ fn the_header_offers_tab_only_when_there_are_groups() {
             callback(&tmux, &grouped, &grouped_session, "header"),
         ],
         [
-            "j/k move   enter run   i search   ctrl-e edit",
-            "j/k move   enter run   tab group   i search   ctrl-e edit",
+            "j/k move   i search\nenter run   ctrl-e edit   esc close",
+            "j/k move   tab group   i search\nenter run   ctrl-e edit   esc close",
         ]
     );
 }

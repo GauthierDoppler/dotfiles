@@ -71,16 +71,14 @@ pub fn pick(tmux: &Tmux, target: Option<&str>) -> Result<()> {
     let root = session_root(tmux, target)?;
     let rows = rows(&root);
     let atelier = fzf::atelier(tmux)?;
-    let mut picker = fzf::picker(
-        "  markdown  ",
-        "j/k move   i search\nenter preview   esc close",
-        fzf::MODAL_KEYS,
-    );
+    let mut picker = fzf::Picker {
+        prompt: "  markdown  ",
+        header: &fzf::header(&[], &["enter preview"]),
+        modal_keys: &[],
+        prompt_command: None,
+    }
+    .command();
     picker
-        .arg(fzf::leave_search(
-            fzf::MODAL_KEYS,
-            "change-prompt(  markdown  )",
-        ))
         .arg(format!("--bind=enter:become({atelier} preview {{}})"))
         .current_dir(if root.is_dir() { &root } else { Path::new("/") });
     fzf::spawn(&mut picker, rows)?.wait()?;
