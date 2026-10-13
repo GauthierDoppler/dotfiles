@@ -133,9 +133,10 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
   "is someone looking" check skips `#{client_control_mode}` = 1
   (`hook_claude.rs::a_control_mode_client_does_not_count_as_watching` and its
   twins in `tasks.rs`, `sessions.rs`, `bar_daemon.rs`).
-- **Every picker builds fzf through `fzf::picker`** (shared flags, colours,
-  `j`/`k`/`q` + `i` search mode, `esc`, the `fzf::header` layout) and calls back through `fzf::atelier`. The
-  pickers look alike on purpose; one that needs to differ adds flags after it.
+- **Every picker builds fzf through `fzf::Picker`** (shared flags, colours,
+  `j`/`k`/`q` + `i` search mode, `esc`, the `fzf::header` layout) and calls back
+  through `fzf::atelier`. The pickers look alike on purpose; one that needs to
+  differ adds flags after it.
   Needs fzf ≥ 0.59 (`search`).
 - **Session identity is `session::resolve`, for every consumer**: grove's
   `@grove_*` options, else git from `#{session_path}` (main worktree as root),
