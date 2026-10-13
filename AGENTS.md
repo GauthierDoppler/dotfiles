@@ -134,9 +134,9 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
   (`hook_claude.rs::a_control_mode_client_does_not_count_as_watching` and its
   twins in `tasks.rs`, `sessions.rs`, `bar_daemon.rs`).
 - **Every picker builds fzf through `fzf::picker`** (shared flags, colours,
-  `j`/`k`/`q` + `i` search mode) and calls back through `fzf::atelier`. The
+  `j`/`k`/`q` + `i` search mode, `esc`, the `fzf::header` layout) and calls back through `fzf::atelier`. The
   pickers look alike on purpose; one that needs to differ adds flags after it.
-  Needs fzf ≥ 0.45 (`transform`).
+  Needs fzf ≥ 0.59 (`search`).
 - **Session identity is `session::resolve`, for every consumer**: grove's
   `@grove_*` options, else git from `#{session_path}` (main worktree as root),
   else the session name. Session names are never parsed
@@ -188,7 +188,7 @@ the override and the snapshot are gitignored. Preview with `--dry-run`.
   (`atelier/.config/nextest.toml`, profile `ci`), which names and kills a hung
   test; the job stops at 15 minutes. It ignores only `docs/`, top-level markdown
   and `nvim/` (`ci.rs::ci_runs_on_every_trigger_for_the_files_the_tests_read`).
-  fzf-driven tests skip locally without fzf ≥ 0.45 but fail under `CI`. Run
+  fzf-driven tests skip locally without fzf ≥ 0.59 but fail under `CI`. Run
   `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test` in
   `atelier/` before pushing.
 

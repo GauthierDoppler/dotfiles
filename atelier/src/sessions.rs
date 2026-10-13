@@ -37,8 +37,8 @@ pub enum Command {
         #[arg(short = 't', long, value_name = "SESSION")]
         target: String,
     },
-    /// Leave search, or close the picker when not searching; prints fzf actions
-    Escape {
+    /// Print the picker prompt, which names the current scope
+    Prompt {
         #[arg(short = 't', long, value_name = "SESSION")]
         target: String,
     },
@@ -80,9 +80,8 @@ impl Command {
                 println!("{}", Picker::open(tmux, &target)?.header()?);
                 Ok(())
             }
-            Command::Escape { target } => {
-                let input_state = std::env::var("FZF_INPUT_STATE").unwrap_or_default();
-                print_actions(&Picker::open(tmux, &target)?.escape(&input_state)?);
+            Command::Prompt { target } => {
+                println!("{}", Picker::open(tmux, &target)?.prompt()?);
                 Ok(())
             }
             Command::Switch { client, session } => picker::switch(tmux, client.as_deref(), &session),

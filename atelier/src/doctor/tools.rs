@@ -6,7 +6,7 @@ use crate::process::{output as run, stdout};
 use super::check::{fail, Context, Outcome};
 use super::version::{dotted, version};
 
-const FZF_MINIMUM: (u32, u32) = (0, 45);
+const FZF_MINIMUM: (u32, u32) = (0, 59);
 
 pub(super) fn fzf(_: &Context) -> Outcome {
     let fix = if cfg!(target_os = "macos") {
@@ -26,7 +26,7 @@ pub(super) fn fzf(_: &Context) -> Outcome {
         Some(found) if found >= FZF_MINIMUM => Outcome::Ok(reported),
         _ => fail(
             format!(
-                "{reported}, the pickers need {} or later (transform)",
+                "{reported}, the pickers need {} or later (search)",
                 dotted(FZF_MINIMUM)
             ),
             fix,

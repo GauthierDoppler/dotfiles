@@ -9,8 +9,6 @@ use crate::Result;
 use super::rows::rows;
 use super::scope::Scope;
 
-const NAVIGATION_KEYS: &str = "j,k,q,h,l";
-
 pub(super) fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) -> Result<()> {
     let target = tmux.resolve(target.as_deref(), "#{session_id}")?;
     let client = match client {
@@ -26,15 +24,15 @@ pub(super) fn pick(tmux: &Tmux, target: Option<String>, client: Option<String>) 
     if !client.is_empty() {
         switch.push_str(&format!(" -c {}", shell::quote(&client)));
     }
-    let mut finder = fzf::picker(
-        picker.scope()?.prompt(),
-        &picker.header()?,
-        NAVIGATION_KEYS,
-    );
+    let mut finder = fzf::Picker {
+        prompt: picker.scope()?.prompt(),
+        header: &picker.header()?,
+        modal_keys: &["h", "l"],
+        prompt_command: Some(&picker.call("prompt")?),
+    }
+    .command();
     finder
         .args(["--delimiter=\t", "--with-nth=2.."])
-        .arg("--bind")
-        .arg(format!("esc:transform:{}", picker.call("escape")?))
         .arg("--bind")
         .arg(format!("tab:transform:{}", picker.call("toggle")?))
         .arg("--bind")
@@ -105,12 +103,15 @@ impl<'a> Picker<'a> {
     }
 
     pub(super) fn header(&self) -> Result<String> {
-        let navigation = match (&self.project, self.scope()?) {
-            (None, _) => "j/k move   h/l window   i search   (no project)",
-            (Some(_), Scope::Project) => "j/k move   h/l window   tab show all   i search",
-            (Some(_), Scope::All) => "j/k move   h/l window   tab project only   i search",
+        let scope = match (&self.project, self.scope()?) {
+            (None, _) => "(no project)",
+            (Some(_), Scope::Project) => "tab show all",
+            (Some(_), Scope::All) => "tab project only",
         };
-        Ok(format!("{navigation}\nenter switch   ctrl-x kill"))
+        Ok(fzf::header(
+            &["h/l window", scope],
+            &["enter switch", "ctrl-x kill"],
+        ))
     }
 
     pub(super) fn toggle(&self) -> Result<String> {
@@ -138,14 +139,8 @@ impl<'a> Picker<'a> {
         Ok(format!("reload({})", self.call("rows")?))
     }
 
-    pub(super) fn escape(&self, input_state: &str) -> Result<String> {
-        if input_state != "enabled" {
-            return Ok("abort".to_string());
-        }
-        Ok(format!(
-            "disable-search+clear-query+rebind({NAVIGATION_KEYS})+change-prompt({})",
-            self.scope()?.prompt()
-        ))
+    pub(super) fn prompt(&self) -> Result<&'static str> {
+        Ok(self.scope()?.prompt())
     }
 
     fn call(&self, subcommand: &str) -> Result<String> {

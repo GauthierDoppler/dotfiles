@@ -507,6 +507,68 @@ fn ctrl_y_in_the_picker_copies_the_selected_token() {
     assert_eq!(tmux.tmux(&["show-buffer"]), "https://acme.dev/a");
 }
 
+#[test]
+fn every_key_types_into_the_search_once_it_is_open() {
+    let (_dir, dir) = common::real_tempdir();
+    let file = dir.as_path().join("capture.txt");
+    std::fs::write(
+        &file,
+        "https://acme.dev/wiki\nhttps://acme.dev/a\nhttps://acme.dev/b\n",
+    )
+    .unwrap();
+    let bin = FakeBin::new();
+    let tmux = TmuxServer::start();
+    let pane = pane_showing(&tmux, dir.as_path(), file.to_str().unwrap());
+    let Some(picker) = picker_on(&tmux, &bin, &pane) else {
+        return;
+    };
+
+    tmux.tmux(&["send-keys", "-t", &picker, "i"]);
+    tmux.tmux(&["send-keys", "-t", &picker, "-l", "ikqj"]);
+    common::wait_until("the query to be typed", || {
+        tmux.tmux(&["capture-pane", "-p", "-t", &picker])
+            .contains("ikqj")
+    });
+    tmux.tmux(&["send-keys", "-t", &picker, "BSpace", "BSpace", "BSpace"]);
+    common::wait_until("one row to match", || {
+        tmux.tmux(&["capture-pane", "-p", "-t", &picker])
+            .contains("1/3")
+    });
+    tmux.tmux(&["send-keys", "-t", &picker, "Enter"]);
+
+    common::wait_until("the browser to be called", || !bin.opened().is_empty());
+    assert_eq!(bin.opened(), "https://acme.dev/wiki\n");
+}
+
+#[test]
+fn esc_leaves_the_search_for_navigation_with_the_query_cleared() {
+    let (_dir, dir) = common::real_tempdir();
+    let file = dir.as_path().join("capture.txt");
+    std::fs::write(&file, "https://acme.dev/a\nhttps://acme.dev/b\n").unwrap();
+    let bin = FakeBin::new();
+    let tmux = TmuxServer::start();
+    let pane = pane_showing(&tmux, dir.as_path(), file.to_str().unwrap());
+    let Some(picker) = picker_on(&tmux, &bin, &pane) else {
+        return;
+    };
+
+    tmux.tmux(&["send-keys", "-t", &picker, "i"]);
+    tmux.tmux(&["send-keys", "-t", &picker, "-l", "zz"]);
+    common::wait_until("the query to be typed", || {
+        tmux.tmux(&["capture-pane", "-p", "-t", &picker])
+            .contains("search  zz")
+    });
+    tmux.tmux(&["send-keys", "-t", &picker, "Escape"]);
+    common::wait_until("the search to be left", || {
+        tmux.tmux(&["capture-pane", "-p", "-t", &picker])
+            .contains("https://acme.dev/a")
+    });
+    tmux.tmux(&["send-keys", "-t", &picker, "j", "Enter"]);
+
+    common::wait_until("the browser to be called", || !bin.opened().is_empty());
+    assert_eq!(bin.opened(), "https://acme.dev/a\n");
+}
+
 fn preview(tmux: &TmuxServer, port: u16, home: &Path, pane: &str, token: &str) -> String {
     let args = ["pick", "preview", "-t", pane, token];
     let opener = FakeOpener::new();

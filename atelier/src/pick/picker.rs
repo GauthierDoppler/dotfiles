@@ -9,13 +9,18 @@ pub(super) fn popup(tmux: &Tmux, pane: &str) -> Result<()> {
     let rows = rows(tmux, pane)?;
     let atelier = fzf::atelier(tmux)?;
     let pane = shell::quote(pane);
-    let mut picker = fzf::picker(
-        "  pick  ",
-        "j/k move   i search\nenter open   ctrl-y copy   ctrl-o system open   ctrl-v preview .md   esc close",
-        fzf::MODAL_KEYS,
+    let header = fzf::header(
+        &[],
+        &["enter open", "ctrl-y copy", "ctrl-o system open", "ctrl-v preview .md"],
     );
+    let mut picker = fzf::Picker {
+        prompt: "  pick  ",
+        header: &header,
+        modal_keys: &[],
+        prompt_command: None,
+    }
+    .command();
     picker.args([
-        &fzf::leave_search(fzf::MODAL_KEYS, "change-prompt(  pick  )"),
         &format!("--bind=enter:execute-silent({atelier} pick open -t {pane} {{}})+abort"),
         &format!("--bind=ctrl-y:execute-silent({atelier} pick copy {{}})+abort"),
         &format!("--bind=ctrl-o:execute-silent({atelier} pick system -t {pane} {{}})+abort"),

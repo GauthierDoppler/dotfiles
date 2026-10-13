@@ -6,7 +6,7 @@ use crate::shell;
 use crate::tmux::Tmux;
 use crate::Result;
 
-pub const MODAL_KEYS: &str = "j,k,q";
+const MODAL_KEYS: [&str; 4] = ["j", "k", "q", "i"];
 
 const COLORS: &str = "--color=fg:#c6d0f5,fg+:#c6d0f5,bg:-1,bg+:#51576d,hl:#8caaee,hl+:#8caaee,border:#626880,header:#a5adce,info:#838ba7,prompt:#8caaee,pointer:#8caaee";
 
@@ -27,36 +27,66 @@ pub fn atelier(tmux: &Tmux) -> Result<String> {
         .join(" "))
 }
 
-pub fn picker(prompt: &str, header: &str, modal_keys: &str) -> Command {
-    let mut fzf = crate::process::command("fzf");
-    fzf.args([
-        "--no-multi",
-        "--disabled",
-        "--cycle",
-        "--height=100%",
-        "--layout=reverse",
-        "--info=inline",
-        "--header-first",
-        "--pointer=▸",
-        COLORS,
-    ])
-    .arg(format!("--prompt={prompt}"))
-    .arg(format!("--header={header}"))
-    .args(["--bind=j:down,k:up", "--bind=q:abort"])
-    .arg(format!(
-        "--bind=i:enable-search+unbind({modal_keys})+change-prompt(  search  )"
-    ))
-    .stdin(Stdio::piped());
-    fzf
+pub struct Picker<'a> {
+    pub prompt: &'a str,
+    pub header: &'a str,
+    pub modal_keys: &'a [&'a str],
+    pub prompt_command: Option<&'a str>,
 }
 
-// fzf's unbind removes a key's behaviour rather than restoring its default:
-// unbinding esc during search would leave no way out.
-pub fn leave_search(modal_keys: &str, restore_prompt: &str) -> String {
-    let actions = format!("disable-search+clear-query+rebind({modal_keys})+{restore_prompt}");
+impl Picker<'_> {
+    pub fn command(&self) -> Command {
+        let keys = MODAL_KEYS
+            .iter()
+            .chain(self.modal_keys)
+            .copied()
+            .collect::<Vec<_>>()
+            .join(",");
+        let restore_prompt = match self.prompt_command {
+            Some(command) => format!("transform-prompt({command})"),
+            None => format!("change-prompt({})", self.prompt),
+        };
+        let leave_search = format!("disable-search+rebind({keys})+{restore_prompt}");
+        let mut fzf = crate::process::command("fzf");
+        fzf.args([
+            "--no-multi",
+            "--disabled",
+            "--cycle",
+            "--height=100%",
+            "--layout=reverse",
+            "--info=inline",
+            "--header-first",
+            "--pointer=▸",
+            COLORS,
+        ])
+        .arg(format!("--prompt={}", self.prompt))
+        .arg(format!("--header={}", self.header))
+        .args(["--bind=j:down,k:up", "--bind=q:abort"])
+        .arg(format!(
+            "--bind=i:enable-search+unbind({keys})+change-prompt(  search  )"
+        ))
+        // fzf's unbind removes a key's behaviour rather than restoring its
+        // default: unbinding esc during search would leave no way out. And a
+        // query cleared from inside a transform is never searched again once
+        // search is disabled, leaving the list filtered: clear it before.
+        .arg(format!(
+            "--bind=esc:clear-query+search()+transform:[ \"$FZF_INPUT_STATE\" = enabled ] && echo {} || echo abort",
+            shell::quote(&leave_search)
+        ))
+        .stdin(Stdio::piped());
+        fzf
+    }
+}
+
+pub fn header(moves: &[&str], acts: &[&str]) -> String {
+    let moves = std::iter::once("j/k move")
+        .chain(moves.iter().copied())
+        .chain(["i search"]);
+    let acts = acts.iter().copied().chain(["esc close"]);
     format!(
-        "--bind=esc:transform:[ \"$FZF_INPUT_STATE\" = enabled ] && echo {} || echo abort",
-        shell::quote(&actions)
+        "{}\n{}",
+        moves.collect::<Vec<_>>().join("   "),
+        acts.collect::<Vec<_>>().join("   ")
     )
 }
 

@@ -306,11 +306,11 @@ fn terminal_features_grown_by_reloads_fail() {
 }
 
 #[test]
-fn an_fzf_older_than_0_45_fails() {
+fn an_fzf_older_than_0_59_fails() {
     let machine = Machine::healthy();
-    machine.state("fzf-version", "0.44.1\n");
+    machine.state("fzf-version", "0.58.0\n");
     let report = assert_fails(&machine, &[], "fzf");
-    assert!(check(&report, "fzf").contains("0.44.1"), "{report}");
+    assert!(check(&report, "fzf").contains("0.58.0"), "{report}");
 }
 
 #[test]

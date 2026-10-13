@@ -405,13 +405,13 @@ pub fn fzf_available() -> bool {
         .unwrap_or_default()
         .split('.')
         .map(|part| part.parse::<u32>().unwrap_or(0));
-    let recent = (numbers.next().unwrap_or(0), numbers.next().unwrap_or(0)) >= (0, 45);
+    let recent = (numbers.next().unwrap_or(0), numbers.next().unwrap_or(0)) >= (0, 59);
     if !recent {
         assert!(
             std::env::var_os("CI").is_none(),
-            "CI must install fzf >= 0.45, found {version:?}"
+            "CI must install fzf >= 0.59, found {version:?}"
         );
-        eprintln!("fzf >= 0.45 is not installed: skipping");
+        eprintln!("fzf >= 0.59 is not installed: skipping");
     }
     recent
 }

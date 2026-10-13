@@ -12,12 +12,13 @@ pub fn prompt(catalog: &Catalog) -> String {
     format!("  {}  ", catalog.group())
 }
 
-pub fn header(catalog: &Catalog) -> &'static str {
-    if catalog.groups().is_empty() {
-        "j/k move   enter run   i search   ctrl-e edit"
+pub fn header(catalog: &Catalog) -> String {
+    let moves: &[&str] = if catalog.groups().is_empty() {
+        &[]
     } else {
-        "j/k move   enter run   tab group   i search   ctrl-e edit"
-    }
+        &["tab group"]
+    };
+    fzf::header(moves, &["enter run", "ctrl-e edit"])
 }
 
 pub fn pick(tmux: &Tmux, catalog: &Catalog) -> Result<()> {
@@ -44,12 +45,14 @@ pub fn pick(tmux: &Tmux, catalog: &Catalog) -> Result<()> {
         "--bind=ctrl-e:execute(f={{1}}; d={dir}; [ -f \"$d/$f\" ] && ${{EDITOR:-vi}} \"$d/$f\")"
     );
 
-    let mut picker = fzf::picker(&prompt(catalog), header(catalog), fzf::MODAL_KEYS);
+    let mut picker = fzf::Picker {
+        prompt: &prompt(catalog),
+        header: &header(catalog),
+        modal_keys: &[],
+        prompt_command: Some(&callback("prompt")),
+    }
+    .command();
     picker
-        .arg(fzf::leave_search(
-            fzf::MODAL_KEYS,
-            &format!("transform-prompt({})", callback("prompt")),
-        ))
         .args([tab, edit])
         .arg(format!("--preview={preview}"))
         .arg("--preview-window=right,40%,border-left")
