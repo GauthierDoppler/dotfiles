@@ -5,7 +5,7 @@
   "editorMode": "normal",
   "effortLevel": "medium",
   "enabledPlugins": {
-    "playground@claude-plugins-official": true,
+    "playground@claude-plugins-official": true
   },
   "hooks": {
     "Notification": [
@@ -51,5 +51,5 @@
     "padding": 0,
     "type": "command"
   },
-  "tui": "default",
+  "tui": "default"
 }
