@@ -28,7 +28,7 @@ git clone https://github.com/GauthierDoppler/dotfiles.git ~/dotfiles
 cd ~/dotfiles && ./install.sh
 ```
 
-First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, atelier, symlinks, Node, Claude Code CLI). On a headless Linux machine, pass `--profile remote`: no casks, no GUI app configs, no keyboard layout. `atelier setup --dry-run` previews the links and stubs alone.
+First run generates an SSH key and exits. Add the key to GitHub, then run `./install.sh` again for the full setup (Homebrew, CLI tools, desktop apps, Oh My Zsh, atelier, symlinks, Node, Claude Code CLI). [atelier](https://github.com/GauthierDoppler/atelier), the Rust tool behind the tmux pickers, bar, setup and services, is cloned to `~/Developer/perso/atelier` (override with `ATELIER_DIR`) and built from there; `install.sh` never pulls it. Links and stubs are listed in `links.toml`. On a headless Linux machine, pass `--profile remote`: no casks, no GUI app configs, no keyboard layout. `atelier setup --dry-run` previews the links and stubs alone.
 
 All dependencies are auto-installed via `Brewfile`. Existing files are backed up as `*.bak`.
 

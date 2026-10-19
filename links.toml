@@ -1,0 +1,102 @@
+# What `atelier setup` links into $HOME and the stubs it writes; `local-diff`,
+# `doctor` and `claude-settings-sync` read it too. Format: atelier's AGENTS.md.
+
+[[link]]
+source = "delta"
+dest = ".config/delta"
+
+[[link]]
+source = "ghostty"
+dest = ".config/ghostty"
+desktop_only = true
+
+[[link]]
+source = "lazydocker"
+dest = ".config/lazydocker"
+
+[[link]]
+source = "lazygit"
+dest = ".config/lazygit"
+
+[[link]]
+source = "nvim"
+dest = ".config/nvim"
+
+[[link]]
+source = "tmux/oneshot"
+dest = ".config/tmux/oneshot"
+
+[[link]]
+source = "zed"
+dest = ".config/zed"
+desktop_only = true
+
+[[link]]
+source = "git/ignore"
+dest = ".config/git/ignore"
+
+[[link]]
+source = "dot_tmux.conf"
+dest = ".tmux.conf"
+
+[[link]]
+source = "dot_claude/CLAUDE.md"
+dest = ".claude/CLAUDE.md"
+
+[[link]]
+source = "dot_claude/statusline-custom.sh"
+dest = ".claude/statusline-custom.sh"
+
+[[link]]
+source = "dot_claude/hooks"
+dest = ".claude/hooks"
+
+[[link]]
+source = "dot_claude/skills/tmux-tasks"
+dest = ".claude/skills/tmux-tasks"
+
+[[link]]
+source = "dot_claude/skills/grove"
+dest = ".claude/skills/grove"
+
+[[link]]
+source = "dot_claude/skills/notion"
+dest = ".claude/skills/notion"
+
+[[link]]
+source = "dot_pi_agent/extensions/subagents"
+dest = ".pi/agent/extensions/subagents"
+
+[[link]]
+each_markdown_in = "dot_pi_agent/agents"
+dest = ".pi/agent/agents"
+
+[[link]]
+source = "scripts/ssh-setup"
+dest = ".local/bin/ssh-setup"
+
+[[link]]
+source = "scripts/cc-tap-service"
+dest = ".local/bin/cc-tap-service"
+
+[[stub]]
+dest = ".zshrc"
+shared = "dot_zshrc"
+format = "shell"
+legacy = ".zshrc.local"
+
+[[stub]]
+dest = ".zprofile"
+shared = "dot_zprofile"
+format = "shell"
+
+[[stub]]
+dest = ".gitconfig"
+shared = "dot_gitconfig"
+format = "git"
+legacy = ".gitconfig.local"
+
+[claude_settings]
+base = "dot_claude/settings.json"
+local = "dot_claude/settings.local.json"
+snapshot = "dot_claude/settings.generated.json"

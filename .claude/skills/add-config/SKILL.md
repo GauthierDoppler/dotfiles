@@ -19,15 +19,15 @@ Add the config at `$ARGUMENTS` to the dotfiles repo.
    - Remove the original
    - Create a symlink from the original location to the dotfiles copy
    - If it's a folder with auto-generated files, add a `.gitignore` inside it
-   - Add the entry to the `LINKS` table in `atelier/src/setup/table.rs`, and the
-     expected pair to `DESKTOP_LINKS` in `atelier/tests/setup.rs`
+   - Add a `[[link]]` entry to `links.toml`
    - Stage and show the result, but do NOT commit
 
-3. `LINKS` format (source relative to the repo, destination relative to `$HOME`):
-   - Folders: `link("foldername", ".config/foldername")`
-   - Individual files: `link("path/file", ".config/path/file")`
-   - Home dotfiles: `link("dot_name", ".name")`
-   - A GUI app's config, skipped on the `remote` profile: `desktop(...)`
+3. `links.toml` format (`source` relative to the repo, `dest` relative to `$HOME`):
+   - Folders: `source = "foldername"`, `dest = ".config/foldername"`
+   - Individual files: `source = "path/file"`, `dest = ".config/path/file"`
+   - Home dotfiles: `source = "dot_name"`, `dest = ".name"`
+   - A GUI app's config, skipped on the `remote` profile: add `desktop_only = true`
+   - Each `*.md` of a folder, linked one by one: `each_markdown_in = "folder"`
+     instead of `source`
 
-4. Run `cargo test --test setup` in `atelier/`, then `atelier setup --dry-run`
-   to check the plan, then `atelier setup`.
+4. Run `atelier setup --dry-run` to check the plan, then `atelier setup`.

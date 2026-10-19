@@ -6,5 +6,3 @@ Brewfile.lock.json
 # Both are per-machine state.
 dot_claude/settings.local.json
 dot_claude/settings.generated.json
-
-atelier/target/

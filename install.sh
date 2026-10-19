@@ -75,13 +75,19 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
 fi
 
 # ─── Phase 5: atelier ──────────────────────────────────────
+# A checkout you work in: cloned once, never pulled here, built as it stands.
+ATELIER_DIR="${ATELIER_DIR:-$HOME/Developer/perso/atelier}"
 export PATH="$HOME/.cargo/bin:$PATH"
 if ! command -v cargo &>/dev/null; then
   echo "Installing Rust via rustup..."
   curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path
 fi
-cargo install --locked --path "$DOTFILES/atelier" --root "$HOME/.local" \
-  --target-dir "$DOTFILES/atelier/target"
+if [[ ! -d "$ATELIER_DIR/.git" ]]; then
+  echo "Cloning atelier into $ATELIER_DIR..."
+  mkdir -p "$(dirname "$ATELIER_DIR")"
+  git clone git@github.com:GauthierDoppler/atelier.git "$ATELIER_DIR"
+fi
+cargo install --locked --path "$ATELIER_DIR" --root "$HOME/.local"
 
 # ─── Phase 6: Links and stubs ──────────────────────────────
 "$HOME/.local/bin/atelier" setup --repo "$DOTFILES" --profile "$PROFILE"

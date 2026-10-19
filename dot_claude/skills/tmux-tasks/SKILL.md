@@ -17,7 +17,7 @@ disable-model-invocation: true
 run and debug loops live — deliberately **not** in Neovim, so they can be driven from any
 window of the session.
 
-Implementation: `atelier tasks` (`~/dotfiles/atelier/src/tasks/`). Read it if behaviour here is unclear.
+Implementation: `atelier tasks` (`~/Developer/perso/atelier/src/tasks/`). Read it if behaviour here is unclear.
 
 ## Where tasks live
 

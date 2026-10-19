@@ -1,0 +1,21 @@
+name: shellcheck
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck install.sh, the Claude statusline and shell scripts under scripts/
+        run: |
+          files=(install.sh dot_claude/statusline-custom.sh)
+          while IFS= read -r -d '' f; do
+            if head -n1 "$f" | grep -qE '^#!.*[/ ](ba)?sh$'; then
+              files+=("$f")
+            fi
+          done < <(find scripts -type f -perm -u+x -print0)
+          shellcheck "${files[@]}"
