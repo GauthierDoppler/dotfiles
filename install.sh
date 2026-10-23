@@ -154,6 +154,11 @@ if ! command -v claude &>/dev/null; then
   npm install -g @anthropic-ai/claude-code
 fi
 
+if ! command -v agent-browser &>/dev/null; then
+  echo "Installing agent-browser..."
+  npm install -g --allow-scripts=agent-browser agent-browser
+fi
+
 if ! command -v nvr &>/dev/null; then
   echo "Installing neovim-remote..."
   pipx install neovim-remote

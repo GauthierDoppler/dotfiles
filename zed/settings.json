@@ -21,7 +21,7 @@
   "git_panel": {
     "dock": "left"
   },
-  "vim_mode": false,
+  "vim_mode": true,
   "agent": {
     "dock": "right",
     "default_model": {

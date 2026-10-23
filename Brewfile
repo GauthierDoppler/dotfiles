@@ -42,7 +42,7 @@ brew "bats-core"
 brew "gitleaks"
 
 # ─── AI tooling ─────────────────────────────────────────────
-brew "agent-browser"
+# agent-browser is an npm global (install.sh): its formula pulls in Homebrew node.
 # Official Notion CLI; the binary is `ntn`.
 cask "notion-cli"
 
