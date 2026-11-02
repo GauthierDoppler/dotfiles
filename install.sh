@@ -149,9 +149,15 @@ fi
 fnm default lts-latest 2>/dev/null || true
 
 # ─── Phase 10: Global packages ─────────────────────────────
-if ! command -v claude &>/dev/null; then
+# Claude Code: native installer into ~/.local/bin, self-updating, no Node.
+# Checked by path, not command -v, so an older npm copy does not skip it.
+if [[ ! -x "$HOME/.local/bin/claude" ]]; then
   echo "Installing Claude Code CLI..."
-  npm install -g @anthropic-ai/claude-code
+  curl -fsSL https://claude.ai/install.sh | bash
+fi
+if npm ls -g @anthropic-ai/claude-code &>/dev/null; then
+  echo "Removing the npm Claude Code CLI (replaced by the native install)..."
+  npm uninstall -g @anthropic-ai/claude-code
 fi
 
 if ! command -v agent-browser &>/dev/null; then
