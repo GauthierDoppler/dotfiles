@@ -165,11 +165,6 @@ if ! command -v agent-browser &>/dev/null; then
   npm install -g --allow-scripts=agent-browser agent-browser
 fi
 
-if ! command -v nvr &>/dev/null; then
-  echo "Installing neovim-remote..."
-  pipx install neovim-remote
-fi
-
 # ─── Phase 10b: Services ───────────────────────────────────
 "$HOME/.local/bin/atelier" service install --repo "$DOTFILES" \
   || warn "atelier service install failed — see above"

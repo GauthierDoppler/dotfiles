@@ -10,8 +10,8 @@ git:
       command: delta --features lazygit-inline
 os:
   editPreset: "nvim-remote"
-  edit: 'nvim --server "$NVIM" --remote-send "<C-\\><C-n><cmd>close<cr>" && nvr --remote {{filename}}'
-  editAtLine: 'nvim --server "$NVIM" --remote-send "<C-\\><C-n><cmd>close<cr>" && nvr --remote +{{line}} {{filename}}'
+  edit: 'nvim --server "$NVIM" --remote-expr "execute(''LazygitFocusEditor'')" && nvim --server "$NVIM" --remote {{filename}}'
+  editAtLine: 'nvim --server "$NVIM" --remote-expr "execute(''LazygitFocusEditor'')" && nvim --server "$NVIM" --remote {{filename}} && nvim --server "$NVIM" --remote-expr "execute({{line}})"'
 gui:
   theme:
     nerdFontsVersion: ""
