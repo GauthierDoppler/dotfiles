@@ -16,6 +16,16 @@ dest = ".config/herdr-app/keys.json"
 desktop_only = true
 
 [[link]]
+source = "herdr-app/settings.json"
+dest = ".config/herdr-app/settings.json"
+desktop_only = true
+
+[[link]]
+source = "herdr-app/themes/catppuccin-frappe.json"
+dest = ".config/herdr-app/themes/catppuccin-frappe.json"
+desktop_only = true
+
+[[link]]
 source = "lazydocker"
 dest = ".config/lazydocker"
 
