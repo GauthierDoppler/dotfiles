@@ -11,6 +11,11 @@ dest = ".config/ghostty"
 desktop_only = true
 
 [[link]]
+source = "herdr-app/keys.json"
+dest = ".config/herdr-app/keys.json"
+desktop_only = true
+
+[[link]]
 source = "lazydocker"
 dest = ".config/lazydocker"
 

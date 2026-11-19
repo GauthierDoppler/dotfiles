@@ -1,30 +1,39 @@
 ---
 name: grove
 description: >-
-  Set up or debug Grove — the git-worktree manager that gives each worktree its own tmux session
-  (`~/Developer/perso/grove-ai`). Use this WHENEVER the user wants to configure worktrees for a
+  Set up or debug Grove — the git-worktree manager that gives each worktree its own workspace, a
+  tmux session or a herdr space (`~/Developer/perso/grove-ai`). Use this WHENEVER the user wants to configure worktrees for a
   project: "set up grove here", "add a grove config", "make new worktrees get my .env files",
   "configure the tmux windows for this repo", "copy untracked files into new worktrees", "change
   where worktrees are created", or when a worktree comes up broken — missing env files, wrong
-  windows, a session that won't attach, or orphaned sessions. Also use when writing or editing
+  windows, a session or space that won't attach, or orphaned ones. Also use when writing or editing
   `.grove/config.yaml` or `.grove/setup.sh`.
 disable-model-invocation: true
 ---
 
 # grove
 
-Grove manages git worktrees and gives each one its own tmux session. `grove` alone opens an
-interactive cockpit; the subcommands are scriptable.
+Grove manages git worktrees and gives each one its own **workspace**: a tmux session or a herdr
+space, built from the same config. `grove` alone opens an interactive cockpit; the subcommands
+are scriptable.
 
 ```bash
 grove                      # interactive cockpit (default)
-grove ls                   # worktrees + tmux session status
-grove new <branch>         # create worktree + session (bases on origin/<branch> if it exists)
-grove attach <branch>      # attach, creating the session if missing
-grove delete <branch> [-f] # remove worktree and kill its session (-f: modified/untracked files)
-grove kill <branch>        # kill the session, keep the worktree
-grove prune                # kill orphaned sessions with no matching worktree
+grove ls                   # worktrees + workspace status
+grove new <branch> [--focus]  # create worktree + workspace, --focus switches to it
+grove attach <branch>      # switch to the workspace, creating it if missing
+grove delete <branch> [-f] # remove worktree and close its workspace (-f: modified/untracked files)
+grove kill <branch>        # close the workspace, keep the worktree
+grove prune                # close this repo's workspaces whose worktree is gone
+grove herdr install        # write the grove-new herdr mod (cmd-shift-n) into ~/.config/herdr-app
 ```
+
+Every command takes `--adapter tmux|herdr`. Without it: `workspace.adapter` from the config, then
+`$TMUX` set → tmux, `$HC_TERMINAL_ID` set → herdr, else tmux.
+
+**A new branch starts from `origin/<default branch>`** (read from `origin/HEAD`, e.g. `develop`),
+whatever the root has checked out. A branch that exists locally is checked out as is; one on
+`origin` starts from `origin/<branch>`.
 
 Cockpit keys: `j/k` move · `Enter` attach · `n` new · `d` delete · `D` force delete · `x` kill
 session · `q` quit.
@@ -46,10 +55,13 @@ project that sets `default_windows` discards the global list entirely, it does n
 > effect before relying on it; put settings in the project file if in doubt.
 
 ```yaml
+workspace:
+  adapter: "auto"                  # auto | tmux | herdr
+
 tmux:
-  session_prefix: "grove_"
-  session_name_format: "{prefix}{project}_{branch}_{key}"
-  default_shell: "zsh"
+  session_prefix: "grove_"         # tmux only
+  session_name_format: "{prefix}{project}_{branch}_{key}"   # tmux only
+  default_shell: "zsh"             # both adapters
 
 worktrees:
   path: "./.claude/worktrees/"     # relative -> repo root; absolute used as-is; ~ and $VAR expand
@@ -66,6 +78,9 @@ worktrees:
         - command: "pnpm i"
         - command: "cd packages/backend && pnpm i"
           split: "vertical"        # vertical | horizontal
+    - name: "warmup"
+      command: "./gradlew assembleDebug"
+      keep_shell: false            # window closes when the command ends (default: true, a shell stays)
 
   template_files: []
 ```
@@ -96,15 +111,21 @@ One caveat for the tracked case: `--skip-worktree` can make a later `git pull` f
 oddly if upstream modifies that same file. If a pull complains about `.grove/`, `git unskip` it,
 pull, then `git skip` it again.
 
-## Session naming — and why it matters beyond grove
+## Workspace identity — and why it matters beyond grove
 
-Default format `{prefix}{project}_{branch}_{key}`, where `{key}` is an FNV-1a hash of the repo
-root, always the **last** field.
+A workspace belongs to a worktree, never to a name:
 
-Nothing parses that name any more. Grove sets `@grove_project`, `@grove_root` and
-`@grove_worktree` on every session it creates or attaches to, and the session picker
-(`atelier sessions pick`) groups "sessions of this project" by `@grove_root`. Changing
-`session_name_format` is therefore safe.
+- **tmux**: grove sets `@grove_project`, `@grove_root` and `@grove_worktree` on every session it
+  creates or attaches to, and finds sessions by those tags. The session picker (`atelier sessions
+  pick`) groups "sessions of this project" by `@grove_root`. The name format
+  (`{prefix}{project}_{branch}_{key}`) only names new sessions, so changing it is safe.
+- **herdr**: grove labels every terminal it starts `grove.worktree`, `grove.root` and
+  `grove.project`, and finds the space through `hc ls --label`. A space whose labelled terminals
+  have all been closed is no longer found; `attach` then opens a new one.
+
+In herdr, pane commands run as `<shell> -lic`, so zsh functions such as `cl` work.
+`keep_shell: false` commands run through `hc run`; inside a split window herdr picks where such a
+pane goes, so its `split` is ignored.
 
 ## Getting files into new worktrees
 
@@ -116,8 +137,12 @@ config — must be put there deliberately. Two mechanisms:
 | `template_files` + `.grove/templates/` | files that are the *same* in every worktree and safe to commit as templates. Copied preserving permissions. |
 | `.grove/setup.sh` | anything else — copying real (uncommittable) files from the main worktree, installing deps, running migrations |
 
-`setup.sh` runs after the worktree is created, with `GROVE_WORKTREE_PATH`, `GROVE_BRANCH`,
-`GROVE_SESSION_NAME` and `GROVE_REPO_ROOT` in the environment.
+Order: worktree → `template_files` → `setup.sh` → workspace. The script runs **before** any
+window exists, with `GROVE_WORKTREE_PATH`, `GROVE_BRANCH` and `GROVE_REPO_ROOT` in the
+environment, so agents start with the files already in place. A script prepares files only; a
+background job (a Gradle warmup) is a `default_windows` entry with `keep_shell: false`, which
+works the same in tmux and herdr. If any step fails, grove removes the worktree, and the branch
+too when it created it.
 
 The house pattern (from `bp-api`):
 
@@ -176,7 +201,10 @@ Do not report it working until step 6 has actually run.
 | global config seems ignored | may not be ported yet — move the setting into `.grove/config.yaml` |
 | project's windows replaced the global ones | expected: arrays replace, they do not merge |
 | session picker no longer scopes to the project | session predates grove's tmux options: `grove attach` to it once to tag it |
-| sessions linger after deleting worktrees | `grove prune` |
+| sessions or spaces linger after deleting worktrees | `grove prune` (untagged sessions are never pruned) |
+| "no running Herdr window" | herdr adapter chosen but the app is closed: open Herdr, or `--adapter tmux` |
+| new branch error about `set-head` | the repo has no `origin/HEAD`: `git remote set-head origin --auto` |
+| `cmd-shift-n` does nothing in herdr | mod missing: `grove herdr install` |
 | `.grove/` shows up in `git status` | not skipped — `git skip .grove/config.yaml .grove/setup.sh` |
 | `git pull` complains about `.grove/` | `--skip-worktree` on a tracked file upstream changed: `git unskip`, pull, `git skip` again |
 
