@@ -173,6 +173,9 @@ fi
 if [[ "$PROFILE" == desktop && -x "$HOME/.local/bin/grove" ]]; then
   "$HOME/.local/bin/grove" herdr install || warn "grove herdr install failed — cmd-shift-n has no mod"
 fi
+if [[ "$PROFILE" == desktop ]]; then
+  "$HOME/.local/bin/atelier" herdr install || warn "atelier herdr install failed — cmd-o has no mod"
+fi
 
 # ─── Phase 10b: Services ───────────────────────────────────
 "$HOME/.local/bin/atelier" service install --repo "$DOTFILES" \

@@ -17,6 +17,7 @@
     "cmd-shift-l": "layout.switch",
     "cmd-n": "space.new",
     "cmd-shift-n": "mod.open:grove-new",
+    "cmd-o": "mod.open:atelier-projects",
     "cmd-p": "mod.open:picker",
     "cmd-shift-p": "app.palette",
     "cmd-,": "app.settings",

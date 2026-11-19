@@ -71,6 +71,14 @@ fi
 typeset -gA _project_paths _project_names
 
 project() {
+  if [[ $1 == --list ]]; then
+    local entry
+    for entry in ${(ko)_project_paths}; do
+      print -r -- "$entry"$'\t'"${_project_paths[$entry]}"$'\t'"${_project_names[$entry]}"
+    done
+    return 0
+  fi
+
   local name=$1 dir=${2:A} tab=${3:-$1}
 
   if [[ -z ${_project_paths[$name]} ]] && command -v "$name" &>/dev/null; then
@@ -87,6 +95,26 @@ project() {
 _project_jump() {
   local dir=${_project_paths[$1]} tab=${_project_names[$1]}
 
+  local root branch
+  root=$(git -C "$dir" worktree list --porcelain 2>/dev/null | head -1)
+  root=${root#worktree }
+  if [[ -n $root ]]; then
+    branch=$(git -C "$root" branch --show-current)
+    if [[ -z $branch ]]; then
+      branch=$(git -C "$root" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
+      branch=${branch#origin/}
+    fi
+  fi
+
+  if [[ -n $HC_TERMINAL_ID && -z $TMUX && -n $branch ]] && command -v grove &>/dev/null; then
+    local -a replace
+    if [[ $(hc get "$HC_TERMINAL_ID" --json 2>/dev/null) =~ '"herdr\.space":"([^"]+)"' ]]; then
+      replace=(--replace-space "$match[1]")
+    fi
+    grove -C "$root" attach "$branch" "${replace[@]}"
+    return
+  fi
+
   cd -- "$dir" || return
 
   # tmux's passthrough wrapper requires every ESC of the inner sequence doubled.
@@ -97,17 +125,6 @@ _project_jump() {
   fi
 
   command -v grove &>/dev/null || return 0
-
-  local root branch
-  root=$(git -C "$dir" worktree list --porcelain 2>/dev/null | head -1)
-  root=${root#worktree }
-  [[ -n $root ]] || return 0
-
-  branch=$(git -C "$root" branch --show-current)
-  if [[ -z $branch ]]; then
-    branch=$(git -C "$root" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
-    branch=${branch#origin/}
-  fi
   [[ -n $branch ]] || return 0
 
   grove attach "$branch"
