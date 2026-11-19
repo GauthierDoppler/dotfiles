@@ -165,6 +165,15 @@ if ! command -v agent-browser &>/dev/null; then
   npm install -g --allow-scripts=agent-browser agent-browser
 fi
 
+# Herdr: its own installer (app + herdr-core), self-updating afterwards.
+if [[ "$PROFILE" == desktop && ! -e "$HOME/.local/bin/herdr-app" ]]; then
+  echo "Installing Herdr..."
+  curl -fsSL https://releases.herdr.dev/app/install.sh | sh
+fi
+if [[ "$PROFILE" == desktop && -x "$HOME/.local/bin/grove" ]]; then
+  "$HOME/.local/bin/grove" herdr install || warn "grove herdr install failed — cmd-shift-n has no mod"
+fi
+
 # ─── Phase 10b: Services ───────────────────────────────────
 "$HOME/.local/bin/atelier" service install --repo "$DOTFILES" \
   || warn "atelier service install failed — see above"
