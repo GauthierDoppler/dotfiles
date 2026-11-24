@@ -20,6 +20,7 @@
     "cmd-n": "space.new",
     "cmd-shift-n": "mod.open:grove-new",
     "cmd-shift-backspace": "mod.open:grove-archive",
+    "cmd-shift-a": "mod.open:atelier-agents",
     "cmd-o": "mod.open:atelier-projects",
     "cmd-p": "mod.open:picker",
     "cmd-shift-p": "app.palette",
