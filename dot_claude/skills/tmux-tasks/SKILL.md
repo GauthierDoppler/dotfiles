@@ -124,7 +124,7 @@ deep. Never write a task that depends on the pane's cwd.
 2. Create `<root>/.tmux/<group>/<name>` (or `<root>/.tmux/<name>` if ungrouped).
 3. Shebang, `# task:` description, `# tmux:` placement, `set -euo pipefail`.
 4. `chmod +x` it.
-5. Verify it is discovered: `~/.local/bin/atelier tasks list` (from inside the session).
+5. Verify it is discovered: `~/.local/bin/atelier tasks rows` (from inside the session).
 6. Only then tell the user it is ready.
 
 Shared logic goes in `.tmux/lib/*.sh`, sourced via `"$TMUX_TASK_ROOT/.tmux/lib/common.sh"`, and
